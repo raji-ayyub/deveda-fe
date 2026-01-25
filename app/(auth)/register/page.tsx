@@ -226,7 +226,7 @@ const RegisterPage: React.FC = () => {
         formData.lastName,
         formData.role
       );
-      router.push('/dashboard');
+      router.push('/profile');
     } catch (err: any) {
       setError(err.message || 'Registration failed. Please try again.');
     } finally {
