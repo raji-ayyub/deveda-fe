@@ -1,15 +1,17 @@
 // components/FeatureCard.tsx
-import { FaCode, FaPuzzlePiece, FaGamepad, FaLayerGroup } from 'react-icons/fa';
+import { FaLayerGroup, FaCode, FaPuzzlePiece, FaGamepad } from 'react-icons/fa';
 
 const iconMap = {
-  FaCode: FaCode,
-  FaPuzzlePiece: FaPuzzlePiece,
-  FaGamepad: FaGamepad,
-  FaLayerGroup: FaLayerGroup,
+  FaLayerGroup,
+  FaCode,
+  FaPuzzlePiece,
+  FaGamepad,
 };
 
-interface FeatureCardProps {
-  icon: keyof typeof iconMap;
+export type FeatureIcon = keyof typeof iconMap;
+
+export interface FeatureCardProps {
+  icon: FeatureIcon;
   title: string;
   description: string;
 }

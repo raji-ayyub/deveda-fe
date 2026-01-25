@@ -1,5 +1,9 @@
 // lib/data.ts
-export const features = [
+
+
+import type { FeatureCardProps } from "@/components/FeatureCard";
+
+export const features: FeatureCardProps[] = [
   {
     icon: 'FaLayerGroup',
     title: 'Layout Grouping Demo',
@@ -136,9 +140,9 @@ export const colorGuidelines = [
 export const teamMembers = [
   {
     name: 'Zara',
-    role: 'Young Explorer',
+    role: 'Frontend Development',
     image: '/images/higab.jpg',
-    description: 'Learning to group layouts and build her first websites.',
+    description: 'Learning to build website user interfaces and implementing APIs',
     skills: ['HTML', 'CSS', 'JavaScript', 'Creativity'],
     progress: [
       { label: 'HTML', value: 75 },
@@ -153,10 +157,11 @@ export const teamMembers = [
     description: 'Helping others connect coding concepts with fun projects.',
     skills: ['Mentorship', 'JavaScript', 'TypeScript', 'React', 'Python'],
     progress: [
-      { label: 'AI Concepts', value: 75 },
-      { label: 'Frontend Development', value: 95 },
-      { label: 'Backend Development', value: 65 },
-      { label: 'AI Engineering', value: 15 },
+      { label: 'AI Concepts', value: 90 },
+      { label: 'Full-Stack Development', value: 95 },
+      { label: 'AI Engineering', value: 65 },
+      { label: 'Agentics', value: 55 },
+
     ],
   },
   {
@@ -204,6 +209,17 @@ export const teamMembers = [
       { label: 'JavaScript', value: 95 },
       { label: 'React Ecosystem', value: 85 },
       { label: 'TypeScript', value: 70 },
+    ],
+  },
+  {
+    name: 'Iremide',
+    role: 'UI/UX',
+    image: '/images/hijab.png',
+    description: 'Website User Interface and Experience Design.',
+    skills: ['Figma', 'Web Design'],
+    progress: [
+      { label: 'Figma', value: 65 },
+      { label: 'Web Design', value: 85 },
     ],
   },
   {

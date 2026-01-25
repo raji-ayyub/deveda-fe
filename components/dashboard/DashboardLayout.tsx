@@ -37,15 +37,15 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
   // Navigation items based on user role
   const navItems = [
-    { href: '/dashboard', icon: <FaHome />, label: 'Overview', visible: true },
-    { href: '/dashboard/courses', icon: <FaBook />, label: 'Courses', visible: true },
-    { href: '/dashboard/quizzes', icon: <FaQuestionCircle />, label: 'Quizzes', visible: true },
-    { href: '/dashboard/games', icon: <FaGamepad />, label: 'Games', visible: true },
-    { href: '/dashboard/creative', icon: <FaPalette />, label: 'Creative Lab', visible: true },
-    { href: '/dashboard/layout', icon: <FaLayerGroup />, label: 'Layout Practice', visible: true },
-    { href: '/dashboard/analytics', icon: <FaChartBar />, label: 'Analytics', visible: isAdmin || isInstructor },
-    { href: '/dashboard/users', icon: <FaUsers />, label: 'Users', visible: isAdmin },
-    { href: '/dashboard/settings', icon: <FaCog />, label: 'Settings', visible: true },
+    { href: '/admin/dashboard', icon: <FaHome />, label: 'Overview', visible: true },
+    { href: '/admin/dashboard/courses', icon: <FaBook />, label: 'Courses', visible: true },
+    { href: '/admin/dashboard/quizzes', icon: <FaQuestionCircle />, label: 'Quizzes', visible: true },
+    { href: '/admin/dashboard/games', icon: <FaGamepad />, label: 'Games', visible: true },
+    { href: '/admin/dashboard/creative', icon: <FaPalette />, label: 'Creative Lab', visible: true },
+    { href: '/admin/dashboard/layout', icon: <FaLayerGroup />, label: 'Layout Practice', visible: true },
+    { href: '/admin/dashboard/analytics', icon: <FaChartBar />, label: 'Analytics', visible: isAdmin || isInstructor },
+    { href: '/admin/dashboard/users', icon: <FaUsers />, label: 'Users', visible: isAdmin },
+    { href: '/admin/dashboard/settings', icon: <FaCog />, label: 'Settings', visible: true },
   ];
 
   const notifications = [
