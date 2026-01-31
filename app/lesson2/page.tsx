@@ -6,6 +6,7 @@ import {
   AlertCircle, Thermometer, ArrowRight,
   RefreshCw, Eye, Wand2, MousePointerClick
 } from 'lucide-react';
+import Link from 'next/link';
 
 const WeatherAPIExplained = () => {
   const [activeStep, setActiveStep] = useState(0);
@@ -802,11 +803,13 @@ const WeatherAPIExplained = () => {
                     get the response, and show it on a webpage. This same pattern works for 
                     hundreds of other APIs too - from news articles to sports scores!
                   </p>
-                  <div className="mt-4 flex flex-wrap gap-2">
+                  <div className="mt-4 flex flex-wrap gap-2 relative">
                     <span className="px-3 py-1 bg-green-800/50 text-green-300 rounded-full text-sm">async/await</span>
                     <span className="px-3 py-1 bg-blue-800/50 text-blue-300 rounded-full text-sm">fetch() API</span>
                     <span className="px-3 py-1 bg-purple-800/50 text-purple-300 rounded-full text-sm">JSON Data</span>
                     <span className="px-3 py-1 bg-yellow-800/50 text-yellow-300 rounded-full text-sm">DOM Manipulation</span>
+                    <Link href={"/lesson2/quiz"} className="absolute bottom-[0px] right-[0px] px-3 py-1 bg-blue-500/50 text-white rounded-full text-sm font-bold border-2 border-white">Take a quick test</Link>
+
                   </div>
                 </div>
               </div>
