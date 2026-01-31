@@ -1,5 +1,4 @@
 'use client'
-
 import { useState, useEffect, useRef } from 'react';
 import {
   Brain, Trophy, Star, Clock, RefreshCw, CheckCircle,
@@ -8,7 +7,7 @@ import {
   Send, Copy, SkipForward, Volume2, VolumeX
 } from 'lucide-react';
 
-type QuestionType = 'multiple-choice' | 'true-false' | 'code-blank' | 'short-answer';
+type QuestionType = 'multiple-choice' | 'true-false' | 'code-blank';
 
 interface Question {
   id: number;
@@ -20,7 +19,7 @@ interface Question {
   difficulty: 'easy' | 'medium' | 'hard';
   category: string;
   code?: string;
-  blanks?: { position: number; correct: string; options: string[] }[];
+  blank?: { correct: string; options: string[] };
 }
 
 interface QuizResult {
@@ -47,7 +46,6 @@ const QuizPage = () => {
   const [quizCompleted, setQuizCompleted] = useState(false);
   const [quizResults, setQuizResults] = useState<QuizResult | null>(null);
   const [timeRemaining, setTimeRemaining] = useState(300); // 5 minutes in seconds
-  const [fillInBlanks, setFillInBlanks] = useState<{[key: number]: string}>({});
   const [hintUsed, setHintUsed] = useState(false);
   const [currentHint, setCurrentHint] = useState('');
   const [showExplanation, setShowExplanation] = useState(false);
@@ -55,86 +53,31 @@ const QuizPage = () => {
   const timerRef = useRef<NodeJS.Timeout>();
 
   const allQuestions: Question[] = [
-    // Multiple Choice Questions
+    // Multiple Choice Questions about Async/API basics
     {
       id: 1,
       type: 'multiple-choice',
-      question: "What does API stand for?",
-      options: [
-        "Application Programming Interface",
-        "Advanced Programming Interface",
-        "Application Protocol Interface",
-        "Automated Programming Interface"
-      ],
-      correctAnswer: "Application Programming Interface",
-      explanation: "API stands for Application Programming Interface. It's a set of rules that allows programs to talk to each other.",
-      difficulty: 'easy',
-      category: 'API Basics'
-    },
-    {
-      id: 2,
-      type: 'multiple-choice',
-      question: "Which HTTP method is used to retrieve data from an API?",
-      options: ["POST", "GET", "PUT", "DELETE"],
-      correctAnswer: "GET",
-      explanation: "The GET method is used to retrieve data from a server. POST is for creating, PUT for updating, and DELETE for removing data.",
-      difficulty: 'easy',
-      category: 'API Basics'
-    },
-    {
-      id: 3,
-      type: 'multiple-choice',
       question: "What does the 'async' keyword do in JavaScript?",
       options: [
-        "Makes a function synchronous",
-        "Allows a function to use await",
-        "Speeds up the function execution",
-        "Makes the function private"
+        "Makes a function return a Promise",
+        "Makes code run faster",
+        "Creates a new thread",
+        "Stops other code from running"
       ],
-      correctAnswer: "Allows a function to use await",
+      correctAnswer: "Makes a function return a Promise",
       explanation: "The async keyword makes a function return a Promise and allows it to use the await keyword to handle asynchronous operations.",
       difficulty: 'medium',
       category: 'Async/Await'
     },
     {
-      id: 4,
-      type: 'multiple-choice',
-      question: "What is JSON?",
-      options: [
-        "JavaScript Object Notation",
-        "JavaScript Online Network",
-        "Java Source Object Notation",
-        "JavaScript Object Network"
-      ],
-      correctAnswer: "JavaScript Object Notation",
-      explanation: "JSON stands for JavaScript Object Notation. It's a lightweight data format that's easy for humans to read and write, and easy for machines to parse.",
-      difficulty: 'easy',
-      category: 'Data Formats'
-    },
-    {
-      id: 5,
-      type: 'multiple-choice',
-      question: "Which method converts a JSON string to a JavaScript object?",
-      options: [
-        "JSON.parse()",
-        "JSON.stringify()",
-        "JSON.convert()",
-        "JSON.toObject()"
-      ],
-      correctAnswer: "JSON.parse()",
-      explanation: "JSON.parse() converts a JSON string into a JavaScript object. JSON.stringify() does the opposite.",
-      difficulty: 'easy',
-      category: 'Data Formats'
-    },
-    {
-      id: 6,
+      id: 2,
       type: 'multiple-choice',
       question: "What does the fetch() function return?",
       options: [
-        "A string",
         "A Promise",
-        "An array",
-        "A boolean"
+        "JSON data",
+        "An HTML response",
+        "A string"
       ],
       correctAnswer: "A Promise",
       explanation: "fetch() returns a Promise that resolves to the Response object representing the response to the request.",
@@ -142,616 +85,293 @@ const QuizPage = () => {
       category: 'Fetch API'
     },
     {
-      id: 7,
+      id: 3,
       type: 'multiple-choice',
-      question: "Which of these is NOT a valid HTTP status code?",
-      options: ["200", "404", "500", "999"],
-      correctAnswer: "999",
-      explanation: "HTTP status codes are standardized. 200 (OK), 404 (Not Found), and 500 (Internal Server Error) are valid. 999 is not a standard HTTP status code.",
-      difficulty: 'medium',
-      category: 'HTTP Basics'
+      question: "Which method converts the fetch response to JSON?",
+      options: [
+        "response.json()",
+        "response.text()",
+        "JSON.parse()",
+        "convertToJSON()"
+      ],
+      correctAnswer: "response.json()",
+      explanation: "The response.json() method parses the response body as JSON and returns a Promise.",
+      difficulty: 'easy',
+      category: 'Fetch API'
     },
     {
-      id: 8,
+      id: 4,
       type: 'multiple-choice',
-      question: "What is CORS?",
+      question: "What is the purpose of the 'await' keyword?",
       options: [
-        "Cross-Origin Resource Sharing",
-        "Cross-Origin Request Security",
-        "Cross-Object Resource Sharing",
-        "Cross-Origin Response Security"
+        "Pauses execution until Promise resolves",
+        "Makes a function async",
+        "Handles errors",
+        "Speeds up API calls"
       ],
-      correctAnswer: "Cross-Origin Resource Sharing",
-      explanation: "CORS (Cross-Origin Resource Sharing) is a security feature that allows or restricts resources on a web page to be requested from another domain.",
-      difficulty: 'hard',
-      category: 'Security'
+      correctAnswer: "Pauses execution until Promise resolves",
+      explanation: "await pauses the execution of an async function until the Promise is settled, then returns the resolved value.",
+      difficulty: 'medium',
+      category: 'Async/Await'
     },
     {
-      id: 9,
+      id: 5,
       type: 'multiple-choice',
-      question: "Which of these is used to handle errors in async/await?",
+      question: "What does this code do: document.getElementById('weather')?",
       options: [
-        "try...catch",
-        "if...else",
-        "switch",
-        "for...of"
+        "Finds an element with ID 'weather'",
+        "Creates a new element",
+        "Changes the weather data",
+        "Gets weather from an API"
       ],
-      correctAnswer: "try...catch",
-      explanation: "try...catch blocks are used to handle errors in async/await functions. This allows you to catch and handle any errors that occur during the async operation.",
-      difficulty: 'medium',
-      category: 'Error Handling'
-    },
-    {
-      id: 10,
-      type: 'multiple-choice',
-      question: "What does .then() do in a Promise chain?",
-      options: [
-        "Handles successful promise resolution",
-        "Handles promise rejection",
-        "Starts a new promise",
-        "Cancels the promise"
-      ],
-      correctAnswer: "Handles successful promise resolution",
-      explanation: ".then() is called when a Promise is fulfilled (resolved successfully). .catch() handles rejections.",
-      difficulty: 'medium',
-      category: 'Promises'
+      correctAnswer: "Finds an element with ID 'weather'",
+      explanation: "getElementById() selects a DOM element by its ID attribute, allowing you to manipulate it with JavaScript.",
+      difficulty: 'easy',
+      category: 'DOM Manipulation'
     },
 
     // True/False Questions
     {
-      id: 11,
+      id: 6,
       type: 'true-false',
-      question: "API calls are always synchronous.",
+      question: "API calls in JavaScript are synchronous by default.",
       options: ["True", "False"],
       correctAnswer: "False",
-      explanation: "API calls are typically asynchronous, meaning your code continues executing while waiting for the response.",
+      explanation: "API calls are typically asynchronous in JavaScript to prevent blocking the main thread.",
       difficulty: 'easy',
       category: 'API Basics'
     },
     {
-      id: 12,
+      id: 7,
       type: 'true-false',
-      question: "The fetch() function can only be used with GET requests.",
+      question: "The fetch() function automatically parses JSON responses.",
       options: ["True", "False"],
       correctAnswer: "False",
-      explanation: "fetch() can be used with various HTTP methods including GET, POST, PUT, DELETE, etc., by passing an options object.",
+      explanation: "fetch() returns a raw Response object. You need to call .json() to parse JSON data.",
       difficulty: 'easy',
       category: 'Fetch API'
     },
     {
-      id: 13,
+      id: 8,
       type: 'true-false',
-      question: "JSON keys must be in double quotes.",
-      options: ["True", "False"],
-      correctAnswer: "True",
-      explanation: "In JSON, all keys must be strings enclosed in double quotes, unlike JavaScript objects.",
-      difficulty: 'medium',
-      category: 'Data Formats'
-    },
-    {
-      id: 14,
-      type: 'true-false',
-      question: "await can only be used inside async functions.",
-      options: ["True", "False"],
-      correctAnswer: "True",
-      explanation: "The await keyword can only be used inside functions declared with the async keyword.",
-      difficulty: 'medium',
-      category: 'Async/Await'
-    },
-    {
-      id: 15,
-      type: 'true-false',
-      question: "All APIs require authentication.",
+      question: "await can be used outside of async functions.",
       options: ["True", "False"],
       correctAnswer: "False",
-      explanation: "While many APIs require authentication (like API keys), there are also public APIs that don't require any authentication.",
-      difficulty: 'easy',
-      category: 'API Basics'
+      explanation: "await can only be used inside functions declared with the async keyword.",
+      difficulty: 'medium',
+      category: 'Async/Await'
     },
 
     // Code Fill-in-the-blank Questions
     {
-      id: 16,
+      id: 9,
       type: 'code-blank',
-      question: "Complete the fetch function to get data from an API:",
-      code: `async function getData() {
-  const response = await fetch('______');
+      question: "Complete the weather API fetch function:",
+      code: `async function getWeather() {
+  const response = await fetch(
+    "https://api.openweathermap.org/data/2.5/weather?q=London&units=metric&appid=YOUR_API_KEY"
+  );
+  
   const data = await response.______();
-  return data;
+  
+  document.getElementById("temperature").innerText = 
+    "Temperature: " + data.main.temp + "°C";
 }`,
-      blanks: [
-        { 
-          position: 1, 
-          correct: "'https://api.example.com/data'",
-          options: ["'https://api.example.com/data'", "'http://api.example.com'", "'api.example.com'", "'example.com/api'"]
-        },
-        { 
-          position: 2, 
-          correct: "json",
-          options: ["json", "text", "html", "xml"]
-        }
-      ],
-      correctAnswer: ["'https://api.example.com/data'", "json"],
-      explanation: "The fetch() function needs a URL string as its first parameter. The response.json() method parses the response as JSON.",
+      blank: {
+        correct: "json",
+        options: ["json", "text", "html", "parse"]
+      },
+      correctAnswer: "json",
+      explanation: "The response.json() method parses the response body as JSON, which is needed to access the weather data.",
+      difficulty: 'medium',
+      category: 'Fetch API'
+    },
+    {
+      id: 10,
+      type: 'code-blank',
+      question: "Complete the function to handle API errors:",
+      code: `async function fetchData() {
+  try {
+    const response = await fetch('https://api.example.com/data');
+    const data = await response.json();
+    console.log(data);
+  } ______ (error) {
+    console.error('Error fetching data:', error);
+  }
+}`,
+      blank: {
+        correct: "catch",
+        options: ["catch", "try", "finally", "error"]
+      },
+      correctAnswer: "catch",
+      explanation: "The catch block handles any errors that occur in the try block, such as network failures or invalid responses.",
+      difficulty: 'medium',
+      category: 'Error Handling'
+    },
+    {
+      id: 11,
+      type: 'code-blank',
+      question: "Complete the DOM update after fetching data:",
+      code: `async function updateWeather() {
+  const data = await fetchWeatherData();
+  
+  document.______('temperature-display').innerText = 
+    \`\${data.temperature}°C in \${data.city}\`;
+}`,
+      blank: {
+        correct: "getElementById",
+        options: ["getElementById", "querySelector", "getElementsByClassName", "findElement"]
+      },
+      correctAnswer: "getElementById",
+      explanation: "getElementById finds an element by its ID, which is the standard way to select a specific DOM element.",
       difficulty: 'easy',
+      category: 'DOM Manipulation'
+    },
+    {
+      id: 12,
+      type: 'code-blank',
+      question: "Complete the basic async function structure:",
+      code: `______ function fetchFromAPI(url) {
+  const response = await fetch(url);
+  return response.json();
+}`,
+      blank: {
+        correct: "async",
+        options: ["async", "function", "await", "return"]
+      },
+      correctAnswer: "async",
+      explanation: "The async keyword is required before function to use await inside it for asynchronous operations.",
+      difficulty: 'easy',
+      category: 'Async/Await'
+    },
+
+    // More multiple choice questions
+    {
+      id: 13,
+      type: 'multiple-choice',
+      question: "What is the purpose of try...catch in async functions?",
+      options: [
+        "Handle errors gracefully",
+        "Make code run faster",
+        "Convert sync to async",
+        "Prevent API calls"
+      ],
+      correctAnswer: "Handle errors gracefully",
+      explanation: "try...catch allows you to handle errors without crashing the entire application.",
+      difficulty: 'medium',
+      category: 'Error Handling'
+    },
+    {
+      id: 14,
+      type: 'multiple-choice',
+      question: "What does innerText do?",
+      options: [
+        "Sets or gets text content of an element",
+        "Changes element color",
+        "Hides an element",
+        "Adds HTML tags"
+      ],
+      correctAnswer: "Sets or gets text content of an element",
+      explanation: "innerText gets or sets the text content of an element, ignoring any HTML tags.",
+      difficulty: 'easy',
+      category: 'DOM Manipulation'
+    },
+    {
+      id: 15,
+      type: 'multiple-choice',
+      question: "Why do we use async/await instead of .then()?",
+      options: [
+        "Makes asynchronous code look synchronous",
+        "It's faster",
+        "Works with all browsers",
+        "No reason, they're the same"
+      ],
+      correctAnswer: "Makes asynchronous code look synchronous",
+      explanation: "async/await makes asynchronous code easier to read and write by making it look like synchronous code.",
+      difficulty: 'medium',
+      category: 'Async/Await'
+    },
+    {
+      id: 16,
+      type: 'multiple-choice',
+      question: "What happens if you don't use await with fetch()?",
+      options: [
+        "Gets a Promise instead of data",
+        "Code crashes",
+        "Nothing happens",
+        "Gets HTML instead of JSON"
+      ],
+      correctAnswer: "Gets a Promise instead of data",
+      explanation: "Without await, fetch() returns a Promise object immediately, not the actual response data.",
+      difficulty: 'medium',
       category: 'Fetch API'
     },
     {
       id: 17,
-      type: 'code-blank',
-      question: "Complete the error handling for an async function:",
-      code: `async function fetchData() {
-  ______ {
-    const response = await fetch('...');
-    const data = await response.json();
-    console.log(data);
-  } ______ (error) {
-    console.error('Error:', ______);
-  }
-}`,
-      blanks: [
-        { 
-          position: 1, 
-          correct: "try",
-          options: ["try", "catch", "finally", "error"]
-        },
-        { 
-          position: 2, 
-          correct: "catch",
-          options: ["catch", "try", "finally", "if"]
-        },
-        { 
-          position: 3, 
-          correct: "error",
-          options: ["error", "err", "e", "exception"]
-        }
+      type: 'multiple-choice',
+      question: "What does this URL part do: '?q=London&units=metric'?",
+      options: [
+        "Adds query parameters to API request",
+        "Encrypts the request",
+        "Changes HTTP method",
+        "Adds authentication"
       ],
-      correctAnswer: ["try", "catch", "error"],
-      explanation: "try...catch blocks are essential for handling errors in async functions. The catch block receives the error object.",
-      difficulty: 'medium',
-      category: 'Error Handling'
+      correctAnswer: "Adds query parameters to API request",
+      explanation: "Query parameters (after ?) specify additional options like city name and measurement units.",
+      difficulty: 'easy',
+      category: 'API Basics'
     },
     {
       id: 18,
-      type: 'code-blank',
-      question: "Complete the Promise chain:",
-      code: `fetch('https://api.example.com/data')
-  .then(response => response.______())
-  .then(data => {
-    console.log(data);
-    document.getElementById('result').______ = data.message;
-  })
-  .______(error => console.error('Failed:', error));`,
-      blanks: [
-        { 
-          position: 1, 
-          correct: "json",
-          options: ["json", "text", "blob", "arrayBuffer"]
-        },
-        { 
-          position: 2, 
-          correct: "innerText",
-          options: ["innerText", "innerHTML", "textContent", "value"]
-        },
-        { 
-          position: 3, 
-          correct: "catch",
-          options: ["catch", "then", "finally", "error"]
-        }
+      type: 'multiple-choice',
+      question: "What is the correct order for fetching and displaying data?",
+      options: [
+        "Fetch → Parse → Update DOM",
+        "Update DOM → Fetch → Parse",
+        "Parse → Fetch → Update DOM",
+        "Fetch → Update DOM → Parse"
       ],
-      correctAnswer: ["json", "innerText", "catch"],
-      explanation: "response.json() parses JSON, innerText sets element text, and catch() handles errors in promise chains.",
-      difficulty: 'medium',
-      category: 'Promises'
+      correctAnswer: "Fetch → Parse → Update DOM",
+      explanation: "First fetch data, then parse it (like with .json()), then update the DOM with the parsed data.",
+      difficulty: 'easy',
+      category: 'Workflow'
     },
     {
       id: 19,
-      type: 'code-blank',
-      question: "Complete the function to update DOM with API data:",
-      code: `function displayWeather(data) {
-  const tempElement = document.______('temperature');
-  tempElement.______ = \`\${data.main.temp}°C\`;
-  
-  const descElement = document.querySelector('______');
-  descElement.textContent = data.weather[0].description;
-}`,
-      blanks: [
-        { 
-          position: 1, 
-          correct: "getElementById",
-          options: ["getElementById", "querySelector", "getElementsByClassName", "getElementByTagName"]
-        },
-        { 
-          position: 2, 
-          correct: "innerText",
-          options: ["innerText", "innerHTML", "value", "text"]
-        },
-        { 
-          position: 3, 
-          correct: ".weather-desc",
-          options: [".weather-desc", "#weather", ".description", "weather"]
-        }
+      type: 'multiple-choice',
+      question: "What happens when you await a Promise?",
+      options: [
+        "Code waits for Promise to resolve",
+        "Promise is cancelled",
+        "Error is thrown",
+        "Nothing, await does nothing"
       ],
-      correctAnswer: ["getElementById", "innerText", ".weather-desc"],
-      explanation: "getElementById finds elements by ID, innerText sets text content, and querySelector uses CSS selectors.",
+      correctAnswer: "Code waits for Promise to resolve",
+      explanation: "await pauses execution until the Promise settles, then continues with the resolved value.",
       difficulty: 'medium',
-      category: 'DOM Manipulation'
+      category: 'Async/Await'
     },
     {
       id: 20,
-      type: 'code-blank',
-      question: "Complete the API call with query parameters:",
-      code: `async function getWeather(city) {
-  const apiKey = 'your_api_key';
-  const url = \`https://api.openweathermap.org/data/2.5/weather?______=\${city}&______=metric&______=\${apiKey}\`;
-  
-  const response = await fetch(url);
-  return await response.json();
-}`,
-      blanks: [
-        { 
-          position: 1, 
-          correct: "q",
-          options: ["q", "city", "location", "name"]
-        },
-        { 
-          position: 2, 
-          correct: "units",
-          options: ["units", "system", "temp", "measurement"]
-        },
-        { 
-          position: 3, 
-          correct: "appid",
-          options: ["appid", "key", "apiKey", "token"]
-        }
-      ],
-      correctAnswer: ["q", "units", "appid"],
-      explanation: "Common OpenWeatherMap parameters: q for city, units for measurement system, appid for API key.",
-      difficulty: 'hard',
-      category: 'API Usage'
-    },
-
-    // Short Answer Questions (converted to multiple choice for consistency)
-    {
-      id: 21,
       type: 'multiple-choice',
-      question: "What does the 'await' keyword do in JavaScript?",
+      question: "Why update DOM after API call completes?",
       options: [
-        "Pauses execution until promise resolves",
-        "Makes code run faster",
-        "Creates a new thread",
-        "Cancels the current operation"
+        "To show fresh data to users",
+        "To make page load faster",
+        "To hide the API call",
+        "To prevent errors"
       ],
-      correctAnswer: "Pauses execution until promise resolves",
-      explanation: "The await keyword pauses the execution of an async function until a Promise is settled (resolved or rejected), then resumes execution and returns the resolved value.",
-      difficulty: 'medium',
-      category: 'Async/Await'
-    },
-    {
-      id: 22,
-      type: 'multiple-choice',
-      question: "Which two methods can be used to select DOM elements in JavaScript?",
-      options: [
-        "getElementById and querySelector",
-        "getElementByClass and findElement",
-        "selectElement and findById",
-        "getDOMElement and queryElement"
-      ],
-      correctAnswer: "getElementById and querySelector",
-      explanation: "getElementById selects by ID, querySelector uses CSS selectors. Other methods include getElementsByClassName and querySelectorAll.",
+      correctAnswer: "To show fresh data to users",
+      explanation: "Updating the DOM displays the new data from the API so users can see current information.",
       difficulty: 'easy',
       category: 'DOM Manipulation'
-    },
-    {
-      id: 23,
-      type: 'multiple-choice',
-      question: "What does HTTP stand for?",
-      options: [
-        "HyperText Transfer Protocol",
-        "High Traffic Transfer Protocol",
-        "Hyper Transfer Text Protocol",
-        "Hyperlink Transfer Protocol"
-      ],
-      correctAnswer: "HyperText Transfer Protocol",
-      explanation: "HTTP is the protocol used for transferring hypertext requests and information on the web.",
-      difficulty: 'easy',
-      category: 'HTTP Basics'
-    },
-    {
-      id: 24,
-      type: 'multiple-choice',
-      question: "What is the main difference between innerText and textContent?",
-      options: [
-        "innerText is aware of styling, textContent is not",
-        "textContent is faster than innerText",
-        "innerText works with HTML tags, textContent doesn't",
-        "textContent is deprecated, innerText is modern"
-      ],
-      correctAnswer: "innerText is aware of styling, textContent is not",
-      explanation: "innerText is aware of CSS styling and won't return hidden text, while textContent returns all text regardless of styling.",
-      difficulty: 'hard',
-      category: 'DOM Manipulation'
-    },
-    {
-      id: 25,
-      type: 'multiple-choice',
-      question: "What is an API endpoint?",
-      options: [
-        "A specific URL where API can be accessed",
-        "A type of API authentication",
-        "The final result of an API call",
-        "A programming language for APIs"
-      ],
-      correctAnswer: "A specific URL where API can be accessed",
-      explanation: "An API endpoint is a specific URL where an API can be accessed to perform certain operations or retrieve specific resources.",
-      difficulty: 'medium',
-      category: 'API Basics'
-    },
-
-    // More Questions...
-    {
-      id: 26,
-      type: 'multiple-choice',
-      question: "Which status code indicates 'Created'?",
-      options: ["200", "201", "404", "500"],
-      correctAnswer: "201",
-      explanation: "HTTP status code 201 indicates that a request was successful and a resource was created as a result.",
-      difficulty: 'medium',
-      category: 'HTTP Basics'
-    },
-    {
-      id: 27,
-      type: 'true-false',
-      question: "All browsers automatically handle CORS errors.",
-      options: ["True", "False"],
-      correctAnswer: "False",
-      explanation: "Browsers enforce CORS policies and will block requests that violate them unless the server includes proper CORS headers.",
-      difficulty: 'hard',
-      category: 'Security'
-    },
-    {
-      id: 28,
-      type: 'code-blank',
-      question: "Complete the function to handle loading state:",
-      code: `async function loadData() {
-  const loader = document.getElementById('loader');
-  loader.style.display = '______';
-  
-  try {
-    const data = await fetchData();
-    displayData(data);
-  } finally {
-    loader.style.display = '______';
-  }
-}`,
-      blanks: [
-        { 
-          position: 1, 
-          correct: "'block'",
-          options: ["'block'", "'visible'", "'show'", "'flex'"]
-        },
-        { 
-          position: 2, 
-          correct: "'none'",
-          options: ["'none'", "'hidden'", "'invisible'", "'hide'"]
-        }
-      ],
-      correctAnswer: ["'block'", "'none'"],
-      explanation: "Show loader before fetch, hide it after (in finally block to ensure it runs regardless of success/error).",
-      difficulty: 'medium',
-      category: 'UI/UX'
-    },
-    {
-      id: 29,
-      type: 'multiple-choice',
-      question: "What is the main purpose of an API key?",
-      options: [
-        "Authentication and rate limiting",
-        "Encrypting API responses",
-        "Making API calls faster",
-        "Converting JSON to XML"
-      ],
-      correctAnswer: "Authentication and rate limiting",
-      explanation: "API keys identify the requester for authentication, authorization, and rate limiting purposes.",
-      difficulty: 'medium',
-      category: 'Security'
-    },
-    {
-      id: 30,
-      type: 'multiple-choice',
-      question: "Which method would you use to update existing data via API?",
-      options: ["GET", "POST", "PUT", "DELETE"],
-      correctAnswer: "PUT",
-      explanation: "PUT is used to update existing resources. POST creates new resources, GET retrieves, DELETE removes.",
-      difficulty: 'medium',
-      category: 'HTTP Methods'
-    },
-    {
-      id: 31,
-      type: 'true-false',
-      question: "fetch() automatically throws an error for HTTP error status codes.",
-      options: ["True", "False"],
-      correctAnswer: "False",
-      explanation: "fetch() only rejects on network failure. HTTP error status codes (404, 500, etc.) don't cause automatic rejection.",
-      difficulty: 'hard',
-      category: 'Fetch API'
-    },
-    {
-      id: 32,
-      type: 'code-blank',
-      question: "Complete the POST request with JSON data:",
-      code: `async function createUser(userData) {
-  const response = await fetch('/api/users', {
-    method: '______',
-    headers: {
-      'Content-Type': '______'
-    },
-    body: JSON.______(userData)
-  });
-  return response.json();
-}`,
-      blanks: [
-        { 
-          position: 1, 
-          correct: "POST",
-          options: ["POST", "GET", "PUT", "DELETE"]
-        },
-        { 
-          position: 2, 
-          correct: "'application/json'",
-          options: ["'application/json'", "'text/html'", "'application/xml'", "'text/plain'"]
-        },
-        { 
-          position: 3, 
-          correct: "stringify",
-          options: ["stringify", "parse", "encode", "convert"]
-        }
-      ],
-      correctAnswer: ["POST", "'application/json'", "stringify"],
-      explanation: "POST method for creation, Content-Type header specifies JSON format, JSON.stringify converts object to string.",
-      difficulty: 'hard',
-      category: 'Fetch API'
-    },
-    {
-      id: 33,
-      type: 'multiple-choice',
-      question: "What is rate limiting in APIs?",
-      options: [
-        "Restricting number of requests per time period",
-        "Limiting the size of API responses",
-        "Slowing down API response times",
-        "Limiting API access to specific countries"
-      ],
-      correctAnswer: "Restricting number of requests per time period",
-      explanation: "Rate limiting controls how many requests a client can make to an API in a given time period to prevent abuse.",
-      difficulty: 'medium',
-      category: 'API Basics'
-    },
-    {
-      id: 34,
-      type: 'multiple-choice',
-      question: "What does this code do: 'data?.user?.name'?",
-      options: [
-        "Uses optional chaining to safely access nested properties",
-        "Always returns the user name",
-        "Throws an error if user doesn't exist",
-        "Checks if data is an array"
-      ],
-      correctAnswer: "Uses optional chaining to safely access nested properties",
-      explanation: "Optional chaining (?.) allows you to safely access deeply nested properties without checking each level.",
-      difficulty: 'medium',
-      category: 'JavaScript'
-    },
-    {
-      id: 35,
-      type: 'true-false',
-      question: "You can use await at the top level of a module.",
-      options: ["True", "False"],
-      correctAnswer: "True",
-      explanation: "In modern JavaScript modules, you can use top-level await without wrapping it in an async function.",
-      difficulty: 'hard',
-      category: 'Async/Await'
-    },
-    {
-      id: 36,
-      type: 'code-blank',
-      question: "Complete the function to cache API responses:",
-      code: `const cache = {};
-
-async function getCachedData(url) {
-  if (cache[url]) {
-    return ______[url];
-  }
-  
-  const response = await fetch(url);
-  const data = await response.json();
-  cache[url] = ______;
-  return data;
-}`,
-      blanks: [
-        { 
-          position: 1, 
-          correct: "cache",
-          options: ["cache", "data", "response", "result"]
-        },
-        { 
-          position: 2, 
-          correct: "data",
-          options: ["data", "cache", "response", "json"]
-        }
-      ],
-      correctAnswer: ["cache", "data"],
-      explanation: "Check cache first, return cached data if exists. Otherwise fetch, store in cache, then return.",
-      difficulty: 'hard',
-      category: 'Performance'
-    },
-    {
-      id: 37,
-      type: 'multiple-choice',
-      question: "What is the purpose of the 'finally' block in try/catch?",
-      options: [
-        "Runs regardless of success or error",
-        "Only runs if there's an error",
-        "Only runs if there's no error",
-        "Replaces the catch block"
-      ],
-      correctAnswer: "Runs regardless of success or error",
-      explanation: "The finally block executes after try and catch blocks, regardless of whether an exception was thrown or caught.",
-      difficulty: 'medium',
-      category: 'Error Handling'
-    },
-    {
-      id: 38,
-      type: 'multiple-choice',
-      question: "Which tool would you use to test API endpoints?",
-      options: ["Postman", "Photoshop", "Excel", "Word"],
-      correctAnswer: "Postman",
-      explanation: "Postman is a popular API testing tool that allows you to send requests and inspect responses.",
-      difficulty: 'easy',
-      category: 'Tools'
-    },
-    {
-      id: 39,
-      type: 'true-false',
-      question: "JSON can contain functions as values.",
-      options: ["True", "False"],
-      correctAnswer: "False",
-      explanation: "JSON is a data format that only supports strings, numbers, objects, arrays, booleans, and null. Functions are not valid JSON.",
-      difficulty: 'medium',
-      category: 'Data Formats'
-    },
-    {
-      id: 40,
-      type: 'code-blank',
-      question: "Complete the function to handle multiple concurrent API calls:",
-      code: `async function fetchAllData(urls) {
-  const promises = urls.map(url => ______(url));
-  const results = await Promise.______(promises);
-  return results;
-}`,
-      blanks: [
-        { 
-          position: 1, 
-          correct: "fetch",
-          options: ["fetch", "get", "request", "call"]
-        },
-        { 
-          position: 2, 
-          correct: "all",
-          options: ["all", "race", "any", "settled"]
-        }
-      ],
-      correctAnswer: ["fetch", "all"],
-      explanation: "Create array of fetch promises, then use Promise.all to wait for all to complete concurrently.",
-      difficulty: 'hard',
-      category: 'Performance'
     }
   ];
 
   const shuffleQuestions = () => {
     const shuffled = [...allQuestions]
       .sort(() => Math.random() - 0.5)
-      .slice(0, 40)
+      .slice(0, 20)
       .map((q, i) => ({ ...q, id: i + 1 }));
     setQuestions(shuffled);
   };
@@ -763,7 +383,6 @@ async function getCachedData(url) {
     setUserAnswers([]);
     setCurrentQuestionIndex(0);
     setSelectedOption('');
-    setFillInBlanks({});
     setTimeRemaining(300);
     setQuizResults(null);
     setHintUsed(false);
@@ -790,13 +409,8 @@ async function getCachedData(url) {
       userAnswer = selectedOption;
       isCorrect = selectedOption === currentQuestion.correctAnswer;
     } else if (currentQuestion.type === 'code-blank') {
-      const blankAnswers = currentQuestion.blanks?.map(blank => fillInBlanks[blank.position] || '').filter(Boolean);
-      userAnswer = blankAnswers?.join(', ') || '';
-      const correctAnswers = Array.isArray(currentQuestion.correctAnswer) 
-        ? currentQuestion.correctAnswer 
-        : [currentQuestion.correctAnswer];
-      isCorrect = blankAnswers?.length === correctAnswers.length && 
-                  blankAnswers?.every((ans, i) => ans === correctAnswers[i]);
+      userAnswer = selectedOption;
+      isCorrect = selectedOption === currentQuestion.correctAnswer;
     }
 
     const answer: UserAnswer = {
@@ -811,7 +425,6 @@ async function getCachedData(url) {
     if (currentQuestionIndex < questions.length - 1) {
       setCurrentQuestionIndex(prev => prev + 1);
       setSelectedOption('');
-      setFillInBlanks({});
       setHintUsed(false);
       setCurrentHint('');
       setShowExplanation(false);
@@ -858,7 +471,6 @@ async function getCachedData(url) {
     if (currentQuestionIndex < questions.length - 1) {
       setCurrentQuestionIndex(prev => prev + 1);
       setSelectedOption('');
-      setFillInBlanks({});
       setHintUsed(false);
       setCurrentHint('');
       setShowExplanation(false);
@@ -877,8 +489,7 @@ async function getCachedData(url) {
     } else if (question.type === 'true-false') {
       hint = `The answer is ${question.correctAnswer}.`;
     } else if (question.type === 'code-blank') {
-      const randomBlank = question.blanks?.[Math.floor(Math.random() * (question.blanks?.length || 1))];
-      hint = randomBlank ? `One of the blanks should be: "${randomBlank.correct}"` : 'Look at the context around the blanks.';
+      hint = `The missing code is related to ${question.explanation.split(' ').slice(0, 3).join(' ')}...`;
     }
     
     setCurrentHint(hint);
@@ -953,8 +564,8 @@ async function getCachedData(url) {
                 <Brain className="w-6 h-6" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold">API Knowledge Quiz</h1>
-                <p className="text-purple-200 text-sm">Test your understanding of APIs, async JavaScript, and DOM manipulation</p>
+                <h1 className="text-2xl font-bold">Async API Quiz</h1>
+                <p className="text-purple-200 text-sm">Test your understanding of async JavaScript, fetch API, and DOM updates</p>
               </div>
             </div>
             <button
@@ -976,9 +587,9 @@ async function getCachedData(url) {
                 <div className="w-24 h-24 bg-gradient-to-r from-yellow-500 to-orange-500 rounded-full flex items-center justify-center mx-auto mb-6">
                   <Brain className="w-12 h-12" />
                 </div>
-                <h2 className="text-3xl font-bold mb-4">API Knowledge Challenge</h2>
+                <h2 className="text-3xl font-bold mb-4">Async API Challenge</h2>
                 <p className="text-gray-300 text-lg mb-8">
-                  Test your understanding with 40 questions covering APIs, async JavaScript, DOM manipulation, and more!
+                  Test your understanding with 20 questions about async JavaScript, fetch API, and DOM manipulation
                 </p>
               </div>
 
@@ -994,7 +605,7 @@ async function getCachedData(url) {
                   <div className="w-12 h-12 bg-gradient-to-r from-green-500 to-emerald-500 rounded-lg flex items-center justify-center mb-4">
                     <Target className="w-6 h-6" />
                   </div>
-                  <h3 className="font-semibold mb-2">40 Questions</h3>
+                  <h3 className="font-semibold mb-2">20 Questions</h3>
                   <p className="text-gray-400 text-sm">Multiple choice, true/false, and code completion</p>
                 </div>
                 <div className="bg-gray-800/50 p-6 rounded-xl border border-gray-700">
@@ -1014,7 +625,7 @@ async function getCachedData(url) {
                 <ul className="space-y-3 text-gray-300">
                   <li className="flex items-start space-x-2">
                     <CheckCircle className="w-5 h-5 text-green-400 mt-0.5 flex-shrink-0" />
-                    <span>Answer all 40 questions within 5 minutes</span>
+                    <span>Answer all 20 questions within 5 minutes</span>
                   </li>
                   <li className="flex items-start space-x-2">
                     <CheckCircle className="w-5 h-5 text-green-400 mt-0.5 flex-shrink-0" />
@@ -1101,7 +712,6 @@ async function getCachedData(url) {
                           if (index <= currentQuestionIndex) {
                             setCurrentQuestionIndex(index);
                             setSelectedOption('');
-                            setFillInBlanks({});
                             setHintUsed(false);
                             setCurrentHint('');
                             setShowExplanation(false);
@@ -1202,23 +812,30 @@ async function getCachedData(url) {
 
                   {/* Code Block for Code Questions */}
                   {currentQuestion?.type === 'code-blank' && currentQuestion.code && (
-                    <div className="bg-gray-900 rounded-xl p-6 border border-gray-700 mb-6 font-mono text-sm">
-                      {currentQuestion.code.split('______').map((part, index) => (
-                        <span key={index}>
-                          <span className="text-gray-300">{part}</span>
-                          {index < currentQuestion.code!.split('______').length - 1 && (
-                            <span className="inline-block mx-1">
-                              <span className="bg-blue-500/20 text-blue-300 px-2 py-1 rounded">
-                                {fillInBlanks[index] || '______'}
-                              </span>
+                    <div className="bg-gray-900 rounded-xl p-6 border border-gray-700 mb-6">
+                      <div className="flex space-x-2 mb-4">
+                        <div className="w-3 h-3 bg-red-500 rounded-full" />
+                        <div className="w-3 h-3 bg-yellow-500 rounded-full" />
+                        <div className="w-3 h-3 bg-green-500 rounded-full" />
+                      </div>
+                      <pre className="font-mono text-sm overflow-x-auto">
+                        <code className="text-gray-300">
+                          {currentQuestion.code.split('______').map((part, index) => (
+                            <span key={index}>
+                              <span>{part}</span>
+                              {index < currentQuestion.code!.split('______').length - 1 && (
+                                <span className="bg-yellow-500/20 text-yellow-300 px-2 py-1 rounded mx-1">
+                                  {selectedOption || '______'}
+                                </span>
+                              )}
                             </span>
-                          )}
-                        </span>
-                      ))}
+                          ))}
+                        </code>
+                      </pre>
                     </div>
                   )}
 
-                  {/* Options for Multiple Choice */}
+                  {/* Options */}
                   {currentQuestion?.type === 'multiple-choice' && (
                     <div className="space-y-3">
                       {currentQuestion.options?.map((option, index) => (
@@ -1279,33 +896,26 @@ async function getCachedData(url) {
                   )}
 
                   {/* Code Blank Options */}
-                  {currentQuestion?.type === 'code-blank' && currentQuestion.blanks && (
-                    <div className="space-y-6">
-                      {currentQuestion.blanks.map((blank, blankIndex) => (
-                        <div key={blank.position} className="space-y-3">
-                          <div className="text-sm font-medium text-gray-300">
-                            Select option for blank #{blankIndex + 1}:
-                          </div>
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                            {blank.options.map((option, optionIndex) => (
-                              <button
-                                key={optionIndex}
-                                onClick={() => setFillInBlanks(prev => ({
-                                  ...prev,
-                                  [blank.position]: option
-                                }))}
-                                className={`p-3 rounded-lg border text-sm ${
-                                  fillInBlanks[blank.position] === option
-                                    ? 'bg-blue-500/20 border-blue-500'
-                                    : 'bg-gray-800/50 border-gray-700 hover:bg-gray-700/50'
-                                }`}
-                              >
-                                <code className="font-mono">{option}</code>
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
+                  {currentQuestion?.type === 'code-blank' && currentQuestion.blank && (
+                    <div className="space-y-3">
+                      <div className="text-sm font-medium text-gray-300 mb-3">
+                        Select the missing code:
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {currentQuestion.blank.options.map((option, optionIndex) => (
+                          <button
+                            key={optionIndex}
+                            onClick={() => setSelectedOption(option)}
+                            className={`p-3 rounded-lg border text-sm ${
+                              selectedOption === option
+                                ? 'bg-blue-500/20 border-blue-500'
+                                : 'bg-gray-800/50 border-gray-700 hover:bg-gray-700/50'
+                            }`}
+                          >
+                            <code className="font-mono">{option}</code>
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1352,11 +962,7 @@ async function getCachedData(url) {
                     </button>
                     <button
                       onClick={handleAnswer}
-                      disabled={
-                        (currentQuestion?.type === 'multiple-choice' || currentQuestion?.type === 'true-false') && !selectedOption ||
-                        (currentQuestion?.type === 'code-blank' && 
-                          currentQuestion.blanks?.some(blank => !fillInBlanks[blank.position]))
-                      }
+                      disabled={!selectedOption}
                       className="px-8 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:opacity-90 rounded-lg font-bold flex items-center space-x-2 disabled:opacity-50 transition-opacity"
                     >
                       <span>{currentQuestionIndex < questions.length - 1 ? 'Next Question' : 'Finish Quiz'}</span>
@@ -1491,6 +1097,34 @@ async function getCachedData(url) {
                           <span className="text-sm text-gray-400">{question?.category}</span>
                         </div>
                         <div className="text-sm mb-2">{question?.question}</div>
+                        {question?.type === 'code-blank' && question.code && (
+                          <div className="bg-gray-900 rounded p-3 mb-2 font-mono text-xs">
+                            <code className="text-gray-300">
+                              {question?.type === 'code-blank' && question.code && (
+                                <div className="bg-gray-900 rounded p-3 mb-2 font-mono text-xs">
+                                    <code className="text-gray-300">
+                                     {question?.type === 'code-blank' && question.code && (
+                                        <div className="bg-gray-900 rounded p-3 mb-2 font-mono text-xs">
+                                            <code className="text-gray-300">
+                                            {question.code.split('______').map((part, i, arr) => (
+                                                <span key={i}>
+                                                {part}
+                                                {i < arr.length - 1 && (
+                                                    <span className={`px-1 ${answer.isCorrect ? 'text-green-400' : 'text-red-400'}`}>
+                                                    {answer.userAnswer || '______'}
+                                                    </span>
+                                                )}
+                                                </span>
+                                            ))}
+                                            </code>
+                                        </div>
+                                        )}
+                                    </code>
+                                </div>
+                                )}
+                            </code>
+                          </div>
+                        )}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
                           <div>
                             <span className="text-gray-400">Your answer:</span>{' '}
@@ -1536,7 +1170,7 @@ async function getCachedData(url) {
                 </button>
                 <button
                   onClick={() => {
-                    const resultsText = `I scored ${quizResults!.score}% on the API Knowledge Quiz! 🎯\nCorrect: ${quizResults!.correct}/${quizResults!.total}\nTime: ${formatTime(quizResults!.timeSpent)}\nBadge: ${getBadge(quizResults!.score).name}`;
+                    const resultsText = `I scored ${quizResults!.score}% on the Async API Quiz! 🎯\nCorrect: ${quizResults!.correct}/${quizResults!.total}\nTime: ${formatTime(quizResults!.timeSpent)}\nBadge: ${getBadge(quizResults!.score).name}`;
                     navigator.clipboard.writeText(resultsText);
                   }}
                   className="px-8 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 hover:opacity-90 rounded-xl font-bold flex items-center space-x-2 transition-opacity"
