@@ -19,7 +19,7 @@ const Header: React.FC = () => {
     { name: 'Courses', href: '/courses', icon: <BookOpen className="w-5 h-5" /> },
     { name: 'Quizzes', href: '/quiz', icon: <Trophy className="w-5 h-5" /> },
     { name: 'Dashboard', href: '/dashboard', icon: <Settings className="w-5 h-5" /> },
-    { name: 'lesson', href: '/lesson2', icon: <BookOpen className="w-5 h-5" /> },
+    { name: 'lesson', href: '/lessons', icon: <BookOpen className="w-5 h-5" /> },
 
   ];
 
