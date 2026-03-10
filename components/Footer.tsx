@@ -5,22 +5,22 @@ import { FaFacebookF, FaTwitter, FaGithub, FaLinkedinIn } from 'react-icons/fa';
 export default function Footer() {
   const footerLinks = {
     products: [
-      { name: 'Layout Demo', href: '/layout-demo' },
-      { name: 'Coding Quiz', href: '/quiz' },
-      { name: 'Learning Games', href: '/games' },
-      { name: 'Code Practice', href: '/creative' },
+      { name: 'Frontend Courses', href: '/courses' },
+      { name: 'Backend Courses', href: '/courses' },
+      { name: 'Systems Design', href: '/courses' },
+      { name: 'Coding Quizzes', href: '/quiz' },
     ],
     resources: [
-      { name: 'Documentation', href: '#' },
-      { name: 'Tutorials', href: '#' },
-      { name: 'Blog', href: '#' },
-      { name: 'Community', href: '#' },
+      { name: 'Lessons', href: '/lessons' },
+      { name: 'Course Catalog', href: '/courses' },
+      { name: 'About Deveda', href: '/about' },
+      { name: 'Quiz Practice', href: '/quiz' },
     ],
     company: [
       { name: 'About Us', href: '/about' },
-      { name: 'Careers', href: '#' },
-      { name: 'Contact', href: '#' },
-      { name: 'Privacy Policy', href: '#' },
+      { name: 'Frontend Track', href: '/courses' },
+      { name: 'Backend Track', href: '/courses' },
+      { name: 'Systems Design Track', href: '/courses' },
     ],
   };
 
@@ -37,9 +37,9 @@ export default function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-12">
           {/* Column 1 */}
           <div>
-            <h3 className="text-xl font-bold mb-4">CodeCraft</h3>
+            <h3 className="text-xl font-bold mb-4">Deveda</h3>
             <p className="text-gray-400 mb-4">
-              Master coding through interactive learning, practice, and challenges.
+              Build real coding skills through structured frontend, backend, and systems design learning paths.
             </p>
             <div className="flex gap-4">
               {socialLinks.map((link, index) => (
@@ -98,7 +98,7 @@ export default function Footer() {
         </div>
 
         <div className="border-t border-gray-800 pt-8 text-center text-gray-500">
-          <p>&copy; {new Date().getFullYear()} CodeCraft. All rights reserved.</p>
+          <p>&copy; {new Date().getFullYear()} Deveda. All rights reserved.</p>
         </div>
       </div>
     </footer>

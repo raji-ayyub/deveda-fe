@@ -14,7 +14,7 @@ import {
   Bookmark, Share2, Download, RefreshCw,
   ThumbsUp, MessageCircle
 } from 'lucide-react';
-import { CourseCatalog, UserCourse } from '@/lib/types';
+import { CourseCatalog, CourseCurriculum, UserCourse } from '@/lib/types';
 
 const SingleCoursePage: React.FC = () => {
   const params = useParams();
@@ -24,6 +24,7 @@ const SingleCoursePage: React.FC = () => {
   const slug = params.slug as string;
   
   const [course, setCourse] = useState<CourseCatalog | null>(null);
+  const [curriculum, setCurriculum] = useState<CourseCurriculum | null>(null);
   const [userCourse, setUserCourse] = useState<UserCourse | null>(null);
   const [loading, setLoading] = useState(true);
   const [enrolling, setEnrolling] = useState(false);
@@ -45,6 +46,13 @@ const SingleCoursePage: React.FC = () => {
       // Get course details
       const courseRes = await api.getCourseBySlug(slug);
       setCourse(courseRes.data);
+
+      try {
+        const curriculumRes = await api.getCourseCurriculum(slug);
+        setCurriculum(curriculumRes.data);
+      } catch (error) {
+        console.error('Failed to load curriculum:', error);
+      }
       
       // If user is logged in, get their progress
       if (user) {
@@ -161,6 +169,16 @@ const SingleCoursePage: React.FC = () => {
   const isEnrolled = !!userCourse;
   const progress = userCourse?.progress || 0;
   const completed = userCourse?.completed || false;
+  const learningHighlights = course?.tags?.length
+    ? course.tags.slice(0, 5)
+    : curriculum?.overview
+    ? [curriculum.overview, 'Hands-on lesson progression', 'Checkpoint quizzes and milestone projects']
+    : [
+        'Build practical coding projects',
+        'Validate progress with quizzes',
+        'Move through a structured module path',
+        'Strengthen portfolio-ready implementation skills',
+      ];
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
@@ -382,14 +400,7 @@ const SingleCoursePage: React.FC = () => {
                 <div className="bg-white rounded-xl shadow-lg p-6">
                   <h2 className="text-2xl font-bold text-gray-900 mb-4">What You'll Learn</h2>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {[
-                      'Master the fundamentals of the subject',
-                      'Build real-world projects',
-                      'Solve practical problems',
-                      'Prepare for advanced topics',
-                      'Gain industry-relevant skills',
-                      'Earn a certificate of completion',
-                    ].map((item, index) => (
+                    {learningHighlights.map((item, index) => (
                       <div key={index} className="flex items-start">
                         <CheckCircle className="w-5 h-5 text-green-500 mr-3 mt-0.5 flex-shrink-0" />
                         <span>{item}</span>

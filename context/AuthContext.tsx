@@ -132,7 +132,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setLoading(true);
     try {
       const response = await api.login({ email, password });
-      setUser(response.data);
+      setUser(response.data.user);
     } finally {
       setLoading(false);
     }
@@ -142,7 +142,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setLoading(true);
     try {
       const response = await api.register({ email, password, firstName, lastName, role });
-      setUser(response.data);
+      setUser(response.data.user);
     } finally {
       setLoading(false);
     }

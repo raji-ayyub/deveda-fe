@@ -6,27 +6,21 @@ import type { FeatureCardProps } from "@/components/FeatureCard";
 export const features: FeatureCardProps[] = [
   {
     icon: 'FaLayerGroup',
-    title: 'Layout Grouping Demo',
+    title: 'Frontend Paths',
     description:
-      'Visualize and experiment with CSS layout techniques. Our interactive tool helps you understand how elements position and behave in various layout systems.',
+      'Progress from HTML, CSS, and JavaScript basics to React, Next.js, Tailwind CSS, and frontend engineering.',
   },
   {
     icon: 'FaPuzzlePiece',
-    title: 'Coding Quizzes',
+    title: 'Backend Tracks',
     description:
-      'Test your knowledge with our comprehensive quizzes covering multiple programming languages and concepts. Track your progress and identify areas for improvement.',
-  },
-  {
-    icon: 'FaGamepad',
-    title: 'Learning Games',
-    description:
-      'Make learning fun with our programming games. Solve puzzles, debug code, and complete challenges while improving your coding skills.',
+      'Learn Python, APIs, FastAPI, backend architecture, and production-ready service design step by step.',
   },
   {
     icon: 'FaCode',
-    title: 'Code Practice',
+    title: 'Systems Design',
     description:
-      'Sharpen your skills with our extensive collection of coding exercises. Get instant feedback and suggestions for improvement.',
+      'Connect frontend and backend learning with scalability, reliability, API boundaries, and architecture tradeoffs.',
   },
 ];
 
@@ -35,21 +29,21 @@ export const testimonials = [
     id: 1,
     text: '"The layout grouping tool completely changed how I understand CSS. I finally grasped flexbox and grid after just a few hours of experimentation!"',
     author: 'Sarah Andrews',
-    role: 'Frontend Developer',
+    role: 'Junior Frontend Developer',
     initials: 'SA',
   },
   {
     id: 2,
-    text: '"I\'ve tried many coding platforms, but the gamified learning approach here kept me engaged. I actually look forward to practicing now!"',
+    text: '"The Python and FastAPI track gave me a clean backend roadmap. I finally understood how to move from scripts to real APIs."',
     author: 'Michael Johnson',
-    role: 'Computer Science Student',
+    role: 'Backend Learner',
     initials: 'MJ',
   },
   {
     id: 3,
-    text: '"As a senior developer, I use CodeCraft to keep my skills sharp. The advanced challenges are exactly what I needed to stay current with new technologies."',
+    text: '"The systems design content tied everything together. It made frontend and backend decisions feel connected instead of isolated topics."',
     author: 'Robert Parker',
-    role: 'Lead Developer',
+    role: 'Software Engineer',
     initials: 'RP',
   },
 ];
@@ -63,12 +57,12 @@ export const steps = [
   {
     title: 'Choose Your Path',
     description:
-      'Select from our various learning modules based on your goals and programming interests.',
+      'Pick a frontend, backend, or systems design path based on the type of engineer you want to become.',
   },
   {
     title: 'Start Learning',
     description:
-      'Dive into interactive lessons, challenges, and projects that make learning engaging and effective.',
+      'Work through coding lessons, quizzes, and projects that map directly to real engineering skills.',
   },
 ];
 
@@ -140,10 +134,10 @@ export const colorGuidelines = [
 export const teamMembers = [
   {
     name: 'Zara',
-    role: 'Frontend Development',
+    role: 'Frontend Development Beginner',
     image: '/images/higab.jpg',
-    description: 'Learning to build website user interfaces and implementing APIs',
-    skills: ['HTML', 'CSS', 'JavaScript', 'Creativity'],
+    description: 'Building solid foundations in HTML, CSS, and basic JavaScript.',
+    skills: ['HTML', 'CSS', 'JavaScript', 'Responsive Design'],
     progress: [
       { label: 'HTML', value: 75 },
       { label: 'CSS Layout', value: 65 },
@@ -152,24 +146,23 @@ export const teamMembers = [
   },
   {
     name: 'Ayyub',
-    role: 'Mentor & Guide',
+    role: 'Frontend and Backend Mentor',
     image: '/images/admin.png',
-    description: 'Helping others connect coding concepts with fun projects.',
+    description: 'Guiding learners across frontend systems, backend services, and architecture thinking.',
     skills: ['Mentorship', 'JavaScript', 'TypeScript', 'React', 'Python'],
     progress: [
-      { label: 'AI Concepts', value: 90 },
+      { label: 'Frontend Systems', value: 90 },
       { label: 'Full-Stack Development', value: 95 },
-      { label: 'AI Engineering', value: 65 },
-      { label: 'Agentics', value: 55 },
-
+      { label: 'Backend Architecture', value: 85 },
+      { label: 'Systems Design', value: 80 },
     ],
   },
   {
     name: 'DevTribe Crew',
-    role: 'Fellow Learners',
+    role: 'Frontend and Backend Cohort',
     image: '/images/git2.jpg',
-    description: 'Coding, building, and sharing ideas together.',
-    skills: ['Collaboration', 'Projects', 'Community'],
+    description: 'Shipping projects together across frontend, backend, and systems design practice.',
+    skills: ['Collaboration', 'Projects', 'Code Reviews'],
     progress: [
       { label: 'Team Projects', value: 20 },
       { label: 'Collaboration', value: 30 },
@@ -177,7 +170,7 @@ export const teamMembers = [
   },
   {
     name: 'Muiz',
-    role: 'Frontend Development Student',
+    role: 'Frontend Development Intermediate',
     image: '/images/user.jpg',
     description: 'Exploring modern web technologies and responsive design.',
     skills: ['HTML', 'CSS', 'JavaScript', 'React'],
@@ -189,19 +182,19 @@ export const teamMembers = [
   },
   {
     name: 'David',
-    role: 'Frontend Development Student',
+    role: 'Frontend Development Advanced',
     image: '/images/admin2.png',
-    description: 'Passionate about creating beautiful user interfaces.',
-    skills: ['UI Design', 'CSS', 'JavaScript', 'Accessibility'],
+    description: 'Focusing on React, Next.js, and accessible interface engineering.',
+    skills: ['React', 'Next.js', 'TypeScript', 'Accessibility'],
     progress: [
-      { label: 'UI Design', value: 80 },
-      { label: 'CSS Mastery', value: 90 },
-      { label: 'JavaScript', value: 60 },
+      { label: 'Next.js', value: 80 },
+      { label: 'TypeScript', value: 75 },
+      { label: 'Accessibility', value: 70 },
     ],
   },
   {
     name: 'Romlah_Dev',
-    role: 'Frontend Developer JS',
+    role: 'Frontend Development Mastery',
     image: '/images/hijab.png',
     description: 'Specializing in JavaScript and modern frameworks.',
     skills: ['JavaScript', 'React', 'Next.js', 'TypeScript'],
@@ -213,25 +206,25 @@ export const teamMembers = [
   },
   {
     name: 'Iremide',
-    role: 'UI/UX',
+    role: 'Backend Development FastAPI',
     image: '/images/hijab.png',
-    description: 'Website User Interface and Experience Design.',
-    skills: ['Figma', 'Web Design'],
+    description: 'Learning Python APIs, request validation, and service structure with FastAPI.',
+    skills: ['Python', 'FastAPI', 'Pydantic', 'APIs'],
     progress: [
-      { label: 'Figma', value: 65 },
-      { label: 'Web Design', value: 85 },
+      { label: 'Python', value: 65 },
+      { label: 'FastAPI', value: 60 },
     ],
   },
   {
     name: 'Uthman',
-    role: 'Explorer/Developer',
+    role: 'Systems Design Learner',
     image: '/images/user.jpg',
-    description: 'Exploring various programming paradigms and tools.',
-    skills: ['Python', 'JavaScript', 'Algorithms', 'Problem Solving'],
+    description: 'Exploring how APIs, databases, queues, and scaling decisions fit together.',
+    skills: ['Python', 'System Design', 'APIs', 'Problem Solving'],
     progress: [
       { label: 'Python', value: 75 },
-      { label: 'Algorithms', value: 65 },
-      { label: 'Web Development', value: 50 },
+      { label: 'Architecture', value: 65 },
+      { label: 'Scalability', value: 50 },
     ],
   },
 ];

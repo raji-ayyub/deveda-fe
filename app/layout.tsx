@@ -10,8 +10,8 @@ import { AuthProvider } from '@/context/AuthContext';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Deveda - Learning Platform',
-  description: 'Interactive learning platform with courses, quizzes, and games',
+  title: 'Deveda - Coding Learning Platform',
+  description: 'Coding-focused learning platform for frontend development, backend development, and systems design.',
 };
 
 export default function RootLayout({

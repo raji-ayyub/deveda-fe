@@ -34,7 +34,7 @@ const QuizzesManagementPage: React.FC = () => {
   const loadData = async () => {
     try {
       setLoading(true);
-      const questionsRes = await api.getAllQuizQuestions();
+      const questionsRes = await api.getQuestionsWithDetails();
       const allQuestions = questionsRes.data;
 
       setQuestions(allQuestions);

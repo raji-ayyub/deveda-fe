@@ -19,7 +19,8 @@ import {
   Download,
   Plus,
   RefreshCw,
-  Users
+  Users,
+  X
 } from 'lucide-react';
 
 const UsersManagementPage: React.FC = () => {
@@ -32,6 +33,16 @@ const UsersManagementPage: React.FC = () => {
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [usersPerPage] = useState(10);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [creatingUser, setCreatingUser] = useState(false);
+  const [createError, setCreateError] = useState('');
+  const [createForm, setCreateForm] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    password: '',
+    role: 'Instructor',
+  });
 
   useEffect(() => {
     loadUsers();
@@ -102,6 +113,45 @@ const UsersManagementPage: React.FC = () => {
     }
   };
 
+  const handleCreateUser = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setCreateError('');
+
+    try {
+      setCreatingUser(true);
+      const response = await api.createUser({
+        firstName: createForm.firstName.trim(),
+        lastName: createForm.lastName.trim(),
+        email: createForm.email.trim().toLowerCase(),
+        password: createForm.password,
+        role: createForm.role,
+      });
+
+      setUsers([
+        {
+          ...response.data,
+          createdAt: response.data.createdAt || new Date().toISOString(),
+          lastLogin: response.data.lastLogin || null,
+          coursesCount: 0,
+          quizAttempts: 0,
+        },
+        ...users,
+      ]);
+      setShowCreateModal(false);
+      setCreateForm({
+        firstName: '',
+        lastName: '',
+        email: '',
+        password: '',
+        role: 'Instructor',
+      });
+    } catch (error: any) {
+      setCreateError(error.message || 'Failed to create user.');
+    } finally {
+      setCreatingUser(false);
+    }
+  };
+
   const toggleSelectUser = (userId: string) => {
     setSelectedUsers(prev =>
       prev.includes(userId)
@@ -153,7 +203,10 @@ const UsersManagementPage: React.FC = () => {
             <Download className="w-4 h-4 mr-2" />
             Export
           </button>
-          <button className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg text-sm font-medium hover:opacity-90">
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg text-sm font-medium hover:opacity-90"
+          >
             <Plus className="w-4 h-4 mr-2" />
             Add User
           </button>
@@ -423,8 +476,92 @@ const UsersManagementPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-4 py-8">
+          <div className="w-full max-w-2xl overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-2xl shadow-slate-300">
+            <div className="flex items-center justify-between border-b border-slate-100 bg-[linear-gradient(135deg,#eff6ff_0%,#ffffff_50%,#eef2ff_100%)] px-6 py-5">
+              <div>
+                <h3 className="text-xl font-bold text-slate-950">Create staff or learner account</h3>
+                <p className="mt-1 text-sm text-slate-600">Use this for instructors, admins, and managed student accounts.</p>
+              </div>
+              <button
+                onClick={() => setShowCreateModal(false)}
+                className="rounded-full p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateUser} className="space-y-5 px-6 py-6">
+              {createError && <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{createError}</div>}
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <ModalField label="First name" value={createForm.firstName} onChange={(value) => setCreateForm((current) => ({ ...current, firstName: value }))} />
+                <ModalField label="Last name" value={createForm.lastName} onChange={(value) => setCreateForm((current) => ({ ...current, lastName: value }))} />
+                <ModalField label="Email" type="email" value={createForm.email} onChange={(value) => setCreateForm((current) => ({ ...current, email: value }))} />
+                <ModalField label="Password" type="password" value={createForm.password} onChange={(value) => setCreateForm((current) => ({ ...current, password: value }))} />
+                <div className="md:col-span-2">
+                  <label className="mb-2 block text-sm font-semibold text-slate-700">Role</label>
+                  <select
+                    value={createForm.role}
+                    onChange={(event) => setCreateForm((current) => ({ ...current, role: event.target.value }))}
+                    className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                  >
+                    <option value="Instructor">Instructor</option>
+                    <option value="Student">Student</option>
+                    <option value="Admin">Admin</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 border-t border-slate-100 pt-5">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(false)}
+                  className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={creatingUser}
+                  className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-60"
+                >
+                  {creatingUser ? 'Creating...' : 'Create account'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+
+function ModalField({
+  label,
+  value,
+  onChange,
+  type = 'text',
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  type?: string;
+}) {
+  return (
+    <div>
+      <label className="mb-2 block text-sm font-semibold text-slate-700">{label}</label>
+      <input
+        type={type}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+        required
+      />
+    </div>
+  );
+}
 
 export default UsersManagementPage;

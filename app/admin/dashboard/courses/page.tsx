@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
 import { CourseCatalog } from '@/lib/types';
+import { CODING_COURSES, COURSE_CATEGORY_COLORS, COURSE_DIFFICULTY_COLORS } from '@/lib/course-content';
 import {
   Plus,
   RefreshCw,
@@ -41,8 +42,11 @@ const CoursesManagementPage: React.FC = () => {
 
   useEffect(() => {
     loadCourses();
-    loadStats();
   }, []);
+
+  useEffect(() => {
+    loadStats();
+  }, [courses]);
 
   useEffect(() => {
     filterCourses();
@@ -55,9 +59,8 @@ const CoursesManagementPage: React.FC = () => {
       setCourses(response.data);
     } catch (error) {
       console.error('Failed to load courses:', error);
-      // For demo purposes, create some mock data if API fails
       if (process.env.NODE_ENV === 'development') {
-        setCourses(getMockCourses());
+        setCourses(CODING_COURSES);
       }
     } finally {
       setLoading(false);
@@ -120,16 +123,13 @@ const CoursesManagementPage: React.FC = () => {
   const handleUpdateCourse = async (courseId: string, formData: any) => {
     try {
       setActionLoading('update');
-      // Note: This endpoint needs to be implemented in your backend
-      // For now, we'll simulate the update
-      const updatedCourse = {
-        ...editingCourse,
-        ...formData,
-        id: courseId,
-      };
-      
+      if (!editingCourse) {
+        return;
+      }
+
+      const response = await api.updateCourseCatalog(editingCourse.slug, formData);
       setCourses(courses.map(c => 
-        c.id === courseId ? updatedCourse as CourseCatalog : c
+        c.id === courseId ? response.data : c
       ));
       
       setShowEditModal(false);
@@ -161,25 +161,11 @@ const CoursesManagementPage: React.FC = () => {
   };
 
   const getDifficultyColor = (difficulty: string) => {
-    switch (difficulty) {
-      case 'Beginner': return 'bg-green-100 text-green-800';
-      case 'Intermediate': return 'bg-yellow-100 text-yellow-800';
-      case 'Advanced': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
+    return COURSE_DIFFICULTY_COLORS[difficulty] || 'bg-gray-100 text-gray-800';
   };
 
   const getCategoryColor = (category: string) => {
-    const colors: Record<string, string> = {
-      'Programming': 'bg-blue-100 text-blue-800',
-      'Mathematics': 'bg-purple-100 text-purple-800',
-      'Science': 'bg-green-100 text-green-800',
-      'Web Development': 'bg-orange-100 text-orange-800',
-      'Data Science': 'bg-pink-100 text-pink-800',
-      'Business': 'bg-indigo-100 text-indigo-800',
-      'Design': 'bg-teal-100 text-teal-800',
-    };
-    return colors[category] || 'bg-gray-100 text-gray-800';
+    return COURSE_CATEGORY_COLORS[category] || 'bg-gray-100 text-gray-800';
   };
 
   const formatDuration = (minutes: number) => {
@@ -212,7 +198,7 @@ const CoursesManagementPage: React.FC = () => {
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Course Management</h2>
-          <p className="text-gray-600">Manage course catalog and content</p>
+          <p className="text-gray-600">Manage the coding curriculum across frontend, backend, and systems design</p>
         </div>
         <div className="flex items-center space-x-3">
           <button
@@ -377,58 +363,8 @@ const CoursesManagementPage: React.FC = () => {
   );
 };
 
-// Mock data for development (remove in production)
 const getMockCourses = (): CourseCatalog[] => {
-  return [
-    {
-      id: '1',
-      slug: 'intro-python',
-      title: 'Introduction to Python',
-      description: 'Learn the fundamentals of Python programming language from scratch.',
-      category: 'Programming',
-      difficulty: 'Beginner',
-      duration: 240,
-      totalQuizzes: 5,
-      totalLessons: 12,
-      instructor: 'John Smith',
-      prerequisites: [],
-      tags: ['python', 'programming', 'beginner'],
-      thumbnail: 'https://images.unsplash.com/photo-1526379879527-8559ecfcaec1?w=400&h=300&fit=crop',
-      createdAt: '2024-01-15',
-    },
-    {
-      id: '2',
-      slug: 'advanced-javascript',
-      title: 'Advanced JavaScript Concepts',
-      description: 'Master advanced JavaScript topics including async/await, closures, and design patterns.',
-      category: 'Web Development',
-      difficulty: 'Advanced',
-      duration: 360,
-      totalQuizzes: 8,
-      totalLessons: 18,
-      instructor: 'Sarah Johnson',
-      prerequisites: ['intro-javascript', 'basic-html-css'],
-      tags: ['javascript', 'webdev', 'advanced'],
-      thumbnail: 'https://images.unsplash.com/photo-1627398242454-45a1465c2479?w=400&h=300&fit=crop',
-      createdAt: '2024-01-20',
-    },
-    {
-      id: '3',
-      slug: 'data-science-101',
-      title: 'Data Science Fundamentals',
-      description: 'Introduction to data science concepts, tools, and methodologies.',
-      category: 'Data Science',
-      difficulty: 'Intermediate',
-      duration: 300,
-      totalQuizzes: 6,
-      totalLessons: 15,
-      instructor: 'Dr. Michael Chen',
-      prerequisites: ['intro-python', 'basic-statistics'],
-      tags: ['data-science', 'python', 'machine-learning'],
-      thumbnail: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=400&h=300&fit=crop',
-      createdAt: '2024-01-25',
-    },
-  ];
+  return CODING_COURSES;
 };
 
 export default CoursesManagementPage;

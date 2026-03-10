@@ -124,6 +124,7 @@ import {
   Search, Filter, Grid, List
 } from 'lucide-react';
 import { CourseCatalog, UserCourse, QuizAttempt } from '@/lib/types';
+import { CODING_COURSES, COURSE_CATEGORY_COLORS, COURSE_DIFFICULTY_COLORS } from '@/lib/course-content';
 
 const HomePage: React.FC = () => {
   const { user } = useAuth();
@@ -142,16 +143,13 @@ const HomePage: React.FC = () => {
   });
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState<string>('All');
+  const [usingFallbackData, setUsingFallbackData] = useState(false);
 
   const categories = [
     { id: 'all', name: 'All', icon: Grid, color: 'bg-gradient-to-r from-blue-500 to-purple-500' },
-    { id: 'programming', name: 'Programming', icon: Code, color: 'bg-gradient-to-r from-blue-500 to-cyan-500' },
-    { id: 'design', name: 'Design', icon: Palette, color: 'bg-gradient-to-r from-pink-500 to-rose-500' },
-    { id: 'business', name: 'Business', icon: Briefcase, color: 'bg-gradient-to-r from-green-500 to-emerald-500' },
-    { id: 'science', name: 'Science', icon: Brain, color: 'bg-gradient-to-r from-purple-500 to-violet-500' },
-    { id: 'math', name: 'Mathematics', icon: Calculator, color: 'bg-gradient-to-r from-orange-500 to-red-500' },
-    { id: 'music', name: 'Music', icon: Music, color: 'bg-gradient-to-r from-yellow-500 to-amber-500' },
-    { id: 'language', name: 'Languages', icon: Globe, color: 'bg-gradient-to-r from-teal-500 to-cyan-500' },
+    { id: 'frontend development', name: 'Frontend Development', icon: Code, color: 'bg-gradient-to-r from-blue-500 to-cyan-500' },
+    { id: 'backend development', name: 'Backend Development', icon: Server, color: 'bg-gradient-to-r from-emerald-500 to-teal-500' },
+    { id: 'systems design', name: 'Systems Design', icon: Database, color: 'bg-gradient-to-r from-amber-500 to-orange-500' },
   ];
 
   useEffect(() => {
@@ -185,6 +183,7 @@ const HomePage: React.FC = () => {
         completionRate: 78,
         totalHours: 24500,
       });
+      setUsingFallbackData(false);
 
       // If user is logged in, load their progress
       if (user) {
@@ -246,41 +245,35 @@ const HomePage: React.FC = () => {
 
     } catch (error) {
       console.error('Failed to load home data:', error);
-      // Fallback mock data for demo
-      setFeaturedCourses(getMockCourses().slice(0, 6));
-      setPopularCourses(getMockCourses().slice(6, 12));
-      setNewCourses(getMockCourses().slice(-6));
+      if (process.env.NODE_ENV === 'development') {
+        setFeaturedCourses(getMockCourses().slice(0, 6));
+        setPopularCourses(getMockCourses().slice(3, 9));
+        setNewCourses(getMockCourses().slice(-4));
+        setStats({
+          totalCourses: CODING_COURSES.length,
+          totalStudents: 0,
+          completionRate: 0,
+          totalHours: 0,
+        });
+        setUsingFallbackData(true);
+      }
     } finally {
       setLoading(false);
     }
   };
 
   const getDifficultyColor = (difficulty: string) => {
-    switch (difficulty) {
-      case 'Beginner': return 'bg-green-100 text-green-800';
-      case 'Intermediate': return 'bg-yellow-100 text-yellow-800';
-      case 'Advanced': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
+    return COURSE_DIFFICULTY_COLORS[difficulty] || 'bg-gray-100 text-gray-800';
   };
 
   const getCategoryColor = (category: string) => {
-    const colors: Record<string, string> = {
-      'Programming': 'bg-blue-100 text-blue-800',
-      'Mathematics': 'bg-purple-100 text-purple-800',
-      'Science': 'bg-green-100 text-green-800',
-      'Web Development': 'bg-orange-100 text-orange-800',
-      'Data Science': 'bg-pink-100 text-pink-800',
-      'Business': 'bg-indigo-100 text-indigo-800',
-      'Design': 'bg-teal-100 text-teal-800',
-    };
-    return colors[category] || 'bg-gray-100 text-gray-800';
+    return COURSE_CATEGORY_COLORS[category] || 'bg-gray-100 text-gray-800';
   };
 
   const getFeaturedCourses = () => {
     if (activeCategory === 'All') return featuredCourses;
     return featuredCourses.filter(course => 
-      course.category.toLowerCase().includes(activeCategory.toLowerCase())
+      course.category.toLowerCase() === activeCategory.toLowerCase()
     );
   };
 
@@ -304,14 +297,14 @@ const HomePage: React.FC = () => {
           <div className="text-center lg:text-left lg:flex lg:items-center lg:justify-between">
             <div className="lg:w-1/2">
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white leading-tight">
-                Learn. Grow.
+                Build Frontend.
                 <span className="block text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 to-pink-300">
-                  Succeed.
+                  Ship Backend.
                 </span>
               </h1>
               <p className="mt-6 text-xl text-white/90 max-w-2xl">
-                Join thousands of students mastering new skills with our interactive courses, 
-                hands-on projects, and expert guidance.
+                Follow structured coding paths in frontend development, backend development,
+                and systems design with projects, quizzes, and progressive skill tracks.
               </p>
               <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
                 {user ? (
@@ -401,6 +394,14 @@ const HomePage: React.FC = () => {
           ))}
         </div>
       </div>
+
+      {usingFallbackData && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            Showing local coding curriculum fallback data because the course catalog API was unavailable.
+          </div>
+        </div>
+      )}
 
       {/* User Progress Dashboard */}
       {user && userProgress && (
@@ -909,10 +910,10 @@ const HomePage: React.FC = () => {
       <div className="bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 py-20">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-4xl font-bold text-white mb-6">
-            Ready to Start Your Learning Journey?
+            Ready to Build Real Coding Skills?
           </h2>
           <p className="text-xl text-white/90 mb-10">
-            Join thousands of students who are transforming their careers with our platform.
+            Start with HTML, CSS, JavaScript, Python, FastAPI, React, Next.js, and systems design.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             {user ? (
@@ -948,7 +949,7 @@ const HomePage: React.FC = () => {
             )}
           </div>
           <p className="text-white/70 mt-6 text-sm">
-            No credit card required • 7-day free trial • Cancel anytime
+            Curriculum focused entirely on software development tracks
           </p>
         </div>
       </div>
@@ -962,10 +963,10 @@ const HomePage: React.FC = () => {
                 <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-500 rounded-lg flex items-center justify-center mr-3">
                   <GraduationCap className="w-6 h-6" />
                 </div>
-                <span className="text-xl font-bold">LearnHub</span>
+                <span className="text-xl font-bold">Deveda</span>
               </div>
               <p className="text-gray-400">
-                Empowering learners worldwide with interactive courses and expert-led instruction.
+                Frontend, backend, and systems design learning paths for developers who want a focused roadmap.
               </p>
             </div>
             
@@ -973,19 +974,19 @@ const HomePage: React.FC = () => {
               <h4 className="font-semibold mb-4">Platform</h4>
               <ul className="space-y-2">
                 <li><a href="/courses" className="text-gray-400 hover:text-white">Courses</a></li>
-                <li><a href="/pricing" className="text-gray-400 hover:text-white">Pricing</a></li>
+                <li><a href="/courses" className="text-gray-400 hover:text-white">Frontend Track</a></li>
                 <li><a href="/about" className="text-gray-400 hover:text-white">About Us</a></li>
-                <li><a href="/careers" className="text-gray-400 hover:text-white">Careers</a></li>
+                <li><a href="/courses" className="text-gray-400 hover:text-white">Backend Track</a></li>
               </ul>
             </div>
             
             <div>
               <h4 className="font-semibold mb-4">Resources</h4>
               <ul className="space-y-2">
-                <li><a href="/blog" className="text-gray-400 hover:text-white">Blog</a></li>
-                <li><a href="/help" className="text-gray-400 hover:text-white">Help Center</a></li>
-                <li><a href="/community" className="text-gray-400 hover:text-white">Community</a></li>
-                <li><a href="/contact" className="text-gray-400 hover:text-white">Contact</a></li>
+                <li><a href="/lessons" className="text-gray-400 hover:text-white">Lessons</a></li>
+                <li><a href="/quiz" className="text-gray-400 hover:text-white">Quiz Practice</a></li>
+                <li><a href="/courses" className="text-gray-400 hover:text-white">Systems Design</a></li>
+                <li><a href="/about" className="text-gray-400 hover:text-white">Contact</a></li>
               </ul>
             </div>
             
@@ -1013,7 +1014,7 @@ const HomePage: React.FC = () => {
           </div>
           
           <div className="border-t border-gray-800 mt-8 pt-8 text-center text-gray-400 text-sm">
-            <p>© {new Date().getFullYear()} LearnHub. All rights reserved.</p>
+            <p>© {new Date().getFullYear()} Deveda. All rights reserved.</p>
           </div>
         </div>
       </footer>
@@ -1034,104 +1035,7 @@ const HomePage: React.FC = () => {
 
 // Mock data for development
 const getMockCourses = (): CourseCatalog[] => {
-  return [
-    {
-      id: '1',
-      slug: 'intro-python',
-      title: 'Introduction to Python Programming',
-      description: 'Learn Python from scratch with hands-on projects',
-      category: 'Programming',
-      difficulty: 'Beginner',
-      duration: 240,
-      totalQuizzes: 5,
-      totalLessons: 12,
-      instructor: 'John Smith',
-      prerequisites: [],
-      tags: ['python', 'programming', 'beginner'],
-      thumbnail: 'https://images.unsplash.com/photo-1526379879527-8559ecfcaec1?w=400&h=300&fit=crop',
-      createdAt: '2024-01-15',
-    },
-    {
-      id: '2',
-      slug: 'web-dev-bootcamp',
-      title: 'Complete Web Development Bootcamp',
-      description: 'Master HTML, CSS, JavaScript, and modern frameworks',
-      category: 'Web Development',
-      difficulty: 'Intermediate',
-      duration: 480,
-      totalQuizzes: 8,
-      totalLessons: 20,
-      instructor: 'Sarah Johnson',
-      prerequisites: ['basic-programming'],
-      tags: ['web', 'javascript', 'react'],
-      thumbnail: 'https://images.unsplash.com/photo-1627398242454-45a1465c2479?w=400&h=300&fit=crop',
-      createdAt: '2024-01-20',
-    },
-    {
-      id: '3',
-      slug: 'data-science-essentials',
-      title: 'Data Science Essentials',
-      description: 'Learn data analysis, visualization, and machine learning basics',
-      category: 'Data Science',
-      difficulty: 'Intermediate',
-      duration: 360,
-      totalQuizzes: 6,
-      totalLessons: 15,
-      instructor: 'Dr. Michael Chen',
-      prerequisites: ['intro-python', 'basic-math'],
-      tags: ['data-science', 'python', 'machine-learning'],
-      thumbnail: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=400&h=300&fit=crop',
-      createdAt: '2024-01-25',
-    },
-    {
-      id: '4',
-      slug: 'ui-ux-design',
-      title: 'UI/UX Design Principles',
-      description: 'Master user interface and experience design',
-      category: 'Design',
-      difficulty: 'Beginner',
-      duration: 180,
-      totalQuizzes: 4,
-      totalLessons: 10,
-      instructor: 'Emma Wilson',
-      prerequisites: [],
-      tags: ['design', 'ui', 'ux', 'figma'],
-      thumbnail: 'https://images.unsplash.com/photo-1561070791-2526d30994b5?w=400&h=300&fit=crop',
-      createdAt: '2024-01-30',
-    },
-    {
-      id: '5',
-      slug: 'digital-marketing',
-      title: 'Digital Marketing Mastery',
-      description: 'Learn SEO, social media, and content marketing strategies',
-      category: 'Business',
-      difficulty: 'Beginner',
-      duration: 200,
-      totalQuizzes: 5,
-      totalLessons: 12,
-      instructor: 'Alex Rodriguez',
-      prerequisites: [],
-      tags: ['marketing', 'seo', 'business'],
-      thumbnail: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=400&h=300&fit=crop',
-      createdAt: '2024-02-01',
-    },
-    {
-      id: '6',
-      slug: 'machine-learning-advanced',
-      title: 'Advanced Machine Learning',
-      description: 'Deep dive into neural networks and AI algorithms',
-      category: 'Data Science',
-      difficulty: 'Advanced',
-      duration: 500,
-      totalQuizzes: 10,
-      totalLessons: 25,
-      instructor: 'Dr. Lisa Wang',
-      prerequisites: ['data-science-essentials', 'advanced-math'],
-      tags: ['ai', 'machine-learning', 'deep-learning'],
-      thumbnail: 'https://images.unsplash.com/photo-1555949963-aa79dcee981c?w=400&h=300&fit=crop',
-      createdAt: '2024-02-05',
-    },
-  ];
+  return CODING_COURSES;
 };
 
 export default HomePage;

@@ -3,6 +3,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { AchievementCelebrationModal } from '@/components/achievements/AchievementCelebrationModal';
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
 import {
@@ -13,6 +14,7 @@ import {
   Bookmark, Share2, Maximize2, Volume2,
   Settings
 } from 'lucide-react';
+import { CourseCurriculum, UserAchievement } from '@/lib/types';
 
 const CourseLearnPage: React.FC = () => {
   const params = useParams();
@@ -23,9 +25,11 @@ const CourseLearnPage: React.FC = () => {
   
   const [loading, setLoading] = useState(true);
   const [course, setCourse] = useState<any>(null);
+  const [curriculum, setCurriculum] = useState<CourseCurriculum | null>(null);
   const [userCourse, setUserCourse] = useState<any>(null);
   const [currentLesson, setCurrentLesson] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [celebrationAwards, setCelebrationAwards] = useState<UserAchievement[]>([]);
 
   useEffect(() => {
     if (slug && user) {
@@ -40,6 +44,9 @@ const CourseLearnPage: React.FC = () => {
       // Get course details
       const courseRes = await api.getCourseBySlug(slug);
       setCourse(courseRes.data);
+
+      const curriculumRes = await api.getCourseCurriculum(slug);
+      setCurriculum(curriculumRes.data);
       
       // Get user progress
       const userCoursesRes = await api.getUserCourses(user!.id);
@@ -59,18 +66,17 @@ const CourseLearnPage: React.FC = () => {
 
     try {
       const completed = progress >= 100;
-      await api.updateCourseProgress(
+      const response = await api.updateCourseProgress(
         user.id,
         slug,
         progress,
         completed
       );
-      
-      setUserCourse({
-        ...userCourse,
-        progress,
-        completed,
-      });
+
+      setUserCourse(response.data.course);
+      if (response.data.awards.length > 0) {
+        setCelebrationAwards(response.data.awards);
+      }
     } catch (error) {
       console.error('Failed to update progress:', error);
     }
@@ -79,7 +85,6 @@ const CourseLearnPage: React.FC = () => {
   const handleLessonComplete = () => {
     if (!course || !userCourse) return;
     
-    const totalLessons = course.totalLessons;
     const lessonProgress = 100 / totalLessons;
     const newProgress = Math.min(userCourse.progress + lessonProgress, 100);
     
@@ -114,8 +119,31 @@ const CourseLearnPage: React.FC = () => {
     );
   }
 
+  const lessonList =
+    curriculum?.modules.flatMap((module) =>
+      module.lessons.map((lesson) => ({
+        ...lesson,
+        moduleTitle: module.title,
+        moduleOrder: module.order,
+      }))
+    ) ||
+    Array.from({ length: course.totalLessons }).map((_, index) => ({
+      title: `Lesson ${index + 1}`,
+      slug: `lesson-${index + 1}`,
+      summary: 'Guided lesson content for this course.',
+      durationMinutes: 15,
+      contentType: 'lesson',
+    }));
+  const totalLessons = lessonList.length;
+  const activeLesson = lessonList[currentLesson];
+
   return (
     <div className="min-h-screen bg-gray-900">
+      <AchievementCelebrationModal
+        achievements={celebrationAwards}
+        learnerName={user ? user.firstName : 'Learner'}
+        onClose={() => setCelebrationAwards([])}
+      />
       {/* Top Navigation */}
       <div className="bg-gray-800 border-b border-gray-700">
         <div className="flex items-center justify-between px-4 py-3">
@@ -130,7 +158,7 @@ const CourseLearnPage: React.FC = () => {
             <div className="hidden md:block">
               <h1 className="text-lg font-semibold text-white">{course.title}</h1>
               <p className="text-sm text-gray-400">
-                Lesson {currentLesson + 1} of {course.totalLessons}
+                Lesson {currentLesson + 1} of {totalLessons}
               </p>
             </div>
           </div>
@@ -182,9 +210,9 @@ const CourseLearnPage: React.FC = () => {
               </div>
               
               <div className="space-y-1">
-                {Array.from({ length: course.totalLessons }).map((_, index) => (
+                {lessonList.map((lesson, index) => (
                   <button
-                    key={index}
+                    key={lesson.slug}
                     onClick={() => setCurrentLesson(index)}
                     className={`w-full text-left px-3 py-3 rounded-lg transition-colors ${
                       currentLesson === index
@@ -202,10 +230,10 @@ const CourseLearnPage: React.FC = () => {
                       </div>
                       <div className="flex-1">
                         <div className="font-medium">
-                          Lesson {index + 1}: {['Introduction', 'Basics', 'Advanced Concepts', 'Practice'][index % 4]}
+                          Lesson {index + 1}: {lesson.title}
                         </div>
                         <div className="text-sm opacity-75">
-                          15 min • {index < currentLesson ? 'Completed' : 'Not started'}
+                          {lesson.durationMinutes} min / {index < currentLesson ? 'Completed' : 'Not started'}
                         </div>
                       </div>
                       {index === currentLesson && (
@@ -247,16 +275,16 @@ const CourseLearnPage: React.FC = () => {
                   <div className="w-16 h-16 bg-white/10 backdrop-blur-sm rounded-full flex items-center justify-center mx-auto mb-4">
                     <Play className="w-8 h-8 text-white" />
                   </div>
-                  <p className="text-gray-300">Lesson {currentLesson + 1} video will play here</p>
+                  <p className="text-gray-300">{activeLesson?.title || `Lesson ${currentLesson + 1}`} video will play here</p>
                 </div>
               </div>
               <div className="bg-gray-800 px-4 py-3">
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="text-lg font-semibold text-white">
-                      Lesson {currentLesson + 1}: Understanding the Basics
+                      Lesson {currentLesson + 1}: {activeLesson?.title || 'Understanding the Basics'}
                     </h3>
-                    <p className="text-gray-400">15 minutes</p>
+                    <p className="text-gray-400">{activeLesson?.durationMinutes || 15} minutes</p>
                   </div>
                   <div className="flex items-center space-x-4">
                     <button className="text-gray-400 hover:text-white">
@@ -286,11 +314,11 @@ const CourseLearnPage: React.FC = () => {
                   
                   <div className="prose prose-invert max-w-none">
                     <h3 className="text-xl font-semibold text-white mb-4">
-                      Understanding Key Concepts
+                      {activeLesson?.title || 'Understanding Key Concepts'}
                     </h3>
                     
                     <p className="text-gray-300 mb-4">
-                      In this lesson, we'll dive deep into the fundamental concepts that form the backbone of this course. Understanding these basics is crucial for your success in more advanced topics.
+                      {activeLesson?.summary || "In this lesson, we'll dive deep into the fundamental concepts that form the backbone of this course."}
                     </p>
                     
                     <div className="bg-gray-700 rounded-lg p-4 mb-4">
@@ -369,8 +397,8 @@ const CourseLearnPage: React.FC = () => {
                     <CheckCircle className="w-4 h-4 ml-2" />
                   </button>
                   <button
-                    onClick={() => setCurrentLesson(Math.min(course.totalLessons - 1, currentLesson + 1))}
-                    disabled={currentLesson === course.totalLessons - 1}
+                    onClick={() => setCurrentLesson(Math.min(totalLessons - 1, currentLesson + 1))}
+                    disabled={currentLesson === totalLessons - 1}
                     className="px-6 py-3 bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
                   >
                     Next Lesson
@@ -423,7 +451,7 @@ const CourseLearnPage: React.FC = () => {
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-300">Completed Lessons</span>
                         <span className="text-white font-medium">
-                          {Math.floor((userCourse.progress / 100) * course.totalLessons)}/{course.totalLessons}
+                          {Math.floor((userCourse.progress / 100) * totalLessons)}/{totalLessons}
                         </span>
                       </div>
                       <div className="flex justify-between text-sm">

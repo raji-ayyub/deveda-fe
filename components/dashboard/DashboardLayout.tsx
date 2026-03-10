@@ -17,9 +17,7 @@ import {
   FaSignOutAlt,
   FaBars,
   FaTimes,
-  FaGamepad,
-  FaPalette,
-  FaLayerGroup
+  FaCode
 } from 'react-icons/fa';
 
 interface DashboardLayoutProps {
@@ -40,18 +38,16 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     { href: '/admin/dashboard', icon: <FaHome />, label: 'Overview', visible: true },
     { href: '/admin/dashboard/courses', icon: <FaBook />, label: 'Courses', visible: true },
     { href: '/admin/dashboard/quizzes', icon: <FaQuestionCircle />, label: 'Quizzes', visible: true },
-    { href: '/admin/dashboard/games', icon: <FaGamepad />, label: 'Games', visible: true },
-    { href: '/admin/dashboard/creative', icon: <FaPalette />, label: 'Creative Lab', visible: true },
-    { href: '/admin/dashboard/layout', icon: <FaLayerGroup />, label: 'Layout Practice', visible: true },
+    { href: '/admin/dashboard/questions', icon: <FaCode />, label: 'Questions', visible: true },
     { href: '/admin/dashboard/analytics', icon: <FaChartBar />, label: 'Analytics', visible: isAdmin || isInstructor },
     { href: '/admin/dashboard/users', icon: <FaUsers />, label: 'Users', visible: isAdmin },
     { href: '/admin/dashboard/settings', icon: <FaCog />, label: 'Settings', visible: true },
   ];
 
   const notifications = [
-    { id: 1, text: 'New quiz available: Advanced CSS', time: '2 hours ago' },
-    { id: 2, text: 'You completed HTML Basics course', time: '1 day ago' },
-    { id: 3, text: 'New message from instructor', time: '2 days ago' },
+    { id: 1, text: 'New frontend course draft is ready for review', time: '2 hours ago' },
+    { id: 2, text: 'Backend FastAPI quiz was updated', time: '1 day ago' },
+    { id: 3, text: 'Systems design notes were published', time: '2 days ago' },
   ];
 
   return (
@@ -73,7 +69,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   <div className="w-8 h-8 bg-gradient-to-r from-primary to-secondary rounded-lg flex items-center justify-center">
                     <FaBook className="text-white text-sm" />
                   </div>
-                  <span className="text-xl font-bold text-dark">CodeCraft</span>
+                  <span className="text-xl font-bold text-dark">Deveda</span>
                 </Link>
               </div>
             </div>
@@ -158,7 +154,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                 <div className="w-8 h-8 bg-gradient-to-r from-primary to-secondary rounded-lg flex items-center justify-center">
                   <FaBook className="text-white text-sm" />
                 </div>
-                <span className="text-xl font-bold text-dark">CodeCraft</span>
+                <span className="text-xl font-bold text-dark">Deveda</span>
               </Link>
             </div>
 

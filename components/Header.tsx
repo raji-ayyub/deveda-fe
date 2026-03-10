@@ -7,7 +7,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
-import { Menu, X, User, LogOut, Home, BookOpen, Trophy, Settings } from 'lucide-react';
+import { Menu, X, User, LogOut, Home, BookOpen, Trophy, FileCode2, Info, Settings } from 'lucide-react';
 
 const Header: React.FC = () => {
   const { user, logout } = useAuth();
@@ -18,9 +18,8 @@ const Header: React.FC = () => {
     { name: 'Home', href: '/', icon: <Home className="w-5 h-5" /> },
     { name: 'Courses', href: '/courses', icon: <BookOpen className="w-5 h-5" /> },
     { name: 'Quizzes', href: '/quiz', icon: <Trophy className="w-5 h-5" /> },
-    { name: 'Dashboard', href: '/dashboard', icon: <Settings className="w-5 h-5" /> },
-    { name: 'lesson', href: '/lessons', icon: <BookOpen className="w-5 h-5" /> },
-
+    { name: 'Lessons', href: '/lessons', icon: <FileCode2 className="w-5 h-5" /> },
+    { name: 'About', href: '/about', icon: <Info className="w-5 h-5" /> },
   ];
 
   const handleLogout = async () => {

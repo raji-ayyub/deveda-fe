@@ -20,9 +20,9 @@ import {
   Search,
   User,
   FileText,
-  GamepadIcon,
   Shield,
-  TrendingUp
+  TrendingUp,
+  LibraryBig
 } from 'lucide-react';
 
 interface DashboardLayoutProps {
@@ -35,7 +35,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
-  const { user, logout } = useAuth();
+  const { user, logout, loading } = useAuth();
 
   const navigation = [
     {
@@ -69,16 +69,16 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
       current: pathname.startsWith('/admin/dashboard/questions'),
     },
     {
+      name: 'Curriculum',
+      href: '/admin/dashboard/cms',
+      icon: <LibraryBig className="w-5 h-5" />,
+      current: pathname.startsWith('/admin/dashboard/cms'),
+    },
+    {
       name: 'Analytics',
       href: '/admin/dashboard/analytics',
       icon: <BarChart3 className="w-5 h-5" />,
       current: pathname.startsWith('/admin/dashboard/analytics'),
-    },
-    {
-      name: 'Games',
-      href: '/admin/dashboard/games',
-      icon: <GamepadIcon className="w-5 h-5" />,
-      current: pathname.startsWith('/admin/dashboard/games'),
     },
     {
       name: 'Settings',
@@ -103,6 +103,17 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
       console.error('Logout failed:', error);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-blue-50">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!user || !['Admin', 'Instructor'].includes(user.role)) {
     return (

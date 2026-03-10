@@ -1,4 +1,3 @@
-// lib/types.ts
 export interface User {
   id: string;
   email: string;
@@ -6,6 +5,15 @@ export interface User {
   lastName: string;
   role: string;
   isActive: boolean;
+  avatarUrl?: string;
+  avatarPublicId?: string;
+  createdAt?: string;
+  lastLogin?: string | null;
+}
+
+export interface AuthSession {
+  user: User;
+  accessToken: string;
 }
 
 export interface UserProfile {
@@ -15,7 +23,6 @@ export interface UserProfile {
   registeredCourses: string[];
   createdAt: string;
 }
-
 
 export interface UserCourse {
   id: string;
@@ -37,8 +44,13 @@ export interface QuizQuestion {
   correctAnswer?: string;
   explanation: string;
   points: number;
-  questionType: 'single' | 'multiple';
+  questionType: string;
   timeLimit: number;
+  difficulty?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  createdBy?: string;
+  isActive?: boolean;
 }
 
 export interface QuizWithDetails {
@@ -46,7 +58,7 @@ export interface QuizWithDetails {
   title: string;
   courseSlug?: string;
   totalQuestions?: number;
-  duration?: number; // seconds
+  duration?: number;
 }
 
 export interface QuizAttempt {
@@ -58,7 +70,6 @@ export interface QuizAttempt {
   passed: boolean;
   attemptedAt: string;
 }
-
 
 export interface CourseCatalog {
   id: string;
@@ -74,22 +85,47 @@ export interface CourseCatalog {
   prerequisites: string[];
   tags: string[];
   thumbnail: string;
+  thumbnailPublicId?: string;
   createdAt: string;
 }
 
-
-export interface GameProgress {
-  id: string;
-  userId: string;
-  gameId: string;
-  level: number;
-  xp: number;
-  lastPlayed: string | null;
+export interface CourseCurriculumLesson {
+  title: string;
+  slug: string;
+  summary: string;
+  durationMinutes: number;
+  contentType: string;
+  quizId?: string | null;
+  quizTitle?: string | null;
 }
 
-export interface AuthResponse {
-  message: string;
-  data: User;
+export interface CourseCurriculumModule {
+  title: string;
+  description: string;
+  order: number;
+  lessons: CourseCurriculumLesson[];
+  assessmentTitle?: string | null;
+  assessmentQuizId?: string | null;
+}
+
+export interface MilestoneProject {
+  title: string;
+  description: string;
+  milestoneOrder: number;
+  estimatedHours: number;
+  deliverables: string[];
+  completionThreshold: number;
+}
+
+export interface CourseCurriculum {
+  id: string;
+  courseSlug: string;
+  overview: string;
+  modules: CourseCurriculumModule[];
+  milestoneProjects: MilestoneProject[];
+  updatedAt: string;
+  updatedBy: string;
+  isDraftScaffold?: boolean;
 }
 
 export interface ApiResponse<T> {
@@ -97,11 +133,47 @@ export interface ApiResponse<T> {
   data: T;
 }
 
+export interface CloudinaryUploadSignature {
+  cloudName: string;
+  apiKey: string;
+  folder: string;
+  timestamp: number;
+  signature: string;
+  publicId?: string | null;
+}
+
+export interface UserAchievement {
+  id: string;
+  userId: string;
+  courseSlug: string;
+  courseTitle: string;
+  kind: 'milestone' | 'course_completion';
+  key: string;
+  title: string;
+  description: string;
+  celebrationMessage: string;
+  badgeLabel: string;
+  badgeTone: 'blue' | 'amber' | 'emerald' | string;
+  progressTrigger: number;
+  milestoneOrder?: number | null;
+  skills: string[];
+  deliverables: string[];
+  parentSummary: string;
+  awardedAt: string;
+  certificate?: {
+    code: string;
+    label: string;
+    issuedAt: string;
+    issuer: string;
+    skills: string[];
+    shareNote: string;
+  } | null;
+}
+
 export interface LoginCredentials {
   email: string;
   password: string;
 }
-
 
 export interface RegisterCredentials {
   email: string;
@@ -111,12 +183,16 @@ export interface RegisterCredentials {
   role?: string;
 }
 
+export interface PasswordChangePayload {
+  currentPassword: string;
+  newPassword: string;
+}
+
 export interface QuizSubmission {
   quizId: string;
   score: number;
   courseSlug?: string;
 }
-
 
 export interface CourseEnrollment {
   courseSlug: string;
@@ -124,8 +200,15 @@ export interface CourseEnrollment {
   difficulty?: string;
 }
 
+export interface CourseProgressResponse {
+  course: UserCourse;
+  awards: UserAchievement[];
+}
 
-
+export interface QuizAttemptSubmission {
+  attempt: QuizAttempt;
+  awards: UserAchievement[];
+}
 
 export interface Feature {
   icon: string;
@@ -158,11 +241,6 @@ export interface Profile {
   }[];
 }
 
-
-
-
-
-
 export interface AdminStats {
   totalUsers: number;
   totalCourses: number;
@@ -173,8 +251,6 @@ export interface AdminStats {
   averageProgress: number;
 }
 
-
-
 export interface UserWithDetails extends User {
   createdAt: string;
   lastLogin: string | null;
@@ -183,6 +259,7 @@ export interface UserWithDetails extends User {
 }
 
 export interface QuestionWithDetails extends QuizQuestion {
+  correctAnswer: string;
   difficulty: string;
   createdAt: string;
   updatedAt: string;
@@ -196,8 +273,6 @@ export interface CourseWithDetails extends CourseCatalog {
   completionRate: number;
   isPublished: boolean;
 }
-
-
 
 export interface AdminFilters {
   startDate?: string;
@@ -219,7 +294,6 @@ export interface ChartData {
     borderWidth: number;
   }[];
 }
-
 
 export interface RecentActivity {
   id: string;

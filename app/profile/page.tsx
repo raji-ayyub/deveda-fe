@@ -1,479 +1,434 @@
-
-
-// app/profile/page.tsx
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { Award, BookOpen, Calendar, CheckCircle2, ChevronRight, Mail, Settings, Trophy } from 'lucide-react';
+
+import { AchievementShowcase } from '@/components/achievements/AchievementShowcase';
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
-import { 
-  User, Mail, Calendar, Award, BookOpen, Trophy, 
-  TrendingUp, Edit, Save, X, Clock, CheckCircle, 
-  AlertCircle, Star
-} from 'lucide-react';
-import { UserCourse, QuizAttempt, CourseCatalog } from '@/lib/types';
+import { CourseCatalog, QuizAttempt, UserAchievement, UserCourse } from '@/lib/types';
 
 const ProfilePage: React.FC = () => {
-  const { user, updateUser } = useAuth();
+  const { user, updateUser, loading: authLoading } = useAuth();
   const [userCourses, setUserCourses] = useState<UserCourse[]>([]);
   const [quizAttempts, setQuizAttempts] = useState<QuizAttempt[]>([]);
   const [courseCatalog, setCourseCatalog] = useState<CourseCatalog[]>([]);
+  const [achievements, setAchievements] = useState<UserAchievement[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [editData, setEditData] = useState({
     firstName: '',
     lastName: '',
     email: '',
-    role: '',
   });
 
   useEffect(() => {
-    if (user) {
-      loadUserData();
-      setEditData({
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email: user.email,
-        role: user.role,
-      });
+    if (!user) {
+      return;
     }
+
+    setEditData({
+      firstName: user.firstName,
+      lastName: user.lastName,
+      email: user.email,
+    });
+
+    const loadUserData = async () => {
+      try {
+        setLoading(true);
+        const [coursesRes, quizzesRes, catalogRes, achievementsRes] = await Promise.all([
+          api.getUserCourses(user.id),
+          api.getUserQuizAttempts(user.id),
+          api.getCourseCatalog(),
+          api.getUserAchievements(user.id),
+        ]);
+
+        setUserCourses(coursesRes.data);
+        setQuizAttempts(quizzesRes.data);
+        setCourseCatalog(catalogRes.data);
+        setAchievements(achievementsRes.data);
+      } catch (loadError) {
+        console.error('Failed to load profile data:', loadError);
+        setError('We could not load your latest learning data.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadUserData();
   }, [user]);
 
-  const loadUserData = async () => {
-    if (!user) return;
+  const learningStats = useMemo(() => {
+    const completedCourses = userCourses.filter((course) => course.completed).length;
+    const averageProgress = userCourses.length
+      ? Math.round(userCourses.reduce((total, course) => total + course.progress, 0) / userCourses.length)
+      : 0;
+    const passRate = quizAttempts.length
+      ? Math.round((quizAttempts.filter((attempt) => attempt.passed).length / quizAttempts.length) * 100)
+      : 0;
 
-    try {
-      setLoading(true);
-      const [coursesRes, quizzesRes, catalogRes] = await Promise.all([
-        api.getUserCourses(user.id),
-        api.getUserQuizAttempts(user.id),
-        api.getCourseCatalog(),
-      ]);
+    return {
+      completedCourses,
+      averageProgress,
+      passRate,
+    };
+  }, [quizAttempts, userCourses]);
 
-      setUserCourses(coursesRes.data);
-      setQuizAttempts(quizzesRes.data);
-      setCourseCatalog(catalogRes.data);
-    } catch (error) {
-      console.error('Failed to load user data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const recentCourses = userCourses.slice(0, 3);
+  const recentAttempts = quizAttempts.slice(0, 4);
+  const certificateCount = achievements.filter((achievement) => achievement.kind === 'course_completion').length;
 
   const handleSave = async () => {
-    if (!user) return;
+    if (!user) {
+      return;
+    }
+
+    setError('');
+    setSuccess('');
+
+    if (!editData.firstName.trim() || !editData.lastName.trim() || !editData.email.trim()) {
+      setError('Please complete your first name, last name, and email.');
+      return;
+    }
 
     try {
-      await updateUser(editData);
-      setEditing(false);
-    } catch (error) {
-      console.error('Failed to update user:', error);
-    }
-  };
-
-  const handleCancel = () => {
-    if (user) {
-      setEditData({
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email: user.email,
-        role: user.role,
+      setSaving(true);
+      await updateUser({
+        firstName: editData.firstName.trim(),
+        lastName: editData.lastName.trim(),
+        email: editData.email.trim().toLowerCase(),
       });
+      setSuccess('Profile updated successfully.');
+      setEditing(false);
+    } catch (saveError: any) {
+      setError(saveError.message || 'Could not update your profile right now.');
+    } finally {
+      setSaving(false);
     }
-    setEditing(false);
   };
 
-  const getCourseStats = () => {
-    const totalCourses = userCourses.length;
-    const completedCourses = userCourses.filter(course => course.completed).length;
-    const avgProgress = totalCourses > 0 
-      ? userCourses.reduce((sum, course) => sum + course.progress, 0) / totalCourses 
-      : 0;
-
-    return { totalCourses, completedCourses, avgProgress };
-  };
-
-  const getQuizStats = () => {
-    const totalAttempts = quizAttempts.length;
-    const passedAttempts = quizAttempts.filter(attempt => attempt.passed).length;
-    const avgScore = totalAttempts > 0
-      ? quizAttempts.reduce((sum, attempt) => sum + attempt.score, 0) / totalAttempts
-      : 0;
-
-    return { totalAttempts, passedAttempts, avgScore };
-  };
-
-  const stats = getCourseStats();
-  const quizStats = getQuizStats();
-
-  if (!user) {
+  if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
         <div className="text-center">
-          <div className="w-16 h-16 bg-gray-200 rounded-full animate-pulse mx-auto"></div>
-          <p className="mt-4 text-gray-600">Please log in to view your profile</p>
+          <div className="mx-auto h-14 w-14 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
+          <p className="mt-4 text-sm text-slate-600">Restoring your session...</p>
         </div>
       </div>
     );
   }
 
-  if (loading) {
+  if (!user) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading profile...</p>
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
+        <div className="max-w-md rounded-[28px] border border-slate-200 bg-white p-8 text-center shadow-xl">
+          <h1 className="text-2xl font-bold text-slate-950">Please sign in</h1>
+          <p className="mt-3 text-sm text-slate-600">Your profile, enrollments, and quiz history appear here after login.</p>
+          <Link href="/login" className="mt-6 inline-flex rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white">
+            Go to login
+          </Link>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 py-8 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">My Profile</h1>
-          <p className="text-gray-600 mt-2">Manage your account and track your learning progress</p>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Left Column - Profile Info */}
-          <div className="lg:col-span-1 space-y-6">
-            {/* Profile Card */}
-            <div className="bg-white rounded-2xl shadow-lg p-6">
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center space-x-4">
-                  <div className="w-20 h-20 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
-                    <span className="text-white text-2xl font-bold">
-                      {user.firstName.charAt(0)}
-                      {user.lastName.charAt(0)}
-                    </span>
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-bold text-gray-900">
-                      {user.firstName} {user.lastName}
-                    </h2>
-                    <div className="flex items-center space-x-2 mt-1">
-                      <span className="px-3 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">
-                        {user.role}
-                      </span>
-                      {user.isActive && (
-                        <span className="px-3 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full flex items-center">
-                          <div className="w-2 h-2 bg-green-500 rounded-full mr-1"></div>
-                          Active
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setEditing(!editing)}
-                  className="p-2 text-gray-400 hover:text-blue-600 transition-colors"
-                >
-                  {editing ? <X className="w-5 h-5" /> : <Edit className="w-5 h-5" />}
-                </button>
-              </div>
-
-              {editing ? (
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      First Name
-                    </label>
-                    <input
-                      type="text"
-                      value={editData.firstName}
-                      onChange={(e) => setEditData({ ...editData, firstName: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Last Name
-                    </label>
-                    <input
-                      type="text"
-                      value={editData.lastName}
-                      onChange={(e) => setEditData({ ...editData, lastName: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Email
-                    </label>
-                    <input
-                      type="email"
-                      value={editData.email}
-                      onChange={(e) => setEditData({ ...editData, email: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div className="flex space-x-3 pt-2">
-                    <button
-                      onClick={handleSave}
-                      className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 text-white py-2 rounded-lg font-medium hover:opacity-90 transition-opacity"
-                    >
-                      <Save className="w-4 h-4 inline mr-2" />
-                      Save Changes
-                    </button>
-                    <button
-                      onClick={handleCancel}
-                      className="flex-1 border border-gray-300 text-gray-700 py-2 rounded-lg font-medium hover:bg-gray-50 transition-colors"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
+    <div className="min-h-screen bg-[linear-gradient(180deg,#f8fafc_0%,#ffffff_40%,#eef2ff_100%)] px-4 py-8 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl space-y-8">
+        <div className="flex flex-col gap-4 rounded-[32px] border border-slate-200 bg-white/90 px-8 py-8 shadow-2xl shadow-slate-200 backdrop-blur lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center gap-5">
+            <div className="h-20 w-20 overflow-hidden rounded-full bg-slate-950">
+              {user.avatarUrl ? (
+                <img src={user.avatarUrl} alt={`${user.firstName} ${user.lastName}`} className="h-full w-full object-cover" />
               ) : (
-                <div className="space-y-4">
-                  <div className="flex items-center space-x-3 text-gray-600">
-                    <Mail className="w-5 h-5" />
-                    <span>{user.email}</span>
-                  </div>
-                  <div className="flex items-center space-x-3 text-gray-600">
-                    <User className="w-5 h-5" />
-                    <span>{user.role}</span>
-                  </div>
-                  <div className="pt-4 border-t border-gray-100">
-                    <p className="text-sm text-gray-500">Member since</p>
-                    <div className="flex items-center space-x-2 mt-1">
-                      <Calendar className="w-4 h-4 text-gray-400" />
-                      <span className="text-gray-700">Recently joined</span>
-                    </div>
-                  </div>
+                <div className="flex h-full w-full items-center justify-center text-2xl font-bold text-white">
+                  {user.firstName.charAt(0)}
+                  {user.lastName.charAt(0)}
                 </div>
               )}
             </div>
-
-            {/* Quick Stats */}
-            <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl shadow-lg p-6 text-white">
-              <h3 className="text-lg font-semibold mb-4">Learning Stats</h3>
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center space-x-3">
-                    <BookOpen className="w-5 h-5" />
-                    <span>Courses Enrolled</span>
-                  </div>
-                  <span className="text-2xl font-bold">{stats.totalCourses}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center space-x-3">
-                    <CheckCircle className="w-5 h-5" />
-                    <span>Courses Completed</span>
-                  </div>
-                  <span className="text-2xl font-bold">{stats.completedCourses}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center space-x-3">
-                    <Trophy className="w-5 h-5" />
-                    <span>Avg. Progress</span>
-                  </div>
-                  <span className="text-2xl font-bold">{stats.avgProgress.toFixed(1)}%</span>
-                </div>
+            <div>
+              <div className="inline-flex rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
+                {user.role}
+              </div>
+              <h1 className="mt-3 text-3xl font-black tracking-tight text-slate-950">
+                {user.firstName} {user.lastName}
+              </h1>
+              <div className="mt-2 flex flex-wrap items-center gap-4 text-sm text-slate-600">
+                <span className="inline-flex items-center gap-2">
+                  <Mail className="h-4 w-4" />
+                  {user.email}
+                </span>
+                <span className="inline-flex items-center gap-2">
+                  <Calendar className="h-4 w-4" />
+                  Member since {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'recently'}
+                </span>
               </div>
             </div>
           </div>
 
-          {/* Right Column - Courses & Quizzes */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Courses Progress */}
-            <div className="bg-white rounded-2xl shadow-lg p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-xl font-bold text-gray-900">My Courses</h3>
-                <span className="text-sm text-blue-600 font-medium">
-                  {stats.completedCourses}/{stats.totalCourses} Completed
-                </span>
+          <div className="flex flex-wrap gap-3">
+            <button
+              onClick={() => setEditing((current) => !current)}
+              className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700"
+            >
+              {editing ? 'Cancel edit' : 'Edit profile'}
+            </button>
+            <Link
+              href="/settings"
+              className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-blue-700"
+            >
+              <Settings className="h-4 w-4" />
+              Account settings
+            </Link>
+          </div>
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
+          <div className="space-y-6">
+            <div className="grid gap-4 sm:grid-cols-3">
+              <StatCard label="Courses enrolled" value={userCourses.length} icon={<BookOpen className="h-5 w-5" />} />
+              <StatCard label="Courses completed" value={learningStats.completedCourses} icon={<CheckCircle2 className="h-5 w-5" />} />
+              <StatCard label="Certificates earned" value={certificateCount} icon={<Trophy className="h-5 w-5" />} />
+            </div>
+
+            <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-lg shadow-slate-100">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-bold text-slate-950">Profile details</h2>
+                  <p className="mt-1 text-sm text-slate-600">Keep your account details accurate for communications and certificates.</p>
+                </div>
               </div>
 
-              <div className="space-y-4">
-                {userCourses.length > 0 ? (
-                  userCourses.map((course) => {
-                    const catalogCourse = courseCatalog.find(c => c.slug === course.courseSlug);
+              {error && <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+              {success && <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{success}</div>}
+
+              {editing ? (
+                <div className="mt-6 grid gap-4 md:grid-cols-2">
+                  <Field
+                    label="First name"
+                    value={editData.firstName}
+                    onChange={(value) => setEditData((current) => ({ ...current, firstName: value }))}
+                  />
+                  <Field
+                    label="Last name"
+                    value={editData.lastName}
+                    onChange={(value) => setEditData((current) => ({ ...current, lastName: value }))}
+                  />
+                  <div className="md:col-span-2">
+                    <Field
+                      label="Email address"
+                      type="email"
+                      value={editData.email}
+                      onChange={(value) => setEditData((current) => ({ ...current, email: value }))}
+                    />
+                  </div>
+                  <div className="md:col-span-2 flex gap-3 pt-2">
+                    <button
+                      onClick={handleSave}
+                      disabled={saving}
+                      className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-60"
+                    >
+                      {saving ? 'Saving...' : 'Save changes'}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setEditData({
+                          firstName: user.firstName,
+                          lastName: user.lastName,
+                          email: user.email,
+                        });
+                        setEditing(false);
+                      }}
+                      className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700"
+                    >
+                      Discard
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <dl className="mt-6 grid gap-4 md:grid-cols-2">
+                  <Detail label="Full name" value={`${user.firstName} ${user.lastName}`} />
+                  <Detail label="Role" value={user.role} />
+                  <Detail label="Email" value={user.email} />
+                  <Detail label="Last sign-in" value={user.lastLogin ? new Date(user.lastLogin).toLocaleString() : 'No sign-in history yet'} />
+                </dl>
+              )}
+            </section>
+
+            <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-lg shadow-slate-100">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-bold text-slate-950">Current courses</h2>
+                  <p className="mt-1 text-sm text-slate-600">Continue where you left off.</p>
+                </div>
+                <Link href="/courses" className="inline-flex items-center gap-1 text-sm font-semibold text-blue-700">
+                  Browse catalog
+                  <ChevronRight className="h-4 w-4" />
+                </Link>
+              </div>
+
+              <div className="mt-6 space-y-4">
+                {loading ? (
+                  <p className="text-sm text-slate-500">Loading courses...</p>
+                ) : recentCourses.length > 0 ? (
+                  recentCourses.map((course) => {
+                    const courseInfo = courseCatalog.find((item) => item.slug === course.courseSlug);
                     return (
-                      <div key={course.id} className="border border-gray-200 rounded-xl p-4 hover:border-blue-300 transition-colors">
-                        <div className="flex justify-between items-start">
+                      <div key={course.id} className="rounded-2xl border border-slate-200 p-4">
+                        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                           <div>
-                            <h4 className="font-medium text-gray-900">
-                              {catalogCourse?.title || course.courseSlug}
-                            </h4>
-                            <div className="flex items-center space-x-3 mt-2">
-                              <span className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded">
-                                {course.category}
-                              </span>
-                              <span className={`px-2 py-1 text-xs rounded ${
-                                course.difficulty === 'Beginner' 
-                                  ? 'bg-green-100 text-green-800'
-                                  : course.difficulty === 'Intermediate'
-                                  ? 'bg-yellow-100 text-yellow-800'
-                                  : 'bg-red-100 text-red-800'
-                              }`}>
-                                {course.difficulty}
-                              </span>
+                            <h3 className="font-semibold text-slate-900">{courseInfo?.title || course.courseSlug}</h3>
+                            <p className="mt-1 text-sm text-slate-600">
+                              {course.category} · {course.difficulty}
+                            </p>
+                          </div>
+                          <div className="min-w-[160px]">
+                            <div className="mb-2 flex items-center justify-between text-sm text-slate-600">
+                              <span>Progress</span>
+                              <span className="font-semibold text-slate-900">{course.progress}%</span>
                             </div>
-                          </div>
-                          <div className="text-right">
-                            <span className="text-2xl font-bold text-blue-600">
-                              {course.progress}%
-                            </span>
-                            {course.completed && (
-                              <div className="flex items-center justify-end mt-1">
-                                <CheckCircle className="w-4 h-4 text-green-500 mr-1" />
-                                <span className="text-xs text-green-600">Completed</span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        <div className="mt-4">
-                          <div className="w-full bg-gray-200 rounded-full h-2">
-                            <div 
-                              className={`h-2 rounded-full transition-all duration-500 ${
-                                course.progress === 100 
-                                  ? 'bg-gradient-to-r from-green-500 to-emerald-500'
-                                  : 'bg-gradient-to-r from-blue-500 to-purple-500'
-                              }`}
-                              style={{ width: `${course.progress}%` }}
-                            />
-                          </div>
-                          <div className="flex justify-between text-xs text-gray-500 mt-1">
-                            <span>Progress</span>
-                            <span>Last accessed: {new Date(course.lastAccessed || course.enrolledAt).toLocaleDateString()}</span>
+                            <div className="h-2 rounded-full bg-slate-100">
+                              <div className="h-2 rounded-full bg-gradient-to-r from-blue-600 to-cyan-500" style={{ width: `${course.progress}%` }} />
+                            </div>
                           </div>
                         </div>
                       </div>
                     );
                   })
                 ) : (
-                  <div className="text-center py-8">
-                    <BookOpen className="w-12 h-12 text-gray-300 mx-auto" />
-                    <p className="text-gray-500 mt-4">No courses enrolled yet</p>
+                  <div className="rounded-2xl border border-dashed border-slate-300 px-6 py-10 text-center text-sm text-slate-500">
+                    No enrollments yet. Pick a coding track from the catalog to get started.
                   </div>
                 )}
               </div>
-            </div>
+            </section>
 
-            {/* Quiz Attempts */}
-            <div className="bg-white rounded-2xl shadow-lg p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-xl font-bold text-gray-900">Quiz History</h3>
-                <div className="flex items-center space-x-4">
-                  <div className="text-right">
-                    <div className="text-sm text-gray-500">Average Score</div>
-                    <div className="text-2xl font-bold text-blue-600">
-                      {quizStats.avgScore.toFixed(1)}%
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-sm text-gray-500">Pass Rate</div>
-                    <div className="text-2xl font-bold text-green-600">
-                      {quizStats.totalAttempts > 0 
-                        ? ((quizStats.passedAttempts / quizStats.totalAttempts) * 100).toFixed(1)
-                        : 0}%
-                    </div>
-                  </div>
+            <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-lg shadow-slate-100">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-bold text-slate-950">Certificates & accolades</h2>
+                  <p className="mt-1 text-sm text-slate-600">Milestones worth showing to a parent, guardian, mentor, or coach.</p>
+                </div>
+                <div className="rounded-2xl bg-amber-50 p-3 text-amber-700">
+                  <Award className="h-5 w-5" />
                 </div>
               </div>
 
-              <div className="space-y-4">
-                {quizAttempts.length > 0 ? (
-                  quizAttempts.slice(0, 5).map((attempt) => (
-                    <div key={attempt.id} className="border border-gray-200 rounded-xl p-4">
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <h4 className="font-medium text-gray-900">Quiz: {attempt.quizId}</h4>
-                          {attempt.courseSlug && (
-                            <p className="text-sm text-gray-500 mt-1">
-                              Course: {attempt.courseSlug}
-                            </p>
-                          )}
-                          <div className="flex items-center space-x-4 mt-2">
-                            <div className="flex items-center space-x-1">
-                              <Clock className="w-4 h-4 text-gray-400" />
-                              <span className="text-sm text-gray-500">
-                                {new Date(attempt.attemptedAt).toLocaleDateString()}
-                              </span>
-                            </div>
-                            <div className="flex items-center space-x-1">
-                              <Trophy className="w-4 h-4 text-gray-400" />
-                              <span className="text-sm text-gray-500">Score: {attempt.score}%</span>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <span className={`text-lg font-bold ${
-                            attempt.passed ? 'text-green-600' : 'text-red-600'
-                          }`}>
-                            {attempt.score}%
-                          </span>
-                          <div className="mt-1">
-                            <span className={`px-3 py-1 text-xs rounded-full ${
-                              attempt.passed 
-                                ? 'bg-green-100 text-green-800'
-                                : 'bg-red-100 text-red-800'
-                            }`}>
-                              {attempt.passed ? 'Passed' : 'Failed'}
-                            </span>
-                          </div>
-                        </div>
+              <div className="mt-6">
+                <AchievementShowcase achievements={achievements} />
+              </div>
+            </section>
+          </div>
+
+          <div className="space-y-6">
+            <section className="rounded-[28px] border border-slate-200 bg-slate-950 p-6 text-white shadow-2xl shadow-slate-300">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-bold">Learning momentum</h2>
+                <Award className="h-5 w-5 text-cyan-300" />
+              </div>
+              <div className="mt-6 grid gap-4">
+                <MomentumRow label="Average course progress" value={`${learningStats.averageProgress}%`} />
+                <MomentumRow label="Quiz attempts" value={quizAttempts.length} />
+                <MomentumRow label="Completed courses" value={learningStats.completedCourses} />
+                <MomentumRow label="Quiz pass rate" value={`${learningStats.passRate}%`} />
+              </div>
+            </section>
+
+            <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-lg shadow-slate-100">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-bold text-slate-950">Recent quiz activity</h2>
+                  <p className="mt-1 text-sm text-slate-600">Your latest checkpoint results.</p>
+                </div>
+              </div>
+
+              <div className="mt-6 space-y-3">
+                {loading ? (
+                  <p className="text-sm text-slate-500">Loading attempts...</p>
+                ) : recentAttempts.length > 0 ? (
+                  recentAttempts.map((attempt) => (
+                    <div key={attempt.id} className="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3">
+                      <div>
+                        <p className="font-semibold text-slate-900">{attempt.quizId}</p>
+                        <p className="text-sm text-slate-500">{new Date(attempt.attemptedAt).toLocaleDateString()}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className={`font-semibold ${attempt.passed ? 'text-emerald-600' : 'text-rose-600'}`}>{attempt.score}%</p>
+                        <p className="text-xs text-slate-500">{attempt.passed ? 'Passed' : 'Retry needed'}</p>
                       </div>
                     </div>
                   ))
                 ) : (
-                  <div className="text-center py-8">
-                    <Trophy className="w-12 h-12 text-gray-300 mx-auto" />
-                    <p className="text-gray-500 mt-4">No quiz attempts yet</p>
-                  </div>
-                )}
-
-                {quizAttempts.length > 5 && (
-                  <div className="text-center pt-4">
-                    <button className="text-blue-600 hover:text-blue-700 font-medium">
-                      View all {quizAttempts.length} quiz attempts →
-                    </button>
+                  <div className="rounded-2xl border border-dashed border-slate-300 px-6 py-10 text-center text-sm text-slate-500">
+                    No quiz attempts yet. Your results will appear here after your first assessment.
                   </div>
                 )}
               </div>
-            </div>
-
-            {/* Achievements */}
-            <div className="bg-gradient-to-r from-purple-500 to-pink-500 rounded-2xl shadow-lg p-6 text-white">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-xl font-bold">Achievements</h3>
-                <Star className="w-6 h-6" />
-              </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="text-center">
-                  <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto">
-                    <BookOpen className="w-8 h-8" />
-                  </div>
-                  <p className="mt-2 font-medium">Course Enthusiast</p>
-                </div>
-                <div className="text-center">
-                  <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto">
-                    <Trophy className="w-8 h-8" />
-                  </div>
-                  <p className="mt-2 font-medium">Quiz Master</p>
-                </div>
-                <div className="text-center">
-                  <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto">
-                    <TrendingUp className="w-8 h-8" />
-                  </div>
-                  <p className="mt-2 font-medium">Consistent Learner</p>
-                </div>
-                <div className="text-center">
-                  <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto">
-                    <Award className="w-8 h-8" />
-                  </div>
-                  <p className="mt-2 font-medium">Perfect Score</p>
-                </div>
-              </div>
-            </div>
+            </section>
           </div>
         </div>
       </div>
     </div>
   );
 };
+
+function StatCard({ label, value, icon }: { label: string; value: string | number; icon: React.ReactNode }) {
+  return (
+    <div className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-lg shadow-slate-100">
+      <div className="flex items-center justify-between">
+        <div className="text-sm font-medium text-slate-500">{label}</div>
+        <div className="rounded-2xl bg-blue-50 p-2 text-blue-700">{icon}</div>
+      </div>
+      <div className="mt-4 text-3xl font-black tracking-tight text-slate-950">{value}</div>
+    </div>
+  );
+}
+
+function Field({
+  label,
+  type = 'text',
+  value,
+  onChange,
+}: {
+  label: string;
+  type?: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div>
+      <label className="mb-2 block text-sm font-semibold text-slate-700">{label}</label>
+      <input
+        type={type}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+      />
+    </div>
+  );
+}
+
+function Detail({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-4">
+      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">{label}</dt>
+      <dd className="mt-2 text-sm font-medium text-slate-900">{value}</dd>
+    </div>
+  );
+}
+
+function MomentumRow({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="rounded-2xl bg-white/10 px-4 py-4 backdrop-blur">
+      <div className="text-sm text-slate-300">{label}</div>
+      <div className="mt-1 text-2xl font-bold text-white">{value}</div>
+    </div>
+  );
+}
 
 export default ProfilePage;

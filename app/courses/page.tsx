@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { CourseCatalog, UserCourse } from '@/lib/types';
 import { useRouter } from 'next/navigation';
+import { CODING_COURSES, COURSE_CATEGORY_COLORS, COURSE_DIFFICULTY_COLORS } from '@/lib/course-content';
 
 const CoursesPage: React.FC = () => {
   const { user } = useAuth();
@@ -38,20 +39,14 @@ const CoursesPage: React.FC = () => {
   });
 
   useEffect(() => {
-    if (user) {
-      loadCourses();
-    }
+    loadCourses();
   }, [user]);
 
   const loadCourses = async () => {
-    if (!user) return;
-
     try {
       setLoading(true);
-      const [catalogRes, userCoursesRes] = await Promise.all([
-        api.getCourseCatalog(),
-        api.getUserCourses(user.id),
-      ]);
+      const catalogRes = await api.getCourseCatalog();
+      const userCoursesRes = user ? await api.getUserCourses(user.id) : { data: [] };
 
       const allCourses = catalogRes.data;
       const userEnrollments = userCoursesRes.data;
@@ -80,6 +75,18 @@ const CoursesPage: React.FC = () => {
       filterAndSortCourses(allCourses, userEnrollments);
     } catch (error) {
       console.error('Failed to load courses:', error);
+      if (process.env.NODE_ENV === 'development') {
+        setCourses(CODING_COURSES);
+        setUserCourses([]);
+        setFilteredCourses(CODING_COURSES);
+        setCategories(['All', ...Array.from(new Set(CODING_COURSES.map((course) => course.category)))]);
+        setStats({
+          totalCourses: CODING_COURSES.length,
+          totalEnrolled: 0,
+          completionRate: 0,
+          averageRating: 0,
+        });
+      }
     } finally {
       setLoading(false);
     }
@@ -122,7 +129,7 @@ const CoursesPage: React.FC = () => {
         );
         break;
       case 'difficulty':
-        const difficultyOrder = { 'Beginner': 0, 'Intermediate': 1, 'Advanced': 2 };
+        const difficultyOrder = { 'Beginner': 0, 'Intermediate': 1, 'Advanced': 2, 'Mastery': 3 };
         filtered.sort((a, b) => 
           difficultyOrder[a.difficulty as keyof typeof difficultyOrder] - 
           difficultyOrder[b.difficulty as keyof typeof difficultyOrder]
@@ -177,25 +184,11 @@ const CoursesPage: React.FC = () => {
   };
 
   const getDifficultyColor = (difficulty: string) => {
-    switch (difficulty) {
-      case 'Beginner': return 'bg-green-100 text-green-800';
-      case 'Intermediate': return 'bg-yellow-100 text-yellow-800';
-      case 'Advanced': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
+    return COURSE_DIFFICULTY_COLORS[difficulty] || 'bg-gray-100 text-gray-800';
   };
 
   const getCategoryColor = (category: string) => {
-    const colors: Record<string, string> = {
-      'Programming': 'bg-blue-100 text-blue-800',
-      'Mathematics': 'bg-purple-100 text-purple-800',
-      'Science': 'bg-green-100 text-green-800',
-      'Web Development': 'bg-orange-100 text-orange-800',
-      'Data Science': 'bg-pink-100 text-pink-800',
-      'Business': 'bg-indigo-100 text-indigo-800',
-      'Design': 'bg-teal-100 text-teal-800',
-    };
-    return colors[category] || 'bg-gray-100 text-gray-800';
+    return COURSE_CATEGORY_COLORS[category] || 'bg-gray-100 text-gray-800';
   };
 
   if (loading) {
@@ -216,8 +209,8 @@ const CoursesPage: React.FC = () => {
         <div className="mb-8">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Explore Courses</h1>
-              <p className="text-gray-600 mt-2">Discover and enroll in courses to enhance your skills</p>
+              <h1 className="text-3xl font-bold text-gray-900">Explore Coding Courses</h1>
+              <p className="text-gray-600 mt-2">Follow focused frontend, backend, and systems design paths</p>
             </div>
             <div className="flex items-center space-x-4">
               <div className="flex items-center space-x-2 text-sm text-gray-600">
@@ -379,7 +372,7 @@ const CoursesPage: React.FC = () => {
             >
               All Levels
             </button>
-            {['Beginner', 'Intermediate', 'Advanced'].map(level => (
+            {['Beginner', 'Intermediate', 'Advanced', 'Mastery'].map(level => (
               <button
                 key={level}
                 onClick={() => setSelectedDifficulty(level)}
@@ -583,7 +576,7 @@ const CoursesPage: React.FC = () => {
 
         {/* Learning Paths Section */}
         <div className="mb-12">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6">Learning Paths</h2>
+          <h2 className="text-2xl font-bold text-gray-900 mb-6">Coding Paths</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg p-6 text-white">
               <div className="flex items-center justify-between mb-4">
@@ -591,7 +584,7 @@ const CoursesPage: React.FC = () => {
                 <Award className="w-8 h-8" />
               </div>
               <p className="mb-4 opacity-90">
-                Start your learning journey with fundamental courses designed for beginners.
+                Start with frontend and backend fundamentals built for first-time coding learners.
               </p>
               <div className="text-sm opacity-75">
                 <div className="flex items-center justify-between mb-2">
@@ -627,7 +620,7 @@ const CoursesPage: React.FC = () => {
                 <TrendingUp className="w-8 h-8" />
               </div>
               <p className="mb-4 opacity-90">
-                Build on your foundation with intermediate courses and practical projects.
+                Build confidence with React, FastAPI, and deeper project-based implementation.
               </p>
               <div className="text-sm opacity-75">
                 <div className="flex items-center justify-between mb-2">
@@ -663,7 +656,7 @@ const CoursesPage: React.FC = () => {
                 <BarChart3 className="w-8 h-8" />
               </div>
               <p className="mb-4 opacity-90">
-                Master advanced topics and specialize in specific domains with expert-level courses.
+                Push into production-grade frontend, backend, and systems design decisions.
               </p>
               <div className="text-sm opacity-75">
                 <div className="flex items-center justify-between mb-2">
@@ -697,7 +690,7 @@ const CoursesPage: React.FC = () => {
 
         {/* Recommended Section */}
         <div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-6">Recommended For You</h2>
+          <h2 className="text-2xl font-bold text-gray-900 mb-6">Recommended Next Courses</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {userCourses.length > 0 ? (
               courses
@@ -750,7 +743,7 @@ const CoursesPage: React.FC = () => {
               <div className="col-span-2 bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl shadow p-8 text-center">
                 <AlertCircle className="w-12 h-12 text-blue-400 mx-auto mb-4" />
                 <h3 className="text-xl font-semibold text-gray-800 mb-2">
-                  Start Your Learning Journey
+                  Start Your Coding Journey
                 </h3>
                 <p className="text-gray-600 mb-6">
                   Enroll in your first course to get personalized recommendations!

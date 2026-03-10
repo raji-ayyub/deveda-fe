@@ -115,23 +115,19 @@ const AnalyticsPage: React.FC = () => {
 
   const generateCourseDistributionData = (): ChartData => {
     return {
-      labels: ['Programming', 'Mathematics', 'Science', 'Business', 'Arts'],
+      labels: ['Frontend Development', 'Backend Development', 'Systems Design'],
       datasets: [{
         label: 'Enrollments',
-        data: [45, 28, 15, 32, 20],
+        data: [52, 38, 21],
         backgroundColor: [
           'rgba(59, 130, 246, 0.8)',
-          'rgba(139, 92, 246, 0.8)',
           'rgba(16, 185, 129, 0.8)',
           'rgba(245, 158, 11, 0.8)',
-          'rgba(239, 68, 68, 0.8)',
         ],
         borderColor: [
           'rgb(59, 130, 246)',
-          'rgb(139, 92, 246)',
           'rgb(16, 185, 129)',
           'rgb(245, 158, 11)',
-          'rgb(239, 68, 68)',
         ],
         borderWidth: 1,
       }],
@@ -169,7 +165,7 @@ const AnalyticsPage: React.FC = () => {
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Analytics Dashboard</h2>
-          <p className="text-gray-600">Track platform performance and user engagement</p>
+          <p className="text-gray-600">Track coding curriculum performance and learner engagement</p>
         </div>
         <div className="flex items-center space-x-3">
           <div className="flex items-center space-x-2">
@@ -312,7 +308,7 @@ const AnalyticsPage: React.FC = () => {
           <div className="flex items-center justify-between mb-6">
             <div>
               <h3 className="text-lg font-semibold text-gray-900">Course Distribution</h3>
-              <p className="text-sm text-gray-500">Enrollments by category</p>
+              <p className="text-sm text-gray-500">Enrollments across frontend, backend, and systems design</p>
             </div>
             <PieChartIcon className="w-5 h-5 text-purple-500" />
           </div>

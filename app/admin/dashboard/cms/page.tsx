@@ -1,339 +1,532 @@
-// app/dashboard/cms/page.tsx
 'use client';
 
-import { useState } from 'react';
-import { motion } from 'framer-motion';
-import {
-  FaSearch,
-  FaFilter,
-  FaPlus,
-  FaEdit,
-  FaTrash,
-  FaEye,
-  FaEyeSlash,
-  FaSort,
-  FaDownload,
-  FaUpload,
-  FaClone,
-  FaCalendar,
-  FaUserGraduate,
-  FaChartBar
-} from 'react-icons/fa';
+import { useEffect, useState } from 'react';
+import { Loader2, Plus, Save, Sparkles, Trash2 } from 'lucide-react';
 
-interface ContentItem {
-  id: string;
-  title: string;
-  type: 'course' | 'quiz' | 'game' | 'article';
-  category: string;
-  status: 'draft' | 'published' | 'archived';
-  createdAt: string;
-  updatedAt: string;
-  author: string;
-  views?: number;
-  students?: number;
-}
+import { api } from '@/lib/api';
+import { CourseCatalog, CourseCurriculum, CourseCurriculumLesson, CourseCurriculumModule, MilestoneProject } from '@/lib/types';
 
-const contentItems: ContentItem[] = [
-  { id: '1', title: 'HTML Fundamentals', type: 'course', category: 'HTML', status: 'published', createdAt: '2024-01-15', updatedAt: '2024-01-20', author: 'John Doe', students: 245, views: 1200 },
-  { id: '2', title: 'CSS Grid Mastery', type: 'course', category: 'CSS', status: 'published', createdAt: '2024-01-10', updatedAt: '2024-01-18', author: 'Jane Smith', students: 189, views: 980 },
-  { id: '3', title: 'JavaScript Basics Quiz', type: 'quiz', category: 'JavaScript', status: 'published', createdAt: '2024-01-12', updatedAt: '2024-01-12', author: 'Bob Johnson', views: 560 },
-  { id: '4', title: 'React Hooks Deep Dive', type: 'course', category: 'React', status: 'draft', createdAt: '2024-01-14', updatedAt: '2024-01-19', author: 'Alice Brown', students: 0, views: 45 },
-  { id: '5', title: 'Code Typing Game', type: 'game', category: 'Games', status: 'published', createdAt: '2024-01-05', updatedAt: '2024-01-15', author: 'Charlie Wilson', views: 2100 },
-  { id: '6', title: 'TypeScript Advanced', type: 'course', category: 'TypeScript', status: 'archived', createdAt: '2023-12-20', updatedAt: '2024-01-10', author: 'David Lee', students: 156, views: 780 },
-  { id: '7', title: 'CSS Layout Challenge', type: 'quiz', category: 'CSS', status: 'published', createdAt: '2024-01-08', updatedAt: '2024-01-08', author: 'Emma Wilson', views: 420 },
-  { id: '8', title: 'Next.js 14 Guide', type: 'article', category: 'Next.js', status: 'draft', createdAt: '2024-01-18', updatedAt: '2024-01-18', author: 'Frank Miller', views: 32 },
-];
+const makeLesson = (moduleIndex: number, lessonIndex: number): CourseCurriculumLesson => ({
+  title: `Lesson ${lessonIndex + 1}`,
+  slug: `module-${moduleIndex + 1}-lesson-${lessonIndex + 1}`,
+  summary: 'Add a short lesson summary.',
+  durationMinutes: 20,
+  contentType: 'lesson',
+  quizId: '',
+  quizTitle: '',
+});
+
+const makeModule = (moduleIndex: number): CourseCurriculumModule => ({
+  title: `Module ${moduleIndex + 1}`,
+  description: 'Describe what learners complete in this module.',
+  order: moduleIndex + 1,
+  lessons: [makeLesson(moduleIndex, 0)],
+  assessmentTitle: '',
+  assessmentQuizId: '',
+});
+
+const makeProject = (projectIndex: number): MilestoneProject => ({
+  title: `Milestone Project ${projectIndex + 1}`,
+  description: 'Describe the project goal and acceptance criteria.',
+  milestoneOrder: projectIndex + 1,
+  estimatedHours: 6,
+  deliverables: ['Working codebase', 'README', 'Demo notes'],
+  completionThreshold: 70,
+});
 
 export default function CMSPage() {
-  const [items, setItems] = useState(contentItems);
-  const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState('all');
-  const [sortBy, setSortBy] = useState('newest');
+  const [courses, setCourses] = useState<CourseCatalog[]>([]);
+  const [selectedSlug, setSelectedSlug] = useState('');
+  const [curriculum, setCurriculum] = useState<CourseCurriculum | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
 
-  const filteredItems = items.filter(item => {
-    const matchesSearch = item.title.toLowerCase().includes(search.toLowerCase()) ||
-                         item.category.toLowerCase().includes(search.toLowerCase());
-    const matchesFilter = filter === 'all' || item.type === filter || item.status === filter;
-    return matchesSearch && matchesFilter;
-  });
+  useEffect(() => {
+    const loadCourses = async () => {
+      try {
+        setLoading(true);
+        const response = await api.getCourseCatalog();
+        setCourses(response.data);
+        if (response.data[0]) {
+          setSelectedSlug(response.data[0].slug);
+        }
+      } catch (loadError) {
+        console.error('Failed to load courses:', loadError);
+        setError('Unable to load courses for the curriculum studio.');
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  const sortedItems = [...filteredItems].sort((a, b) => {
-    switch (sortBy) {
-      case 'newest':
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-      case 'oldest':
-        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-      case 'title':
-        return a.title.localeCompare(b.title);
-      case 'popular':
-        return (b.views || 0) - (a.views || 0);
-      default:
-        return 0;
+    loadCourses();
+  }, []);
+
+  useEffect(() => {
+    if (!selectedSlug) {
+      return;
     }
-  });
 
-  const handleDelete = (id: string) => {
-    if (confirm('Are you sure you want to delete this item?')) {
-      setItems(items.filter(item => item.id !== id));
-    }
+    const loadCurriculum = async () => {
+      try {
+        setLoading(true);
+        setMessage('');
+        setError('');
+        const response = await api.getCourseCurriculum(selectedSlug);
+        setCurriculum(response.data);
+      } catch (loadError) {
+        console.error('Failed to load curriculum:', loadError);
+        setError('Unable to load curriculum.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadCurriculum();
+  }, [selectedSlug]);
+
+  const updateCurriculum = (updater: (current: CourseCurriculum) => CourseCurriculum) => {
+    setCurriculum((current) => (current ? updater(current) : current));
   };
 
-  const handleStatusChange = (id: string, newStatus: ContentItem['status']) => {
-    setItems(items.map(item => 
-      item.id === id ? { ...item, status: newStatus } : item
-    ));
-  };
-
-  const getTypeColor = (type: string) => {
-    switch (type) {
-      case 'course': return 'bg-blue-100 text-blue-800';
-      case 'quiz': return 'bg-green-100 text-green-800';
-      case 'game': return 'bg-purple-100 text-purple-800';
-      case 'article': return 'bg-orange-100 text-orange-800';
-      default: return 'bg-gray-100 text-gray-800';
+  const saveCurriculum = async () => {
+    if (!curriculum) {
+      return;
     }
-  };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'published': return 'bg-green-100 text-green-800';
-      case 'draft': return 'bg-yellow-100 text-yellow-800';
-      case 'archived': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
+    try {
+      setSaving(true);
+      setError('');
+      const response = await api.updateCourseCurriculum(curriculum.courseSlug, {
+        overview: curriculum.overview,
+        modules: curriculum.modules,
+        milestoneProjects: curriculum.milestoneProjects,
+      });
+      setCurriculum(response.data);
+      setMessage('Curriculum saved successfully.');
+    } catch (saveError: any) {
+      setError(saveError.message || 'Unable to save curriculum.');
+    } finally {
+      setSaving(false);
     }
   };
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-dark">Content Management</h1>
-          <p className="text-gray-600">Manage courses, quizzes, games, and articles</p>
+      <section className="rounded-[28px] border border-slate-200 bg-[linear-gradient(135deg,#0f172a_0%,#1d4ed8_60%,#38bdf8_100%)] p-8 text-white shadow-2xl shadow-slate-300">
+        <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-100">
+          <Sparkles className="h-3.5 w-3.5" />
+          Instructor Studio
         </div>
-        <button className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors flex items-center gap-2">
-          <FaPlus /> Create New
-        </button>
-      </div>
+        <h1 className="mt-4 text-3xl font-black tracking-tight">Curriculum Builder</h1>
+        <p className="mt-3 max-w-2xl text-sm text-slate-200">
+          Build module-based lessons, attach quizzes after lessons, and define milestone projects for each coding path.
+        </p>
+      </section>
 
-      {/* Filters and Search */}
-      <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Search */}
-          <div className="relative">
-            <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search content..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-            />
-          </div>
-
-          {/* Type Filter */}
+      <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-lg shadow-slate-100">
+        <div className="grid gap-4 lg:grid-cols-[1fr_auto]">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Filter by Type</label>
+            <label className="mb-2 block text-sm font-semibold text-slate-700">Course</label>
             <select
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+              value={selectedSlug}
+              onChange={(event) => setSelectedSlug(event.target.value)}
+              className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
             >
-              <option value="all">All Types</option>
-              <option value="course">Courses</option>
-              <option value="quiz">Quizzes</option>
-              <option value="game">Games</option>
-              <option value="article">Articles</option>
-              <option value="published">Published</option>
-              <option value="draft">Drafts</option>
-              <option value="archived">Archived</option>
-            </select>
-          </div>
-
-          {/* Sort */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Sort By</label>
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
-            >
-              <option value="newest">Newest First</option>
-              <option value="oldest">Oldest First</option>
-              <option value="title">Title A-Z</option>
-              <option value="popular">Most Popular</option>
-            </select>
-          </div>
-        </div>
-
-        {/* Quick Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
-          <div className="bg-blue-50 p-4 rounded-lg">
-            <div className="text-sm text-blue-600 mb-1">Published</div>
-            <div className="text-2xl font-bold text-dark">{items.filter(i => i.status === 'published').length}</div>
-          </div>
-          <div className="bg-yellow-50 p-4 rounded-lg">
-            <div className="text-sm text-yellow-600 mb-1">Drafts</div>
-            <div className="text-2xl font-bold text-dark">{items.filter(i => i.status === 'draft').length}</div>
-          </div>
-          <div className="bg-green-50 p-4 rounded-lg">
-            <div className="text-sm text-green-600 mb-1">Total Views</div>
-            <div className="text-2xl font-bold text-dark">
-              {items.reduce((sum, item) => sum + (item.views || 0), 0).toLocaleString()}
-            </div>
-          </div>
-          <div className="bg-purple-50 p-4 rounded-lg">
-            <div className="text-sm text-purple-600 mb-1">Total Students</div>
-            <div className="text-2xl font-bold text-dark">
-              {items.reduce((sum, item) => sum + (item.students || 0), 0).toLocaleString()}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Content Grid/Table */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-gray-50">
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stats</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {sortedItems.map((item) => (
-                <tr key={item.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4">
-                    <div className="font-medium text-gray-900">{item.title}</div>
-                    <div className="text-sm text-gray-500">
-                      <span className="flex items-center gap-1">
-                        <FaCalendar className="text-gray-400" />
-                        {new Date(item.createdAt).toLocaleDateString()}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-3 py-1 text-xs rounded-full ${getTypeColor(item.type)}`}>
-                      {item.type.charAt(0).toUpperCase() + item.type.slice(1)}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="px-3 py-1 text-xs bg-gray-100 text-gray-800 rounded-full">
-                      {item.category}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <select
-                      value={item.status}
-                      onChange={(e) => handleStatusChange(item.id, e.target.value as ContentItem['status'])}
-                      className={`px-3 py-1 text-xs rounded-full border-0 focus:ring-2 focus:ring-offset-2 ${getStatusColor(item.status)}`}
-                    >
-                      <option value="draft">Draft</option>
-                      <option value="published">Published</option>
-                      <option value="archived">Archived</option>
-                    </select>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex gap-4">
-                      {item.students !== undefined && (
-                        <div className="flex items-center gap-1 text-sm text-gray-600">
-                          <FaUserGraduate className="text-blue-500" />
-                          <span>{item.students}</span>
-                        </div>
-                      )}
-                      {item.views !== undefined && (
-                        <div className="flex items-center gap-1 text-sm text-gray-600">
-                          <FaChartBar className="text-green-500" />
-                          <span>{item.views}</span>
-                        </div>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <div className="flex gap-2">
-                      <button className="p-1.5 text-blue-600 hover:text-blue-900 hover:bg-blue-50 rounded">
-                        <FaEye />
-                      </button>
-                      <button className="p-1.5 text-green-600 hover:text-green-900 hover:bg-green-50 rounded">
-                        <FaEdit />
-                      </button>
-                      <button className="p-1.5 text-purple-600 hover:text-purple-900 hover:bg-purple-50 rounded">
-                        <FaClone />
-                      </button>
-                      <button 
-                        onClick={() => handleDelete(item.id)}
-                        className="p-1.5 text-red-600 hover:text-red-900 hover:bg-red-50 rounded"
-                      >
-                        <FaTrash />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
+              {courses.map((course) => (
+                <option key={course.slug} value={course.slug}>
+                  {course.title}
+                </option>
               ))}
-            </tbody>
-          </table>
+            </select>
+          </div>
+
+          <button
+            onClick={saveCurriculum}
+            disabled={!curriculum || saving}
+            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-60"
+          >
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            Save curriculum
+          </button>
         </div>
 
-        {/* Bulk Actions */}
-        <div className="p-4 border-t border-gray-200 bg-gray-50">
-          <div className="flex justify-between items-center">
-            <div className="text-sm text-gray-600">
-              Showing {sortedItems.length} of {items.length} items
-            </div>
-            <div className="flex gap-3">
-              <button className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm hover:bg-gray-50 flex items-center gap-2">
-                <FaDownload /> Export
-              </button>
-              <button className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm hover:bg-gray-50 flex items-center gap-2">
-                <FaUpload /> Import
-              </button>
-            </div>
+        {message && <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{message}</div>}
+        {error && <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>}
+      </section>
+
+      {loading ? (
+        <div className="flex h-64 items-center justify-center rounded-[28px] border border-slate-200 bg-white shadow-lg shadow-slate-100">
+          <div className="text-center">
+            <Loader2 className="mx-auto h-8 w-8 animate-spin text-blue-600" />
+            <p className="mt-3 text-sm text-slate-500">Loading curriculum...</p>
           </div>
         </div>
-      </div>
+      ) : curriculum ? (
+        <div className="grid gap-6 xl:grid-cols-[1.6fr_1fr]">
+          <section className="space-y-6 rounded-[28px] border border-slate-200 bg-white p-6 shadow-lg shadow-slate-100">
+            <div>
+              <label className="mb-2 block text-sm font-semibold text-slate-700">Course overview</label>
+              <textarea
+                value={curriculum.overview}
+                onChange={(event) => updateCurriculum((current) => ({ ...current, overview: event.target.value }))}
+                rows={4}
+                className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+              />
+            </div>
 
-      {/* Create Content Modal (Simplified) */}
-      <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200">
-        <h3 className="text-lg font-semibold text-dark mb-4">Quick Create</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <button className="p-4 border-2 border-dashed border-gray-300 rounded-xl hover:border-primary hover:bg-primary/5 transition-colors flex flex-col items-center justify-center">
-            <div className="w-12 h-12 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600 text-xl mb-3">
-              📚
+            <div className="space-y-4">
+              {curriculum.modules.map((module, moduleIndex) => (
+                <div key={`${module.title}-${moduleIndex}`} className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
+                  <div className="flex items-center justify-between gap-4">
+                    <input
+                      value={module.title}
+                      onChange={(event) =>
+                        updateCurriculum((current) => ({
+                          ...current,
+                          modules: current.modules.map((item, index) =>
+                            index === moduleIndex ? { ...item, title: event.target.value } : item
+                          ),
+                        }))
+                      }
+                      className="w-full rounded-2xl border border-slate-200 px-4 py-3 font-semibold text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                    />
+                    <button
+                      onClick={() =>
+                        updateCurriculum((current) => ({
+                          ...current,
+                          modules: current.modules.filter((_, index) => index !== moduleIndex).map((item, index) => ({ ...item, order: index + 1 })),
+                        }))
+                      }
+                      className="inline-flex items-center gap-2 rounded-2xl border border-rose-200 px-4 py-3 text-sm font-semibold text-rose-700"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Remove
+                    </button>
+                  </div>
+
+                  <textarea
+                    value={module.description}
+                    onChange={(event) =>
+                      updateCurriculum((current) => ({
+                        ...current,
+                        modules: current.modules.map((item, index) =>
+                          index === moduleIndex ? { ...item, description: event.target.value } : item
+                        ),
+                      }))
+                    }
+                    rows={3}
+                    className="mt-4 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                  />
+
+                  <div className="mt-4 grid gap-4 md:grid-cols-2">
+                    <SimpleField
+                      label="Assessment title"
+                      value={module.assessmentTitle || ''}
+                      onChange={(value) =>
+                        updateCurriculum((current) => ({
+                          ...current,
+                          modules: current.modules.map((item, index) =>
+                            index === moduleIndex ? { ...item, assessmentTitle: value } : item
+                          ),
+                        }))
+                      }
+                    />
+                    <SimpleField
+                      label="Assessment quiz ID"
+                      value={module.assessmentQuizId || ''}
+                      onChange={(value) =>
+                        updateCurriculum((current) => ({
+                          ...current,
+                          modules: current.modules.map((item, index) =>
+                            index === moduleIndex ? { ...item, assessmentQuizId: value } : item
+                          ),
+                        }))
+                      }
+                    />
+                  </div>
+
+                  <div className="mt-4 space-y-3">
+                    {module.lessons.map((lesson, lessonIndex) => (
+                      <div key={`${lesson.slug}-${lessonIndex}`} className="rounded-2xl border border-slate-200 bg-white p-4">
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-semibold text-slate-500">Lesson {lessonIndex + 1}</p>
+                          <button
+                            onClick={() =>
+                              updateCurriculum((current) => ({
+                                ...current,
+                                modules: current.modules.map((item, index) =>
+                                  index === moduleIndex
+                                    ? { ...item, lessons: item.lessons.filter((_, currentLessonIndex) => currentLessonIndex !== lessonIndex) }
+                                    : item
+                                ),
+                              }))
+                            }
+                            className="text-sm font-semibold text-rose-600"
+                          >
+                            Remove
+                          </button>
+                        </div>
+
+                        <div className="mt-3 grid gap-4 md:grid-cols-2">
+                          <SimpleField
+                            label="Title"
+                            value={lesson.title}
+                            onChange={(value) => {
+                              updateCurriculum((current) => ({
+                                ...current,
+                                modules: current.modules.map((item, index) =>
+                                  index === moduleIndex
+                                    ? {
+                                        ...item,
+                                        lessons: item.lessons.map((currentLesson, currentLessonIndex) =>
+                                          currentLessonIndex === lessonIndex ? { ...currentLesson, title: value } : currentLesson
+                                        ),
+                                      }
+                                    : item
+                                ),
+                              }));
+                            }}
+                          />
+                          <SimpleField
+                            label="Slug"
+                            value={lesson.slug}
+                            onChange={(value) => {
+                              updateCurriculum((current) => ({
+                                ...current,
+                                modules: current.modules.map((item, index) =>
+                                  index === moduleIndex
+                                    ? {
+                                        ...item,
+                                        lessons: item.lessons.map((currentLesson, currentLessonIndex) =>
+                                          currentLessonIndex === lessonIndex ? { ...currentLesson, slug: value } : currentLesson
+                                        ),
+                                      }
+                                    : item
+                                ),
+                              }));
+                            }}
+                          />
+                          <div className="md:col-span-2">
+                            <label className="mb-2 block text-sm font-semibold text-slate-700">Summary</label>
+                            <textarea
+                              value={lesson.summary}
+                              onChange={(event) =>
+                                updateCurriculum((current) => ({
+                                  ...current,
+                                  modules: current.modules.map((item, index) =>
+                                    index === moduleIndex
+                                      ? {
+                                          ...item,
+                                          lessons: item.lessons.map((currentLesson, currentLessonIndex) =>
+                                            currentLessonIndex === lessonIndex ? { ...currentLesson, summary: event.target.value } : currentLesson
+                                          ),
+                                        }
+                                      : item
+                                  ),
+                                }))
+                              }
+                              rows={3}
+                              className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                            />
+                          </div>
+                          <SimpleField
+                            label="Duration (minutes)"
+                            type="number"
+                            value={String(lesson.durationMinutes)}
+                            onChange={(value) =>
+                              updateCurriculum((current) => ({
+                                ...current,
+                                modules: current.modules.map((item, index) =>
+                                  index === moduleIndex
+                                    ? {
+                                        ...item,
+                                        lessons: item.lessons.map((currentLesson, currentLessonIndex) =>
+                                          currentLessonIndex === lessonIndex ? { ...currentLesson, durationMinutes: Number(value) || 0 } : currentLesson
+                                        ),
+                                      }
+                                    : item
+                                ),
+                              }))
+                            }
+                          />
+                          <SimpleField
+                            label="Quiz after lesson"
+                            value={lesson.quizId || ''}
+                            onChange={(value) =>
+                              updateCurriculum((current) => ({
+                                ...current,
+                                modules: current.modules.map((item, index) =>
+                                  index === moduleIndex
+                                    ? {
+                                        ...item,
+                                        lessons: item.lessons.map((currentLesson, currentLessonIndex) =>
+                                          currentLessonIndex === lessonIndex ? { ...currentLesson, quizId: value } : currentLesson
+                                        ),
+                                      }
+                                    : item
+                                ),
+                              }))
+                            }
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <button
+                    onClick={() =>
+                      updateCurriculum((current) => ({
+                        ...current,
+                        modules: current.modules.map((item, index) =>
+                          index === moduleIndex ? { ...item, lessons: [...item.lessons, makeLesson(moduleIndex, item.lessons.length)] } : item
+                        ),
+                      }))
+                    }
+                    className="mt-4 inline-flex items-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add lesson
+                  </button>
+                </div>
+              ))}
             </div>
-            <span className="font-medium text-gray-900">New Course</span>
-            <span className="text-sm text-gray-500">Interactive lessons</span>
-          </button>
-          
-          <button className="p-4 border-2 border-dashed border-gray-300 rounded-xl hover:border-primary hover:bg-primary/5 transition-colors flex flex-col items-center justify-center">
-            <div className="w-12 h-12 rounded-lg bg-green-100 flex items-center justify-center text-green-600 text-xl mb-3">
-              📝
+
+            <button
+              onClick={() => updateCurriculum((current) => ({ ...current, modules: [...current.modules, makeModule(current.modules.length)] }))}
+              className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
+            >
+              <Plus className="h-4 w-4" />
+              Add module
+            </button>
+          </section>
+
+          <section className="space-y-6 rounded-[28px] border border-slate-200 bg-white p-6 shadow-lg shadow-slate-100">
+            <div>
+              <h2 className="text-xl font-bold text-slate-950">Milestone projects</h2>
+              <p className="mt-1 text-sm text-slate-600">Add a project after each major checkpoint.</p>
             </div>
-            <span className="font-medium text-gray-900">New Quiz</span>
-            <span className="text-sm text-gray-500">Test knowledge</span>
-          </button>
-          
-          <button className="p-4 border-2 border-dashed border-gray-300 rounded-xl hover:border-primary hover:bg-primary/5 transition-colors flex flex-col items-center justify-center">
-            <div className="w-12 h-12 rounded-lg bg-purple-100 flex items-center justify-center text-purple-600 text-xl mb-3">
-              🎮
+
+            <div className="space-y-4">
+              {curriculum.milestoneProjects.map((project, projectIndex) => (
+                <div key={`${project.title}-${projectIndex}`} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-semibold text-slate-500">Milestone {project.milestoneOrder}</p>
+                    <button
+                      onClick={() =>
+                        updateCurriculum((current) => ({
+                          ...current,
+                          milestoneProjects: current.milestoneProjects.filter((_, index) => index !== projectIndex).map((item, index) => ({ ...item, milestoneOrder: index + 1 })),
+                        }))
+                      }
+                      className="text-sm font-semibold text-rose-600"
+                    >
+                      Remove
+                    </button>
+                  </div>
+
+                  <div className="mt-4 space-y-4">
+                    <SimpleField
+                      label="Project title"
+                      value={project.title}
+                      onChange={(value) =>
+                        updateCurriculum((current) => ({
+                          ...current,
+                          milestoneProjects: current.milestoneProjects.map((item, index) =>
+                            index === projectIndex ? { ...item, title: value } : item
+                          ),
+                        }))
+                      }
+                    />
+                    <div>
+                      <label className="mb-2 block text-sm font-semibold text-slate-700">Description</label>
+                      <textarea
+                        value={project.description}
+                        onChange={(event) =>
+                          updateCurriculum((current) => ({
+                            ...current,
+                            milestoneProjects: current.milestoneProjects.map((item, index) =>
+                              index === projectIndex ? { ...item, description: event.target.value } : item
+                            ),
+                          }))
+                        }
+                        rows={4}
+                        className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                      />
+                    </div>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <SimpleField
+                        label="Estimated hours"
+                        type="number"
+                        value={String(project.estimatedHours)}
+                        onChange={(value) =>
+                          updateCurriculum((current) => ({
+                            ...current,
+                            milestoneProjects: current.milestoneProjects.map((item, index) =>
+                              index === projectIndex ? { ...item, estimatedHours: Number(value) || 0 } : item
+                            ),
+                          }))
+                        }
+                      />
+                      <SimpleField
+                        label="Completion threshold"
+                        type="number"
+                        value={String(project.completionThreshold)}
+                        onChange={(value) =>
+                          updateCurriculum((current) => ({
+                            ...current,
+                            milestoneProjects: current.milestoneProjects.map((item, index) =>
+                              index === projectIndex ? { ...item, completionThreshold: Number(value) || 70 } : item
+                            ),
+                          }))
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
-            <span className="font-medium text-gray-900">New Game</span>
-            <span className="text-sm text-gray-500">Fun learning</span>
-          </button>
-          
-          <button className="p-4 border-2 border-dashed border-gray-300 rounded-xl hover:border-primary hover:bg-primary/5 transition-colors flex flex-col items-center justify-center">
-            <div className="w-12 h-12 rounded-lg bg-orange-100 flex items-center justify-center text-orange-600 text-xl mb-3">
-              📄
-            </div>
-            <span className="font-medium text-gray-900">New Article</span>
-            <span className="text-sm text-gray-500">Written content</span>
-          </button>
+
+            <button
+              onClick={() =>
+                updateCurriculum((current) => ({
+                  ...current,
+                  milestoneProjects: [...current.milestoneProjects, makeProject(current.milestoneProjects.length)],
+                }))
+              }
+              className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700"
+            >
+              <Plus className="h-4 w-4" />
+              Add milestone project
+            </button>
+          </section>
         </div>
-      </div>
+      ) : null}
+    </div>
+  );
+}
+
+function SimpleField({
+  label,
+  value,
+  onChange,
+  type = 'text',
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  type?: string;
+}) {
+  return (
+    <div>
+      <label className="mb-2 block text-sm font-semibold text-slate-700">{label}</label>
+      <input
+        type={type}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+      />
     </div>
   );
 }

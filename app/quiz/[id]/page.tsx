@@ -3,9 +3,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { AchievementCelebrationModal } from '@/components/achievements/AchievementCelebrationModal';
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
-import { QuizQuestion, CourseCatalog } from '@/lib/types';
+import { QuizQuestion, CourseCatalog, UserAchievement } from '@/lib/types';
 import {
   ArrowLeft,
   CheckCircle,
@@ -36,6 +37,7 @@ const QuizPage: React.FC = () => {
     passed: boolean;
     correctAnswers: number;
   } | null>(null);
+  const [celebrationAwards, setCelebrationAwards] = useState<UserAchievement[]>([]);
 
   useEffect(() => {
     if (quizId) {
@@ -111,11 +113,14 @@ const QuizPage: React.FC = () => {
 
       if (user) {
         // Submit quiz attempt to backend
-        await api.submitQuizAttempt(user.id, {
+        const response = await api.submitQuizAttempt(user.id, {
           quizId,
           score: Math.round(score),
           courseSlug: courseInfo?.slug,
         });
+        if (response.data.awards.length > 0) {
+          setCelebrationAwards(response.data.awards);
+        }
       }
 
       setShowResults(true);
@@ -328,6 +333,11 @@ const QuizPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">
+      <AchievementCelebrationModal
+        achievements={celebrationAwards}
+        learnerName={user ? user.firstName : 'Learner'}
+        onClose={() => setCelebrationAwards([])}
+      />
       {/* Top Bar */}
       <div className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
