@@ -27,7 +27,7 @@ import {
 } from './types';
 
 // const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-const API_BASE_URL =  'http://localhost:8000';
+const API_BASE_URL =  'https://deveda-be.onrender.com';
 
 const TOKEN_STORAGE_KEY = 'deveda_token';
 const USER_STORAGE_KEY = 'deveda_user';
