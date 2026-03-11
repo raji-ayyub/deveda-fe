@@ -6,10 +6,11 @@ import Link from 'next/link';
 import { Eye, EyeOff, Lock, Mail } from 'lucide-react';
 
 import { useAuth } from '@/context/AuthContext';
+import { api } from '@/lib/api';
 
 export default function AdminLoginPage() {
   const router = useRouter();
-  const { login, user } = useAuth();
+  const { login, logout, user } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -23,7 +24,12 @@ export default function AdminLoginPage() {
 
     try {
       await login(email.trim().toLowerCase(), password);
-      router.push('/admin/dashboard');
+      const currentUser = await api.getCurrentUser();
+      if (!currentUser || !['Admin', 'Instructor'].includes(currentUser.role)) {
+        await logout();
+        throw new Error('This account does not have admin dashboard access.');
+      }
+      router.push(currentUser.role === 'Admin' ? '/admin/dashboard' : '/instructor/dashboard');
     } catch (loginError: any) {
       setError(loginError.message || 'Sign-in failed.');
     } finally {

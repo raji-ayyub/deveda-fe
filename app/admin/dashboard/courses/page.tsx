@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { CourseCatalog } from '@/lib/types';
-import { CODING_COURSES, COURSE_CATEGORY_COLORS, COURSE_DIFFICULTY_COLORS } from '@/lib/course-content';
+import { COURSE_CATEGORY_COLORS, COURSE_DIFFICULTY_COLORS } from '@/lib/course-content';
 import {
   Plus,
   RefreshCw,
@@ -19,6 +20,8 @@ import {Filters} from '@/components/dashboard/courses';
 import {StatsCard} from '@/components/dashboard/courses';
 
 const CoursesManagementPage: React.FC = () => {
+  const router = useRouter();
+  const pathname = usePathname();
   const [courses, setCourses] = useState<CourseCatalog[]>([]);
   const [filteredCourses, setFilteredCourses] = useState<CourseCatalog[]>([]);
   const [loading, setLoading] = useState(true);
@@ -29,6 +32,7 @@ const CoursesManagementPage: React.FC = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingCourse, setEditingCourse] = useState<CourseCatalog | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [error, setError] = useState('');
   const [stats, setStats] = useState({
     totalCourses: 0,
     averageDuration: 0,
@@ -55,13 +59,13 @@ const CoursesManagementPage: React.FC = () => {
   const loadCourses = async () => {
     try {
       setLoading(true);
+      setError('');
       const response = await api.getCourseCatalog();
       setCourses(response.data);
-    } catch (error) {
-      console.error('Failed to load courses:', error);
-      if (process.env.NODE_ENV === 'development') {
-        setCourses(CODING_COURSES);
-      }
+    } catch (loadError: any) {
+      console.error('Failed to load courses:', loadError);
+      setCourses([]);
+      setError(loadError.message || 'Unable to load course management data.');
     } finally {
       setLoading(false);
     }
@@ -105,13 +109,16 @@ const CoursesManagementPage: React.FC = () => {
     setFilteredCourses(filtered);
   };
 
-  const handleCreateCourse = async (formData: any) => {
+  const handleCreateCourse = async (formData: any, options?: { openCurriculum?: boolean }) => {
     try {
       setActionLoading('create');
+      setError('');
       const response = await api.createCourseCatalog(formData);
       setCourses([response.data, ...courses]);
       setShowCreateModal(false);
-      await loadStats(); // Refresh stats
+      if (options?.openCurriculum) {
+        openCurriculumStudio(response.data.slug);
+      }
     } catch (error) {
       console.error('Failed to create course:', error);
       alert('Failed to create course. Please try again.');
@@ -120,20 +127,24 @@ const CoursesManagementPage: React.FC = () => {
     }
   };
 
-  const handleUpdateCourse = async (courseId: string, formData: any) => {
+  const handleUpdateCourse = async (courseId: string, formData: any, options?: { openCurriculum?: boolean }) => {
     try {
       setActionLoading('update');
+      setError('');
       if (!editingCourse) {
         return;
       }
 
       const response = await api.updateCourseCatalog(editingCourse.slug, formData);
       setCourses(courses.map(c => 
-        c.id === courseId ? response.data : c
+        c.slug === courseId ? response.data : c
       ));
       
       setShowEditModal(false);
       setEditingCourse(null);
+      if (options?.openCurriculum) {
+        openCurriculumStudio(response.data.slug);
+      }
     } catch (error) {
       console.error('Failed to update course:', error);
       alert('Failed to update course. Please try again.');
@@ -149,9 +160,9 @@ const CoursesManagementPage: React.FC = () => {
 
     try {
       setActionLoading(`delete-${courseSlug}`);
+      setError('');
       await api.deleteCourseCatalog(courseSlug);
       setCourses(courses.filter(c => c.slug !== courseSlug));
-      await loadStats(); // Refresh stats
     } catch (error) {
       console.error('Failed to delete course:', error);
       alert('Failed to delete course. Please try again.');
@@ -179,6 +190,12 @@ const CoursesManagementPage: React.FC = () => {
     setSearchTerm('');
     setCategoryFilter('all');
     setDifficultyFilter('all');
+  };
+
+  const cmsRouteBase = pathname.startsWith('/instructor') ? '/instructor/dashboard/cms' : '/admin/dashboard/cms';
+
+  const openCurriculumStudio = (courseSlug: string) => {
+    router.push(`${cmsRouteBase}?course=${courseSlug}`);
   };
 
   if (loading) {
@@ -217,6 +234,12 @@ const CoursesManagementPage: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {error && (
+        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          {error}
+        </div>
+      )}
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -290,6 +313,7 @@ const CoursesManagementPage: React.FC = () => {
                 setShowEditModal(true);
               }}
               onDelete={handleDeleteCourse}
+              onOpenStudio={openCurriculumStudio}
               actionLoading={actionLoading}
               getDifficultyColor={getDifficultyColor}
               getCategoryColor={getCategoryColor}
@@ -330,14 +354,7 @@ const CoursesManagementPage: React.FC = () => {
                 Showing <span className="font-medium">{filteredCourses.length}</span> of{' '}
                 <span className="font-medium">{courses.length}</span> courses
               </div>
-              <div className="flex items-center space-x-2">
-                <button className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50">
-                  Previous
-                </button>
-                <button className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50">
-                  Next
-                </button>
-              </div>
+              <div className="text-sm text-gray-500">Catalog entries update live from the backend.</div>
             </div>
           </div>
         )}
@@ -348,7 +365,7 @@ const CoursesManagementPage: React.FC = () => {
         <CourseModal
           course={editingCourse}
           onSubmit={editingCourse ? 
-            (data) => handleUpdateCourse(editingCourse.id, data) : 
+            (data, options) => handleUpdateCourse(editingCourse.slug, data, options) : 
             handleCreateCourse
           }
           loading={actionLoading === 'create' || actionLoading === 'update'}
@@ -361,10 +378,6 @@ const CoursesManagementPage: React.FC = () => {
       )}
     </div>
   );
-};
-
-const getMockCourses = (): CourseCatalog[] => {
-  return CODING_COURSES;
 };
 
 export default CoursesManagementPage;

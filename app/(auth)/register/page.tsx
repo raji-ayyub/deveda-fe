@@ -6,11 +6,33 @@ import { useRouter } from 'next/navigation';
 import { Eye, EyeOff, Lock, Mail, User } from 'lucide-react';
 
 import { useAuth } from '@/context/AuthContext';
+import { getRoleRegistrationRedirect } from '@/lib/roleRoutes';
 
 const passwordRules = [
   'At least 8 characters',
   'Includes one letter',
   'Includes one number',
+];
+
+const accountTypes = [
+  {
+    value: 'Student',
+    label: 'Student',
+    description: 'For learners following the coding tracks and earning certificates.',
+    title: 'Create your learner account',
+    intro: 'Start with guided coding paths, quizzes, and milestone celebrations.',
+    nextStep: 'After signup, you will land in your learner profile with progress tracking and certificates.',
+    highlights: ['Structured courses', 'Quiz checkpoints', 'Certificates and accolades'],
+  },
+  {
+    value: 'Instructor',
+    label: 'Instructor',
+    description: 'For instructors building courses, assessments, and structured teaching plans.',
+    title: 'Create your instructor workspace',
+    intro: 'Set up a teaching account focused on curriculum, courses, and assessment authoring.',
+    nextStep: 'After signup, you will land in your instructor profile instead of the learner experience.',
+    highlights: ['Curriculum tools', 'Question bank access', 'Separate instructor workspace'],
+  },
 ];
 
 const RegisterPage: React.FC = () => {
@@ -22,12 +44,14 @@ const RegisterPage: React.FC = () => {
     email: '',
     password: '',
     confirmPassword: '',
+    role: 'Student',
   });
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const selectedAccountType = accountTypes.find((accountType) => accountType.value === formData.role) || accountTypes[0];
 
   const passwordValid = useMemo(() => {
     return (
@@ -69,9 +93,9 @@ const RegisterPage: React.FC = () => {
         formData.password,
         formData.firstName.trim(),
         formData.lastName.trim(),
-        'Student'
+        formData.role
       );
-      router.push('/profile');
+      router.push(getRoleRegistrationRedirect(formData.role));
     } catch (err: any) {
       setError(err.message || 'Registration failed. Please try again.');
     } finally {
@@ -95,10 +119,10 @@ const RegisterPage: React.FC = () => {
               </div>
             </div>
             <h1 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-              Create your trainee account
+              {selectedAccountType.title}
             </h1>
             <p className="mt-2 text-center text-sm text-gray-600">
-              Start with the student flow. Instructor accounts can be provisioned from the internal dashboard.
+              {selectedAccountType.intro}
             </p>
             <p className="mt-2 text-center text-sm text-gray-600">
               Already registered?{' '}
@@ -114,6 +138,35 @@ const RegisterPage: React.FC = () => {
                 {error}
               </div>
             )}
+
+            <div className="grid gap-4 md:grid-cols-2">
+              {accountTypes.map((accountType) => (
+                <button
+                  key={accountType.value}
+                  type="button"
+                  onClick={() => setFormData((current) => ({ ...current, role: accountType.value }))}
+                  className={`rounded-xl border p-4 text-left transition ${
+                    formData.role === accountType.value
+                      ? 'border-blue-500 bg-blue-50 shadow-sm shadow-blue-100'
+                      : 'border-gray-200 bg-white hover:border-blue-200'
+                  }`}
+                >
+                  <div className="text-sm font-semibold text-gray-900">{accountType.label}</div>
+                  <div className="mt-2 text-sm text-gray-600">{accountType.description}</div>
+                </button>
+              ))}
+            </div>
+
+            <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-4">
+              <p className="text-sm font-semibold text-blue-950">{selectedAccountType.nextStep}</p>
+              <div className="mt-3 grid gap-2 text-sm text-blue-900 md:grid-cols-3">
+                {selectedAccountType.highlights.map((highlight) => (
+                  <div key={highlight} className="rounded-lg bg-white px-3 py-2">
+                    {highlight}
+                  </div>
+                ))}
+              </div>
+            </div>
 
             <div className="grid gap-4 md:grid-cols-2">
               <div>
@@ -276,7 +329,7 @@ const RegisterPage: React.FC = () => {
               disabled={loading}
               className="flex w-full justify-center rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 px-4 py-2.5 text-sm font-medium text-white transition hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {loading ? 'Creating account...' : 'Create student account'}
+              {loading ? 'Creating account...' : `Create ${formData.role.toLowerCase()} account`}
             </button>
           </form>
         </div>

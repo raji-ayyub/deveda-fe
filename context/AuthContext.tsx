@@ -91,6 +91,7 @@ interface AuthContextType {
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, firstName: string, lastName: string, role?: string) => Promise<void>;
+  registerPrivateAdmin: (email: string, password: string, firstName: string, lastName: string, adminSetupSecret: string) => Promise<void>;
   logout: () => Promise<void>;
   updateUser: (data: Partial<User>) => Promise<void>;
 }
@@ -148,6 +149,22 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  const registerPrivateAdmin = async (
+    email: string,
+    password: string,
+    firstName: string,
+    lastName: string,
+    adminSetupSecret: string
+  ) => {
+    setLoading(true);
+    try {
+      const response = await api.registerPrivateAdmin({ email, password, firstName, lastName, adminSetupSecret });
+      setUser(response.data.user);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const logout = async () => {
     setLoading(true);
     try {
@@ -171,7 +188,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, updateUser }}>
+    <AuthContext.Provider value={{ user, loading, login, register, registerPrivateAdmin, logout, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

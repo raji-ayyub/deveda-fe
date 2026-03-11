@@ -11,17 +11,19 @@ import {
 } from 'lucide-react';
 import { CourseCatalog, UserCourse } from '@/lib/types';
 import { useRouter } from 'next/navigation';
-import { CODING_COURSES, COURSE_CATEGORY_COLORS, COURSE_DIFFICULTY_COLORS } from '@/lib/course-content';
+import { COURSE_CATEGORY_COLORS, COURSE_DIFFICULTY_COLORS } from '@/lib/course-content';
 
 const CoursesPage: React.FC = () => {
   const { user } = useAuth();
   const router = useRouter();
+  const isLearner = user?.role === 'Student';
   
   const [courses, setCourses] = useState<CourseCatalog[]>([]);
   const [userCourses, setUserCourses] = useState<UserCourse[]>([]);
   const [filteredCourses, setFilteredCourses] = useState<CourseCatalog[]>([]);
   const [loading, setLoading] = useState(true);
   const [enrolling, setEnrolling] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState('');
   
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
@@ -45,8 +47,9 @@ const CoursesPage: React.FC = () => {
   const loadCourses = async () => {
     try {
       setLoading(true);
+      setLoadError('');
       const catalogRes = await api.getCourseCatalog();
-      const userCoursesRes = user ? await api.getUserCourses(user.id) : { data: [] };
+      const userCoursesRes = isLearner ? await api.getUserCourses(user!.id) : { data: [] };
 
       const allCourses = catalogRes.data;
       const userEnrollments = userCoursesRes.data;
@@ -69,24 +72,23 @@ const CoursesPage: React.FC = () => {
         totalCourses: allCourses.length,
         totalEnrolled,
         completionRate,
-        averageRating: 4.5, // This would come from backend in real app
+        averageRating: 0,
       });
       
       filterAndSortCourses(allCourses, userEnrollments);
     } catch (error) {
       console.error('Failed to load courses:', error);
-      if (process.env.NODE_ENV === 'development') {
-        setCourses(CODING_COURSES);
-        setUserCourses([]);
-        setFilteredCourses(CODING_COURSES);
-        setCategories(['All', ...Array.from(new Set(CODING_COURSES.map((course) => course.category)))]);
-        setStats({
-          totalCourses: CODING_COURSES.length,
-          totalEnrolled: 0,
-          completionRate: 0,
-          averageRating: 0,
-        });
-      }
+      setCourses([]);
+      setUserCourses([]);
+      setFilteredCourses([]);
+      setCategories(['All']);
+      setStats({
+        totalCourses: 0,
+        totalEnrolled: 0,
+        completionRate: 0,
+        averageRating: 0,
+      });
+      setLoadError('We could not load the course catalog right now.');
     } finally {
       setLoading(false);
     }
@@ -153,9 +155,14 @@ const CoursesPage: React.FC = () => {
       return;
     }
 
+    if (!isLearner) {
+      router.push('/instructor/dashboard/courses');
+      return;
+    }
+
     try {
       setEnrolling(courseSlug);
-      const enrollment = await api.enrollCourse(user.id, {
+      const enrollment = await api.enrollCourse(user!.id, {
         courseSlug,
         category: courses.find(c => c.slug === courseSlug)?.category,
         difficulty: courses.find(c => c.slug === courseSlug)?.difficulty,
@@ -213,19 +220,34 @@ const CoursesPage: React.FC = () => {
               <p className="text-gray-600 mt-2">Follow focused frontend, backend, and systems design paths</p>
             </div>
             <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2 text-sm text-gray-600">
-                <BookOpen className="w-4 h-4" />
-                <span>{userCourses.length} enrolled</span>
-              </div>
-              <div className="flex items-center space-x-2 text-sm text-gray-600">
-                <CheckCircle className="w-4 h-4" />
-                <span>
-                  {userCourses.filter(c => c.completed).length} completed
-                </span>
-              </div>
+              {isLearner ? (
+                <>
+                  <div className="flex items-center space-x-2 text-sm text-gray-600">
+                    <BookOpen className="w-4 h-4" />
+                    <span>{userCourses.length} enrolled</span>
+                  </div>
+                  <div className="flex items-center space-x-2 text-sm text-gray-600">
+                    <CheckCircle className="w-4 h-4" />
+                    <span>
+                      {userCourses.filter(c => c.completed).length} completed
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-center space-x-2 text-sm text-blue-700">
+                  <BookOpen className="w-4 h-4" />
+                  <span>Instructor catalog view</span>
+                </div>
+              )}
             </div>
           </div>
         </div>
+
+        {loadError && (
+          <div className="mb-8 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+            {loadError}
+          </div>
+        )}
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -241,54 +263,66 @@ const CoursesPage: React.FC = () => {
             </div>
             <div className="mt-4 flex items-center text-sm text-green-600">
               <TrendingUp className="w-4 h-4 mr-1" />
-              <span>+12 new this month</span>
+              <span>Updated from the live catalog</span>
             </div>
           </div>
 
           <div className="bg-white rounded-xl shadow p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500">Your Enrollments</p>
+                <p className="text-sm text-gray-500">{isLearner ? 'Your Enrollments' : 'Teaching View'}</p>
                 <p className="text-3xl font-bold text-gray-900 mt-1">{stats.totalEnrolled}</p>
               </div>
               <div className="p-3 bg-green-100 rounded-lg">
                 <Users className="w-6 h-6 text-green-600" />
               </div>
             </div>
-            <div className="mt-4">
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
-                  className="bg-gradient-to-r from-green-500 to-emerald-500 h-2 rounded-full transition-all duration-500"
-                  style={{ width: `${stats.completionRate}%` }}
-                />
+            {isLearner ? (
+              <div className="mt-4">
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div 
+                    className="bg-gradient-to-r from-green-500 to-emerald-500 h-2 rounded-full transition-all duration-500"
+                    style={{ width: `${stats.completionRate}%` }}
+                  />
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  {stats.completionRate.toFixed(1)}% completion rate
+                </p>
               </div>
-              <p className="text-xs text-gray-500 mt-1">
-                {stats.completionRate.toFixed(1)}% completion rate
+            ) : (
+              <p className="mt-4 text-sm text-gray-500">
+                Instructor accounts review the catalog here but manage course delivery from the instructor workspace.
               </p>
-            </div>
+            )}
           </div>
 
           <div className="bg-white rounded-xl shadow p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-500">Average Rating</p>
-                <p className="text-3xl font-bold text-gray-900 mt-1">{stats.averageRating.toFixed(1)}</p>
+                <p className="text-sm text-gray-500">Course Rating</p>
+                <p className="text-3xl font-bold text-gray-900 mt-1">
+                  {stats.averageRating > 0 ? stats.averageRating.toFixed(1) : 'N/A'}
+                </p>
               </div>
               <div className="p-3 bg-yellow-100 rounded-lg">
                 <Star className="w-6 h-6 text-yellow-600" />
               </div>
             </div>
             <div className="mt-4 flex items-center">
-              {[...Array(5)].map((_, i) => (
-                <Star
-                  key={i}
-                  className={`w-4 h-4 ${
-                    i < Math.floor(stats.averageRating)
-                      ? 'text-yellow-400 fill-yellow-400'
-                      : 'text-gray-300'
-                  }`}
-                />
-              ))}
+              {stats.averageRating > 0 ? (
+                [...Array(5)].map((_, i) => (
+                  <Star
+                    key={i}
+                    className={`w-4 h-4 ${
+                      i < Math.floor(stats.averageRating)
+                        ? 'text-yellow-400 fill-yellow-400'
+                        : 'text-gray-300'
+                    }`}
+                  />
+                ))
+              ) : (
+                <p className="text-sm text-gray-500">Ratings will appear when learner reviews are available.</p>
+              )}
             </div>
           </div>
 
@@ -431,7 +465,7 @@ const CoursesPage: React.FC = () => {
                   >
                     {/* Course Thumbnail */}
                     <div className="h-48 bg-gradient-to-r from-blue-500 to-purple-600 relative overflow-hidden">
-                      {isEnrolled && progress > 0 && (
+                      {isLearner && isEnrolled && progress > 0 && (
                         <div className="absolute top-4 right-4">
                           <div className="relative">
                             <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
@@ -510,7 +544,7 @@ const CoursesPage: React.FC = () => {
                       )}
                       
                       {/* Progress Bar for enrolled courses */}
-                      {isEnrolled && progress > 0 && (
+                      {isLearner && isEnrolled && progress > 0 && (
                         <div className="mb-4">
                           <div className="flex justify-between text-sm mb-1">
                             <span className="text-gray-600">Your progress</span>
@@ -526,38 +560,47 @@ const CoursesPage: React.FC = () => {
                       )}
                       
                       {/* Action Button */}
-                      <button
-                        onClick={() => {
-                          if (isEnrolled) {
-                            router.push(`/courses/${course.slug}`);
-                          } else {
-                            handleEnroll(course.slug);
-                          }
-                        }}
-                        disabled={enrolling === course.slug}
-                        className={`w-full py-3 rounded-lg font-medium transition-all duration-300 flex items-center justify-center ${
-                          isEnrolled
-                            ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:shadow-lg'
-                            : 'bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:shadow-lg'
-                        } ${enrolling === course.slug ? 'opacity-75 cursor-not-allowed' : ''}`}
-                      >
-                        {enrolling === course.slug ? (
-                          <>
-                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                            Enrolling...
-                          </>
-                        ) : isEnrolled ? (
-                          <>
-                            {progress === 100 ? 'Completed' : 'Continue Learning'}
-                            <ArrowRight className="w-4 h-4 ml-2" />
-                          </>
-                        ) : (
-                          <>
-                            Enroll Now
-                            <ArrowRight className="w-4 h-4 ml-2" />
-                          </>
-                        )}
-                      </button>
+                      {isLearner ? (
+                        <button
+                          onClick={() => {
+                            if (isEnrolled) {
+                              router.push(`/courses/${course.slug}`);
+                            } else {
+                              handleEnroll(course.slug);
+                            }
+                          }}
+                          disabled={enrolling === course.slug}
+                          className={`w-full py-3 rounded-lg font-medium transition-all duration-300 flex items-center justify-center ${
+                            isEnrolled
+                              ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:shadow-lg'
+                              : 'bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:shadow-lg'
+                          } ${enrolling === course.slug ? 'opacity-75 cursor-not-allowed' : ''}`}
+                        >
+                          {enrolling === course.slug ? (
+                            <>
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              Enrolling...
+                            </>
+                          ) : isEnrolled ? (
+                            <>
+                              {progress === 100 ? 'Completed' : 'Continue Learning'}
+                              <ArrowRight className="w-4 h-4 ml-2" />
+                            </>
+                          ) : (
+                            <>
+                              Enroll Now
+                              <ArrowRight className="w-4 h-4 ml-2" />
+                            </>
+                          )}
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => router.push(`/courses/${course.slug}`)}
+                          className="w-full py-3 rounded-lg bg-gradient-to-r from-slate-900 to-blue-700 font-medium text-white transition-all duration-300 hover:shadow-lg"
+                        >
+                          Review Course
+                        </button>
+                      )}
                       
                       {/* View Details Link */}
                       <button
@@ -692,7 +735,7 @@ const CoursesPage: React.FC = () => {
         <div>
           <h2 className="text-2xl font-bold text-gray-900 mb-6">Recommended Next Courses</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {userCourses.length > 0 ? (
+            {isLearner && userCourses.length > 0 ? (
               courses
                 .filter(course => 
                   !userCourses.some(uc => uc.courseSlug === course.slug) &&
@@ -739,7 +782,7 @@ const CoursesPage: React.FC = () => {
                     </button>
                   </div>
                 ))
-            ) : (
+            ) : isLearner ? (
               <div className="col-span-2 bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl shadow p-8 text-center">
                 <AlertCircle className="w-12 h-12 text-blue-400 mx-auto mb-4" />
                 <h3 className="text-xl font-semibold text-gray-800 mb-2">
@@ -758,6 +801,20 @@ const CoursesPage: React.FC = () => {
                   className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-lg font-medium hover:shadow-lg transition-shadow"
                 >
                   Enroll in a Course
+                </button>
+              </div>
+            ) : (
+              <div className="col-span-2 rounded-xl border border-slate-200 bg-white p-8 text-center shadow">
+                <BookOpen className="mx-auto h-12 w-12 text-blue-500" />
+                <h3 className="mt-4 text-xl font-semibold text-slate-900">Instructor accounts do not use learner enrollments</h3>
+                <p className="mt-2 text-sm text-slate-600">
+                  Review course pages here, then switch to the instructor dashboard to manage curriculum, quizzes, and question banks.
+                </p>
+                <button
+                  onClick={() => router.push('/instructor/dashboard')}
+                  className="mt-6 rounded-lg bg-slate-950 px-6 py-3 font-medium text-white transition hover:bg-blue-700"
+                >
+                  Open instructor dashboard
                 </button>
               </div>
             )}

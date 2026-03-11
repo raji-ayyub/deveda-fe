@@ -124,7 +124,8 @@ import {
   Search, Filter, Grid, List
 } from 'lucide-react';
 import { CourseCatalog, UserCourse, QuizAttempt } from '@/lib/types';
-import { CODING_COURSES, COURSE_CATEGORY_COLORS, COURSE_DIFFICULTY_COLORS } from '@/lib/course-content';
+import { COURSE_CATEGORY_COLORS, COURSE_DIFFICULTY_COLORS } from '@/lib/course-content';
+import { getRoleLoginRedirect, getRoleProfilePath } from '@/lib/roleRoutes';
 
 const HomePage: React.FC = () => {
   const { user } = useAuth();
@@ -138,12 +139,12 @@ const HomePage: React.FC = () => {
   const [stats, setStats] = useState({
     totalCourses: 0,
     totalStudents: 0,
-    completionRate: 0,
+    totalEnrollments: 0,
     totalHours: 0,
   });
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState<string>('All');
-  const [usingFallbackData, setUsingFallbackData] = useState(false);
+  const [loadError, setLoadError] = useState('');
 
   const categories = [
     { id: 'all', name: 'All', icon: Grid, color: 'bg-gradient-to-r from-blue-500 to-purple-500' },
@@ -159,13 +160,15 @@ const HomePage: React.FC = () => {
   const loadHomeData = async () => {
     try {
       setLoading(true);
+      setLoadError('');
       
-      // Load course catalog
-      const [catalogRes] = await Promise.all([
+      const [catalogRes, catalogStatsRes] = await Promise.all([
         api.getCourseCatalog(),
+        api.getCourseCatalogStats(),
       ]);
 
       const allCourses = catalogRes.data;
+      const catalogStats = catalogStatsRes.data;
       
       // Set featured courses (first 6)
       setFeaturedCourses(allCourses.slice(0, 6));
@@ -179,14 +182,13 @@ const HomePage: React.FC = () => {
       // Calculate stats
       setStats({
         totalCourses: allCourses.length,
-        totalStudents: 12500,
-        completionRate: 78,
-        totalHours: 24500,
+        totalStudents: catalogStats.unique_enrolled_users || 0,
+        totalEnrollments: catalogStats.total_enrollments || 0,
+        totalHours: Math.round(allCourses.reduce((total, course) => total + (course.duration || 0), 0) / 60),
       });
-      setUsingFallbackData(false);
 
       // If user is logged in, load their progress
-      if (user) {
+      if (user?.role === 'Student') {
         try {
           const [userCoursesRes, quizAttemptsRes] = await Promise.all([
             api.getUserCourses(user.id),
@@ -204,13 +206,29 @@ const HomePage: React.FC = () => {
           const totalQuizScore = quizAttempts.reduce((sum, attempt) => sum + attempt.score, 0);
           const avgQuizScore = quizAttempts.length > 0 ? totalQuizScore / quizAttempts.length : 0;
 
+          const activityDates = [
+            ...userCourses.map((item) => item.lastAccessed).filter(Boolean),
+            ...quizAttempts.map((attempt) => attempt.attemptedAt),
+          ]
+            .filter((value): value is string => typeof value === 'string' && value.length > 0)
+            .map((value) => new Date(value))
+            .filter((date) => !Number.isNaN(date.getTime()))
+            .sort((left, right) => right.getTime() - left.getTime());
+          const streakDays = getRecentActivityStreak(activityDates);
+          const totalTimeSpent = Math.round(
+            userCourses.reduce((total, item) => {
+              const courseInfo = allCourses.find((course) => course.slug === item.courseSlug);
+              return total + (((courseInfo?.duration || 0) * item.progress) / 100);
+            }, 0) / 60
+          );
+
           setUserProgress({
             enrolledCourses: totalCourses,
             completedCourses,
             avgProgress,
             avgQuizScore,
-            totalTimeSpent: 45, // This would come from backend
-            streakDays: 7,
+            totalTimeSpent,
+            streakDays,
           });
 
           // Generate recent activity
@@ -245,18 +263,16 @@ const HomePage: React.FC = () => {
 
     } catch (error) {
       console.error('Failed to load home data:', error);
-      if (process.env.NODE_ENV === 'development') {
-        setFeaturedCourses(getMockCourses().slice(0, 6));
-        setPopularCourses(getMockCourses().slice(3, 9));
-        setNewCourses(getMockCourses().slice(-4));
-        setStats({
-          totalCourses: CODING_COURSES.length,
-          totalStudents: 0,
-          completionRate: 0,
-          totalHours: 0,
-        });
-        setUsingFallbackData(true);
-      }
+      setFeaturedCourses([]);
+      setPopularCourses([]);
+      setNewCourses([]);
+      setStats({
+        totalCourses: 0,
+        totalStudents: 0,
+        totalEnrollments: 0,
+        totalHours: 0,
+      });
+      setLoadError('We could not load the latest catalog data right now.');
     } finally {
       setLoading(false);
     }
@@ -310,17 +326,17 @@ const HomePage: React.FC = () => {
                 {user ? (
                   <>
                     <button
-                      onClick={() => router.push('/courses')}
+                      onClick={() => router.push(user.role === 'Student' ? '/courses' : getRoleLoginRedirect(user.role))}
                       className="inline-flex items-center justify-center px-8 py-4 bg-white text-blue-600 font-bold rounded-xl hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1"
                     >
-                      Continue Learning
+                      {user.role === 'Student' ? 'Continue Learning' : 'Open Workspace'}
                       <ArrowRight className="w-5 h-5 ml-2" />
                     </button>
                     <button
-                      onClick={() => router.push('/profile')}
+                      onClick={() => router.push(getRoleProfilePath(user.role))}
                       className="inline-flex items-center justify-center px-8 py-4 bg-white/10 backdrop-blur-sm text-white font-medium rounded-xl border-2 border-white/30 hover:bg-white/20 transition-all"
                     >
-                      View Progress
+                      {user.role === 'Student' ? 'View Progress' : 'View Profile'}
                     </button>
                   </>
                 ) : (
@@ -361,13 +377,13 @@ const HomePage: React.FC = () => {
                     </div>
                     <div className="bg-white/20 p-6 rounded-xl backdrop-blur-sm">
                       <Target className="w-8 h-8 text-white mb-3" />
-                      <div className="text-3xl font-bold text-white">{stats.completionRate}%</div>
-                      <div className="text-white/80 text-sm">Completion Rate</div>
+                      <div className="text-3xl font-bold text-white">{stats.totalEnrollments}</div>
+                      <div className="text-white/80 text-sm">Enrollments</div>
                     </div>
                     <div className="bg-white/20 p-6 rounded-xl backdrop-blur-sm">
                       <Clock className="w-8 h-8 text-white mb-3" />
-                      <div className="text-3xl font-bold text-white">24.5K+</div>
-                      <div className="text-white/80 text-sm">Learning Hours</div>
+                      <div className="text-3xl font-bold text-white">{stats.totalHours}</div>
+                      <div className="text-white/80 text-sm">Guided Hours</div>
                     </div>
                   </div>
                 </div>
@@ -395,10 +411,10 @@ const HomePage: React.FC = () => {
         </div>
       </div>
 
-      {usingFallbackData && (
+      {loadError && (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-            Showing local coding curriculum fallback data because the course catalog API was unavailable.
+          <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">
+            {loadError}
           </div>
         </div>
       )}
@@ -919,16 +935,16 @@ const HomePage: React.FC = () => {
             {user ? (
               <>
                 <button
-                  onClick={() => router.push('/courses')}
+                  onClick={() => router.push(user.role === 'Student' ? '/courses' : getRoleLoginRedirect(user.role))}
                   className="px-8 py-4 bg-white text-blue-600 font-bold rounded-xl hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1"
                 >
-                  Browse Courses
+                  {user.role === 'Student' ? 'Browse Courses' : 'Open Workspace'}
                 </button>
                 <button
-                  onClick={() => router.push('/profile')}
+                  onClick={() => router.push(getRoleProfilePath(user.role))}
                   className="px-8 py-4 bg-white/20 backdrop-blur-sm text-white font-medium rounded-xl border-2 border-white/30 hover:bg-white/30 transition-all"
                 >
-                  View Your Dashboard
+                  {user.role === 'Student' ? 'View Your Dashboard' : 'View Instructor Profile'}
                 </button>
               </>
             ) : (
@@ -1033,9 +1049,42 @@ const HomePage: React.FC = () => {
   );
 };
 
-// Mock data for development
-const getMockCourses = (): CourseCatalog[] => {
-  return CODING_COURSES;
+const getRecentActivityStreak = (dates: Date[]) => {
+  if (dates.length === 0) {
+    return 0;
+  }
+
+  const uniqueDays = Array.from(
+    new Set(
+      dates.map((date) =>
+        new Date(date.getFullYear(), date.getMonth(), date.getDate()).toISOString()
+      )
+    )
+  )
+    .map((value) => new Date(value))
+    .sort((left, right) => right.getTime() - left.getTime());
+
+  let streak = 0;
+  let expected = new Date();
+  expected = new Date(expected.getFullYear(), expected.getMonth(), expected.getDate());
+
+  for (const day of uniqueDays) {
+    const current = new Date(day.getFullYear(), day.getMonth(), day.getDate());
+    const difference = Math.round((expected.getTime() - current.getTime()) / 86400000);
+    if (difference === 0) {
+      streak += 1;
+      expected = new Date(expected.getTime() - 86400000);
+      continue;
+    }
+    if (streak === 0 && difference === 1) {
+      streak += 1;
+      expected = new Date(current.getTime() - 86400000);
+      continue;
+    }
+    break;
+  }
+
+  return streak;
 };
 
 export default HomePage;

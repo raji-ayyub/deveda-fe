@@ -4,15 +4,17 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { AchievementCelebrationModal } from '@/components/achievements/AchievementCelebrationModal';
+import LessonTutorDrawer from '@/components/agents/LessonTutorDrawer';
+import RichContentRenderer from '@/components/lesson/RichContentRenderer';
+import LessonCodePlayground from '@/components/lesson/LessonCodePlayground';
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
 import {
   ArrowLeft, Play, CheckCircle, BookOpen,
   Clock, ChevronRight, ChevronLeft,
   Target, Star, Video, FileText,
-  Download, MessageSquare, HelpCircle,
-  Bookmark, Share2, Maximize2, Volume2,
-  Settings
+  HelpCircle,
+  Bot
 } from 'lucide-react';
 import { CourseCurriculum, UserAchievement } from '@/lib/types';
 
@@ -20,6 +22,7 @@ const CourseLearnPage: React.FC = () => {
   const params = useParams();
   const router = useRouter();
   const { user } = useAuth();
+  const isLearner = user?.role === 'Student';
   
   const slug = params.slug as string;
   
@@ -30,12 +33,15 @@ const CourseLearnPage: React.FC = () => {
   const [currentLesson, setCurrentLesson] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [celebrationAwards, setCelebrationAwards] = useState<UserAchievement[]>([]);
+  const [lessonTutorOpen, setLessonTutorOpen] = useState(false);
 
   useEffect(() => {
-    if (slug && user) {
+    if (slug && user && isLearner) {
       loadCourseData();
+    } else if (user && !isLearner) {
+      setLoading(false);
     }
-  }, [slug, user]);
+  }, [slug, user, isLearner]);
 
   const loadCourseData = async () => {
     try {
@@ -83,7 +89,7 @@ const CourseLearnPage: React.FC = () => {
   };
 
   const handleLessonComplete = () => {
-    if (!course || !userCourse) return;
+    if (!course || !userCourse || totalLessons === 0) return;
     
     const lessonProgress = 100 / totalLessons;
     const newProgress = Math.min(userCourse.progress + lessonProgress, 100);
@@ -98,6 +104,25 @@ const CourseLearnPage: React.FC = () => {
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
           <p className="mt-4 text-gray-600">Loading course content...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (user && !isLearner) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-950 px-4">
+        <div className="max-w-lg rounded-[28px] border border-slate-800 bg-slate-900 p-8 text-center shadow-2xl">
+          <h1 className="text-2xl font-bold text-white">Learner view only</h1>
+          <p className="mt-3 text-sm text-slate-300">
+            Instructors review course content from the catalog and manage delivery from the instructor dashboard instead of the learner lesson player.
+          </p>
+          <button
+            onClick={() => router.push('/instructor/dashboard')}
+            className="mt-6 rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-950"
+          >
+            Open instructor dashboard
+          </button>
         </div>
       </div>
     );
@@ -125,17 +150,41 @@ const CourseLearnPage: React.FC = () => {
         ...lesson,
         moduleTitle: module.title,
         moduleOrder: module.order,
+        assessmentTitle: module.assessmentTitle,
       }))
-    ) ||
-    Array.from({ length: course.totalLessons }).map((_, index) => ({
-      title: `Lesson ${index + 1}`,
-      slug: `lesson-${index + 1}`,
-      summary: 'Guided lesson content for this course.',
-      durationMinutes: 15,
-      contentType: 'lesson',
-    }));
+    ) || [];
   const totalLessons = lessonList.length;
   const activeLesson = lessonList[currentLesson];
+  const completedLessons = Math.floor((userCourse.progress / 100) * totalLessons);
+  const remainingMinutes = lessonList.slice(currentLesson).reduce((total, lesson) => total + lesson.durationMinutes, 0);
+  const activeModule = curriculum?.modules.find((module) => module.title === activeLesson?.moduleTitle) || null;
+
+  if (totalLessons === 0) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-950 px-4">
+        <div className="max-w-xl rounded-[28px] border border-slate-800 bg-slate-900 p-8 text-center shadow-2xl">
+          <h1 className="text-2xl font-bold text-white">No lessons published yet</h1>
+          <p className="mt-3 text-sm text-slate-300">
+            This course has been created, but the lesson curriculum has not been published yet. Check back after the instructor adds the first lessons.
+          </p>
+          <div className="mt-6 flex flex-wrap justify-center gap-3">
+            <button
+              onClick={() => router.push(`/courses/${slug}`)}
+              className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-950"
+            >
+              Return to course page
+            </button>
+            <button
+              onClick={() => router.push('/courses')}
+              className="rounded-2xl border border-slate-700 px-4 py-3 text-sm font-semibold text-slate-200"
+            >
+              Browse other courses
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-900">
@@ -144,6 +193,17 @@ const CourseLearnPage: React.FC = () => {
         learnerName={user ? user.firstName : 'Learner'}
         onClose={() => setCelebrationAwards([])}
       />
+      {course && (
+        <LessonTutorDrawer
+          open={lessonTutorOpen}
+          onClose={() => setLessonTutorOpen(false)}
+          courseSlug={slug}
+          courseTitle={course.title}
+          lessonSlug={activeLesson?.slug}
+          lessonTitle={activeLesson?.title}
+          currentProgress={Math.round(userCourse.progress)}
+        />
+      )}
       {/* Top Navigation */}
       <div className="bg-gray-800 border-b border-gray-700">
         <div className="flex items-center justify-between px-4 py-3">
@@ -177,17 +237,17 @@ const CourseLearnPage: React.FC = () => {
             </div>
             
             <div className="flex items-center space-x-2">
-              <button className="p-2 text-gray-400 hover:text-white">
-                <Bookmark className="w-5 h-5" />
+              <button
+                onClick={() => setSidebarOpen((current) => !current)}
+                className="rounded-xl border border-gray-600 px-3 py-2 text-sm font-semibold text-gray-200 transition hover:border-gray-500 hover:text-white"
+              >
+                {sidebarOpen ? 'Hide outline' : 'Show outline'}
               </button>
-              <button className="p-2 text-gray-400 hover:text-white">
-                <Share2 className="w-5 h-5" />
-              </button>
-              <button className="p-2 text-gray-400 hover:text-white">
-                <Maximize2 className="w-5 h-5" />
-              </button>
-              <button className="p-2 text-gray-400 hover:text-white">
-                <Settings className="w-5 h-5" />
+              <button
+                onClick={() => setLessonTutorOpen((current) => !current)}
+                className="rounded-xl border border-cyan-500/40 bg-cyan-500/10 px-3 py-2 text-sm font-semibold text-cyan-200 transition hover:bg-cyan-500/20"
+              >
+                {lessonTutorOpen ? 'Hide tutor' : 'Open tutor'}
               </button>
             </div>
           </div>
@@ -245,19 +305,19 @@ const CourseLearnPage: React.FC = () => {
               </div>
               
               <div className="mt-6 pt-6 border-t border-gray-700">
-                <h3 className="text-sm font-semibold text-gray-400 mb-3">Resources</h3>
+                <h3 className="text-sm font-semibold text-gray-400 mb-3">At a glance</h3>
                 <div className="space-y-2">
-                  <button className="w-full flex items-center p-2 text-gray-300 hover:bg-gray-700 rounded">
-                    <Download className="w-4 h-4 mr-2" />
-                    <span>Download Slides (PDF)</span>
-                  </button>
-                  <button className="w-full flex items-center p-2 text-gray-300 hover:bg-gray-700 rounded">
+                  <div className="flex items-center rounded p-2 text-gray-300">
+                    <BookOpen className="w-4 h-4 mr-2" />
+                    <span>{activeLesson?.moduleTitle || 'Current module'}</span>
+                  </div>
+                  <div className="flex items-center rounded p-2 text-gray-300">
                     <FileText className="w-4 h-4 mr-2" />
-                    <span>Exercise Files</span>
-                  </button>
-                  <button className="w-full flex items-center p-2 text-gray-300 hover:bg-gray-700 rounded">
-                    <MessageSquare className="w-4 h-4 mr-2" />
-                    <span>Community Discussion</span>
+                    <span className="capitalize">{activeLesson?.contentType || 'lesson'}</span>
+                  </div>
+                  <button onClick={() => setLessonTutorOpen(true)} className="flex w-full items-center rounded p-2 text-gray-300 transition hover:bg-gray-700">
+                    <Bot className="w-4 h-4 mr-2" />
+                    <span>Open lesson tutor</span>
                   </button>
                 </div>
               </div>
@@ -282,15 +342,16 @@ const CourseLearnPage: React.FC = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="text-lg font-semibold text-white">
-                      Lesson {currentLesson + 1}: {activeLesson?.title || 'Understanding the Basics'}
+                      Lesson {currentLesson + 1}: {activeLesson?.title || 'Current lesson'}
                     </h3>
                     <p className="text-gray-400">{activeLesson?.durationMinutes || 15} minutes</p>
                   </div>
                   <div className="flex items-center space-x-4">
-                    <button className="text-gray-400 hover:text-white">
-                      <Volume2 className="w-5 h-5" />
-                    </button>
-                    <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                    <button
+                      onClick={() => setCurrentLesson(Math.min(totalLessons - 1, currentLesson + 1))}
+                      disabled={currentLesson === totalLessons - 1}
+                      className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
                       Next Lesson
                     </button>
                   </div>
@@ -305,77 +366,73 @@ const CourseLearnPage: React.FC = () => {
                   <div className="flex items-center justify-between mb-6">
                     <h2 className="text-2xl font-bold text-white">Lesson Content</h2>
                     <button
-                      onClick={() => setSidebarOpen(!sidebarOpen)}
-                      className="lg:hidden p-2 text-gray-400 hover:text-white"
+                      onClick={() => setSidebarOpen((current) => !current)}
+                      className="p-2 text-gray-400 hover:text-white"
                     >
-                      <ChevronRight className="w-5 h-5" />
+                      {sidebarOpen ? <ChevronLeft className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
                     </button>
                   </div>
                   
-                  <div className="prose prose-invert max-w-none">
-                    <h3 className="text-xl font-semibold text-white mb-4">
-                      {activeLesson?.title || 'Understanding Key Concepts'}
-                    </h3>
-                    
-                    <p className="text-gray-300 mb-4">
-                      {activeLesson?.summary || "In this lesson, we'll dive deep into the fundamental concepts that form the backbone of this course."}
-                    </p>
-                    
-                    <div className="bg-gray-700 rounded-lg p-4 mb-4">
-                      <h4 className="font-semibold text-white mb-2">Learning Objectives</h4>
-                      <ul className="text-gray-300 space-y-1">
-                        <li className="flex items-start">
-                          <CheckCircle className="w-4 h-4 text-green-500 mr-2 mt-0.5 flex-shrink-0" />
-                          Understand the core principles
-                        </li>
-                        <li className="flex items-start">
-                          <CheckCircle className="w-4 h-4 text-green-500 mr-2 mt-0.5 flex-shrink-0" />
-                          Identify common patterns
-                        </li>
-                        <li className="flex items-start">
-                          <CheckCircle className="w-4 h-4 text-green-500 mr-2 mt-0.5 flex-shrink-0" />
-                          Apply concepts to real-world scenarios
-                        </li>
-                      </ul>
-                    </div>
-                    
-                    <h4 className="text-lg font-semibold text-white mt-6 mb-3">Detailed Explanation</h4>
-                    <p className="text-gray-300 mb-4">
-                      Let's start with the basics. The core concept we're discussing today is fundamental to understanding more complex topics. We'll break it down into simple, digestible parts.
-                    </p>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                      <div className="bg-gray-700 rounded-lg p-4">
-                        <h5 className="font-semibold text-white mb-2">Key Term 1</h5>
-                        <p className="text-gray-300 text-sm">
-                          Definition and explanation of the first key term you need to know.
-                        </p>
-                      </div>
-                      <div className="bg-gray-700 rounded-lg p-4">
-                        <h5 className="font-semibold text-white mb-2">Key Term 2</h5>
-                        <p className="text-gray-300 text-sm">
-                          Definition and explanation of the second key term you need to know.
-                        </p>
-                      </div>
-                    </div>
-                    
-                    <div className="bg-gradient-to-r from-blue-900/30 to-purple-900/30 rounded-lg p-4 border border-blue-800/50">
-                      <div className="flex items-center mb-2">
-                        <Target className="w-5 h-5 text-blue-400 mr-2" />
-                        <h5 className="font-semibold text-white">Practice Exercise</h5>
-                      </div>
-                      <p className="text-gray-300 mb-3">
-                        Try applying what you've learned to solve this problem:
+                  <div className="space-y-6">
+                    <div>
+                      <h3 className="mb-3 text-xl font-semibold text-white">
+                        {activeLesson?.title || 'Current lesson'}
+                      </h3>
+                      <p className="text-gray-300">
+                        {activeLesson?.summary || 'This lesson summary will appear here once the curriculum is available.'}
                       </p>
-                      <div className="bg-gray-800 rounded p-3 mb-3">
-                        <p className="text-gray-300 font-mono text-sm">
-                          // Write your solution here
-                        </p>
-                      </div>
-                      <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
-                        Check Solution
-                      </button>
                     </div>
+
+                    <div className="rounded-lg bg-gray-700 p-4">
+                      <h4 className="mb-2 font-semibold text-white">Lesson snapshot</h4>
+                      <div className="grid gap-3 md:grid-cols-3">
+                        <div className="rounded-lg bg-gray-800 p-3">
+                          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-400">Module</div>
+                          <div className="mt-2 text-sm font-medium text-white">{activeLesson?.moduleTitle || 'Current module'}</div>
+                        </div>
+                        <div className="rounded-lg bg-gray-800 p-3">
+                          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-400">Format</div>
+                          <div className="mt-2 text-sm font-medium capitalize text-white">{activeLesson?.contentType || 'lesson'}</div>
+                        </div>
+                        <div className="rounded-lg bg-gray-800 p-3">
+                          <div className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-400">Estimated time</div>
+                          <div className="mt-2 text-sm font-medium text-white">{activeLesson?.durationMinutes || 0} minutes</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {activeLesson?.learningObjectives?.length ? (
+                      <div className="rounded-lg bg-gray-700 p-4">
+                        <h4 className="mb-3 text-lg font-semibold text-white">Learning objectives</h4>
+                        <ul className="ml-5 list-disc space-y-2 text-sm text-gray-200">
+                          {activeLesson.learningObjectives.map((objective) => (
+                            <li key={objective}>{objective}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
+
+                    <div className="rounded-[24px] bg-white p-6 text-slate-900">
+                      <RichContentRenderer content={activeLesson?.contentMarkdown || ''} />
+                    </div>
+
+                    {activeLesson?.practicePrompt ? (
+                      <div className="rounded-lg border border-blue-800/50 bg-gradient-to-r from-blue-900/30 to-purple-900/30 p-4">
+                        <div className="mb-2 flex items-center">
+                          <Target className="mr-2 h-5 w-5 text-blue-400" />
+                          <h5 className="font-semibold text-white">Practice challenge</h5>
+                        </div>
+                        <p className="mb-3 text-gray-300">{activeLesson.practicePrompt}</p>
+                        <button
+                          onClick={() => setLessonTutorOpen(true)}
+                          className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
+                        >
+                          Ask lesson tutor
+                        </button>
+                      </div>
+                    ) : null}
+
+                    {activeLesson?.playground ? <LessonCodePlayground playground={activeLesson.playground} /> : null}
                   </div>
                 </div>
                 
@@ -451,63 +508,68 @@ const CourseLearnPage: React.FC = () => {
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-300">Completed Lessons</span>
                         <span className="text-white font-medium">
-                          {Math.floor((userCourse.progress / 100) * totalLessons)}/{totalLessons}
+                          {completedLessons}/{totalLessons}
                         </span>
                       </div>
                       <div className="flex justify-between text-sm">
-                        <span className="text-gray-300">Time Spent</span>
-                        <span className="text-white font-medium">4h 30m</span>
+                        <span className="text-gray-300">Estimated remaining</span>
+                        <span className="text-white font-medium">{remainingMinutes} min</span>
                       </div>
                     </div>
                   </div>
                   
-                  {/* Resources */}
+                  {/* Course context */}
                   <div className="bg-gray-800 rounded-xl p-6">
-                    <h3 className="text-lg font-semibold text-white mb-4">Resources</h3>
+                    <h3 className="text-lg font-semibold text-white mb-4">Course context</h3>
                     <div className="space-y-3">
-                      <a href="#" className="flex items-center p-3 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors group">
+                      <div className="flex items-center rounded-lg bg-gray-700 p-3">
                         <Video className="w-5 h-5 text-blue-400 mr-3" />
                         <div className="flex-1">
-                          <div className="text-white font-medium">Video Transcript</div>
-                          <div className="text-sm text-gray-400">Downloadable text version</div>
+                          <div className="text-white font-medium">Current module</div>
+                          <div className="text-sm text-gray-400">{activeLesson?.moduleTitle || 'Current module details appear here.'}</div>
                         </div>
-                        <Download className="w-4 h-4 text-gray-400 group-hover:text-white" />
-                      </a>
-                      <a href="#" className="flex items-center p-3 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors group">
+                      </div>
+                      <div className="flex items-center rounded-lg bg-gray-700 p-3">
                         <FileText className="w-5 h-5 text-green-400 mr-3" />
                         <div className="flex-1">
-                          <div className="text-white font-medium">Practice Exercises</div>
-                          <div className="text-sm text-gray-400">10 problems with solutions</div>
+                          <div className="text-white font-medium">Lesson type</div>
+                          <div className="text-sm capitalize text-gray-400">{activeLesson?.contentType || 'lesson'}</div>
                         </div>
-                        <Download className="w-4 h-4 text-gray-400 group-hover:text-white" />
-                      </a>
-                      <a href="#" className="flex items-center p-3 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors group">
+                      </div>
+                      <div className="rounded-lg bg-gray-700 p-3">
+                        <div className="text-white font-medium">Key takeaways</div>
+                        <div className="mt-2 space-y-2 text-sm text-gray-300">
+                          {(activeLesson?.keyTakeaways || []).slice(0, 3).map((takeaway) => (
+                            <div key={takeaway}>{takeaway}</div>
+                          ))}
+                        </div>
+                      </div>
+                      <button onClick={() => setLessonTutorOpen(true)} className="group flex w-full items-center rounded-lg bg-gray-700 p-3 text-left transition-colors hover:bg-gray-600">
                         <HelpCircle className="w-5 h-5 text-yellow-400 mr-3" />
                         <div className="flex-1">
-                          <div className="text-white font-medium">Ask Questions</div>
-                          <div className="text-sm text-gray-400">Get help from community</div>
+                          <div className="text-white font-medium">Need another explanation?</div>
+                          <div className="text-sm text-gray-400">Open the lesson tutor for examples and step-by-step help.</div>
                         </div>
                         <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-white" />
-                      </a>
+                      </button>
                     </div>
                   </div>
                   
-                  {/* Upcoming Quiz */}
+                  {/* Module checkpoint */}
                   <div className="bg-gradient-to-r from-yellow-900/30 to-orange-900/30 rounded-xl p-6 border border-yellow-800/30">
                     <div className="flex items-center mb-4">
                       <Star className="w-5 h-5 text-yellow-400 mr-3" />
-                      <h3 className="text-lg font-semibold text-white">Upcoming Quiz</h3>
+                      <h3 className="text-lg font-semibold text-white">Module checkpoint</h3>
                     </div>
                     <p className="text-gray-300 mb-4">
-                      Complete the next 2 lessons to unlock the module quiz.
+                      {activeModule?.assessmentTitle
+                        ? `${activeModule.assessmentTitle} is the next checkpoint for this module.`
+                        : 'This module does not yet have a checkpoint configured.'}
                     </p>
                     <div className="flex items-center text-sm text-gray-400">
                       <Clock className="w-4 h-4 mr-2" />
-                      <span>Available in: 30 minutes</span>
+                      <span>{activeModule?.assessmentQuizId ? `Quiz ID: ${activeModule.assessmentQuizId}` : 'Checkpoint can be added from the curriculum studio.'}</span>
                     </div>
-                    <button className="w-full mt-4 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 text-sm font-medium">
-                      Prepare for Quiz
-                    </button>
                   </div>
                 </div>
               </div>
@@ -515,6 +577,24 @@ const CourseLearnPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      <button
+        onClick={() => setLessonTutorOpen((current) => !current)}
+        className="fixed bottom-6 right-6 z-40 inline-flex items-center gap-2 rounded-full bg-cyan-500 px-5 py-3 text-sm font-semibold text-slate-950 shadow-2xl transition hover:bg-cyan-400"
+      >
+        <Bot className="h-4 w-4" />
+        {lessonTutorOpen ? 'Close tutor' : 'Lesson tutor'}
+      </button>
+
+      {!sidebarOpen && (
+        <button
+          onClick={() => setSidebarOpen(true)}
+          className="fixed bottom-6 left-6 z-40 inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-semibold text-slate-950 shadow-2xl transition hover:bg-slate-100"
+        >
+          <BookOpen className="h-4 w-4" />
+          Show course content
+        </button>
+      )}
     </div>
   );
 };

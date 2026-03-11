@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation';
 import { Eye, EyeOff, Lock, Mail } from 'lucide-react';
 
 import { useAuth } from '@/context/AuthContext';
+import { api } from '@/lib/api';
+import { getRoleLoginRedirect } from '@/lib/roleRoutes';
 
 const LoginPage: React.FC = () => {
   const router = useRouter();
@@ -25,7 +27,8 @@ const LoginPage: React.FC = () => {
 
     try {
       await login(formData.email.trim().toLowerCase(), formData.password);
-      router.push('/profile');
+      const currentUser = await api.getCurrentUser();
+      router.push(getRoleLoginRedirect(currentUser?.role));
     } catch (err: any) {
       setError(err.message || 'Invalid email or password.');
     } finally {

@@ -1,13 +1,14 @@
 'use client';
 
 import React from 'react';
-import { Edit, Trash2, Eye, Clock, User, Calendar, Loader2 } from 'lucide-react';
+import { Edit, Trash2, Eye, Clock, User, Calendar, Loader2, BookOpenText } from 'lucide-react';
 import { CourseCatalog } from '@/lib/types';
 
 interface CourseRowProps {
   course: CourseCatalog;
   onEdit: (course: CourseCatalog) => void;
   onDelete: (courseSlug: string) => void;
+  onOpenStudio: (courseSlug: string) => void;
   actionLoading: string | null;
   getDifficultyColor: (difficulty: string) => string;
   getCategoryColor: (category: string) => string;
@@ -18,6 +19,7 @@ const CourseRow: React.FC<CourseRowProps> = ({
   course,
   onEdit,
   onDelete,
+  onOpenStudio,
   actionLoading,
   getDifficultyColor,
   getCategoryColor,
@@ -137,6 +139,13 @@ const CourseRow: React.FC<CourseRowProps> = ({
               ) : (
                 <Edit className="w-4 h-4 text-gray-500 hover:text-blue-600" />
               )}
+            </button>
+            <button
+              onClick={() => onOpenStudio(course.slug)}
+              className="p-1.5 hover:bg-emerald-50 rounded-lg transition-colors"
+              title="Open curriculum studio"
+            >
+              <BookOpenText className="w-4 h-4 text-gray-500 hover:text-emerald-700" />
             </button>
             <button
               onClick={() => onDelete(course.slug)}

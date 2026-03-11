@@ -1,7 +1,7 @@
 // components/admin/dashboardLayout.tsx
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
@@ -22,8 +22,10 @@ import {
   FileText,
   Shield,
   TrendingUp,
-  LibraryBig
+  LibraryBig,
+  Bot
 } from 'lucide-react';
+import { getRoleProfilePath } from '@/lib/roleRoutes';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -33,9 +35,12 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement | null>(null);
+  const notificationsRef = useRef<HTMLDivElement | null>(null);
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout, loading } = useAuth();
+  const profileHref = getRoleProfilePath(user?.role);
 
   const navigation = [
     {
@@ -81,6 +86,12 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
       current: pathname.startsWith('/admin/dashboard/analytics'),
     },
     {
+      name: 'Agents',
+      href: '/admin/dashboard/agents',
+      icon: <Bot className="w-5 h-5" />,
+      current: pathname.startsWith('/admin/dashboard/agents'),
+    },
+    {
       name: 'Settings',
       href: '/admin/dashboard/settings',
       icon: <Settings className="w-5 h-5" />,
@@ -104,6 +115,38 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
     }
   };
 
+  useEffect(() => {
+    setSidebarOpen(false);
+    setUserMenuOpen(false);
+    setNotificationsOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!userMenuRef.current?.contains(event.target as Node)) {
+        setUserMenuOpen(false);
+      }
+      if (!notificationsRef.current?.contains(event.target as Node)) {
+        setNotificationsOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setSidebarOpen(false);
+        setUserMenuOpen(false);
+        setNotificationsOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-blue-50">
@@ -115,13 +158,13 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
     );
   }
 
-  if (!user || !['Admin', 'Instructor'].includes(user.role)) {
+  if (!user || user.role !== 'Admin') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-blue-50">
         <div className="text-center">
           <Shield className="w-16 h-16 text-gray-300 mx-auto" />
           <h2 className="text-2xl font-bold text-gray-900 mt-4">Access Denied</h2>
-          <p className="text-gray-600 mt-2">You need admin privileges to access this dashboard.</p>
+          <p className="text-gray-600 mt-2">You need an admin account to access the admin dashboard.</p>
           <button
             onClick={() => router.push('/')}
             className="mt-6 bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-2 rounded-lg font-medium hover:opacity-90 transition-opacity"
@@ -255,9 +298,12 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
             
             <div className="ml-4 flex items-center md:ml-6 space-x-4">
               {/* Notifications */}
-              <div className="relative">
+              <div ref={notificationsRef} className="relative">
                 <button
-                  onClick={() => setNotificationsOpen(!notificationsOpen)}
+                  onClick={() => {
+                    setNotificationsOpen((current) => !current);
+                    setUserMenuOpen(false);
+                  }}
                   className="p-1 text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
                   <Bell className="h-6 w-6" />
@@ -266,9 +312,12 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
               </div>
 
               {/* User menu */}
-              <div className="relative">
+              <div ref={userMenuRef} className="relative">
                 <button
-                  onClick={() => setUserMenuOpen(!userMenuOpen)}
+                  onClick={() => {
+                    setUserMenuOpen((current) => !current);
+                    setNotificationsOpen(false);
+                  }}
                   className="max-w-xs bg-white flex items-center text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
                   <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
@@ -283,7 +332,7 @@ const DashboardLayout: React.FC<DashboardLayoutProps> = ({ children }) => {
                 {userMenuOpen && (
                   <div className="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5 focus:outline-none">
                     <Link
-                      href="/profile"
+                      href={profileHref}
                       className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                       onClick={() => setUserMenuOpen(false)}
                     >

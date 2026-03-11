@@ -2,9 +2,10 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Award, BookOpen, Calendar, CheckCircle2, ChevronRight, Mail, Settings, Trophy } from 'lucide-react';
+import { Award, BookOpen, Bot, Calendar, CheckCircle2, ChevronRight, Mail, Settings, Trophy } from 'lucide-react';
 
 import { AchievementShowcase } from '@/components/achievements/AchievementShowcase';
+import InstructorProfileView from '@/components/profile/InstructorProfileView';
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
 import { CourseCatalog, QuizAttempt, UserAchievement, UserCourse } from '@/lib/types';
@@ -28,6 +29,16 @@ const ProfilePage: React.FC = () => {
 
   useEffect(() => {
     if (!user) {
+      setLoading(false);
+      return;
+    }
+
+    if (user.role !== 'Student') {
+      setUserCourses([]);
+      setQuizAttempts([]);
+      setCourseCatalog([]);
+      setAchievements([]);
+      setLoading(false);
       return;
     }
 
@@ -131,6 +142,31 @@ const ProfilePage: React.FC = () => {
           <Link href="/login" className="mt-6 inline-flex rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white">
             Go to login
           </Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (user.role === 'Instructor') {
+    return <InstructorProfileView />;
+  }
+
+  if (user.role === 'Admin') {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
+        <div className="max-w-xl rounded-[28px] border border-slate-200 bg-white p-8 text-center shadow-xl">
+          <h1 className="text-2xl font-bold text-slate-950">Admin accounts use a different workspace</h1>
+          <p className="mt-3 text-sm text-slate-600">
+            Admin operations live in the admin dashboard and account management screens, not the learner profile.
+          </p>
+          <div className="mt-6 flex flex-wrap justify-center gap-3">
+            <Link href="/admin/dashboard" className="inline-flex rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white">
+              Open admin dashboard
+            </Link>
+            <Link href="/settings" className="inline-flex rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700">
+              Open account settings
+            </Link>
+          </div>
         </div>
       </div>
     );
@@ -312,7 +348,7 @@ const ProfilePage: React.FC = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-xl font-bold text-slate-950">Certificates & accolades</h2>
-                  <p className="mt-1 text-sm text-slate-600">Milestones worth showing to a parent, guardian, mentor, or coach.</p>
+                  <p className="mt-1 text-sm text-slate-600">Completed milestones, earned certificates, and learning highlights from your journey.</p>
                 </div>
                 <div className="rounded-2xl bg-amber-50 p-3 text-amber-700">
                   <Award className="h-5 w-5" />
@@ -322,6 +358,21 @@ const ProfilePage: React.FC = () => {
               <div className="mt-6">
                 <AchievementShowcase achievements={achievements} />
               </div>
+            </section>
+
+            <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-lg shadow-slate-100">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-bold text-slate-950">Agent support</h2>
+                  <p className="mt-1 text-sm text-slate-600">Open your approved learning and support agents whenever you need help.</p>
+                </div>
+                <div className="rounded-2xl bg-blue-50 p-3 text-blue-700">
+                  <Bot className="h-5 w-5" />
+                </div>
+              </div>
+              <Link href="/agents" className="mt-6 inline-flex rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700">
+                Open agent hub
+              </Link>
             </section>
           </div>
 

@@ -4,15 +4,21 @@
 // components/Header.tsx
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import { Menu, X, User, LogOut, Home, BookOpen, Trophy, FileCode2, Info, Settings } from 'lucide-react';
+import { Menu, X, User, LogOut, Home, BookOpen, Trophy, FileCode2, Info, Settings, Bot } from 'lucide-react';
+import { getRoleProfilePath } from '@/lib/roleRoutes';
 
 const Header: React.FC = () => {
   const { user, logout } = useAuth();
+  const pathname = usePathname();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
+  const navRef = useRef<HTMLElement | null>(null);
+  const profileHref = getRoleProfilePath(user?.role);
+  const agentHref = user?.role === 'Admin' ? '/admin/dashboard/agents' : '/agents';
 
   const navigation = [
     { name: 'Home', href: '/', icon: <Home className="w-5 h-5" /> },
@@ -21,6 +27,13 @@ const Header: React.FC = () => {
     { name: 'Lessons', href: '/lessons', icon: <FileCode2 className="w-5 h-5" /> },
     { name: 'About', href: '/about', icon: <Info className="w-5 h-5" /> },
   ];
+
+  const hideOnWorkspaceRoute =
+    pathname.startsWith('/admin/dashboard') ||
+    pathname.startsWith('/instructor/dashboard') ||
+    pathname === '/admin/login' ||
+    pathname === '/admin/setup' ||
+    /^\/courses\/[^/]+\/learn$/.test(pathname);
 
   const handleLogout = async () => {
     try {
@@ -31,8 +44,35 @@ const Header: React.FC = () => {
     }
   };
 
+  useEffect(() => {
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!navRef.current?.contains(event.target as Node)) {
+        setIsMenuOpen(false);
+        setIsProfileDropdownOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsMenuOpen(false);
+        setIsProfileDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
+  if (hideOnWorkspaceRoute) {
+    return null;
+  }
+
   return (
-    <nav className="bg-white shadow-sm sticky top-0 z-[9999]">
+    <nav ref={navRef} className="bg-white shadow-sm sticky top-0 z-[9999]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           {/* Logo */}
@@ -66,7 +106,10 @@ const Header: React.FC = () => {
             {user ? (
               <div className="relative">
                 <button
-                  onClick={() => setIsProfileDropdownOpen(!isProfileDropdownOpen)}
+                  onClick={() => {
+                    setIsProfileDropdownOpen((current) => !current);
+                    setIsMenuOpen(false);
+                  }}
                   className="flex items-center space-x-2 focus:outline-none"
                 >
                   <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
@@ -86,12 +129,20 @@ const Header: React.FC = () => {
                 {isProfileDropdownOpen && (
                   <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg py-1 border border-gray-200 z-[9999]">
                     <Link
-                      href="/profile"
+                      href={profileHref}
                       className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
                       onClick={() => setIsProfileDropdownOpen(false)}
                     >
                       <User className="w-4 h-4" />
                       <span>Profile</span>
+                    </Link>
+                    <Link
+                      href={agentHref}
+                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
+                      onClick={() => setIsProfileDropdownOpen(false)}
+                    >
+                      <Bot className="w-4 h-4" />
+                      <span>Agent Hub</span>
                     </Link>
                     <Link
                       href="/settings"
@@ -130,7 +181,10 @@ const Header: React.FC = () => {
 
             {/* Mobile menu button */}
             <button
-              onClick={() => setIsMenuOpen(!isMenuOpen)}
+              onClick={() => {
+                setIsMenuOpen((current) => !current);
+                setIsProfileDropdownOpen(false);
+              }}
               className="md:hidden text-gray-700 hover:text-blue-600"
             >
               {isMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}

@@ -1,4 +1,15 @@
 import {
+  AgentActionPayload,
+  AgentApprovalPayload,
+  AgentAssignment,
+  AgentArtifact,
+  AgentMessage,
+  AgentMessagePayload,
+  AgentTemplate,
+  AgentThread,
+  AgentThreadDetail,
+  AgentThreadPayload,
+  AgentRequestPayload,
   AdminFilters,
   AdminStats,
   ApiResponse,
@@ -12,6 +23,7 @@ import {
   CourseWithDetails,
   LoginCredentials,
   PasswordChangePayload,
+  PrivateAdminRegistration,
   QuestionWithDetails,
   QuizAttempt,
   QuizQuestion,
@@ -27,7 +39,9 @@ import {
 } from './types';
 
 // const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-const API_BASE_URL =  'https://deveda-be.onrender.com';
+const API_BASE_URL ='http://localhost:8000';
+
+
 
 const TOKEN_STORAGE_KEY = 'deveda_token';
 const USER_STORAGE_KEY = 'deveda_user';
@@ -185,6 +199,22 @@ class ApiService {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify(payload),
+    });
+
+    const result = await this.handleResponse<AuthSession | User>(response);
+    const session = this.normalizeAuthSession(result.data);
+    this.persistSession(session);
+    return {
+      ...result,
+      data: session,
+    };
+  }
+
+  async registerPrivateAdmin(credentials: PrivateAdminRegistration): Promise<ApiResponse<AuthSession>> {
+    const response = await fetch(`${API_BASE_URL}/auth/private-admin/register`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify(credentials),
     });
 
     const result = await this.handleResponse<AuthSession | User>(response);
@@ -524,6 +554,95 @@ class ApiService {
       headers: this.getHeaders(),
     });
     return this.handleResponse<ChartData>(response);
+  }
+
+  async getAgentCatalog(): Promise<ApiResponse<AgentTemplate[]>> {
+    const response = await fetch(`${API_BASE_URL}/agents/catalog`, {
+      headers: this.getHeaders(),
+    });
+    return this.handleResponse<AgentTemplate[]>(response);
+  }
+
+  async requestAgent(payload: AgentRequestPayload): Promise<ApiResponse<AgentAssignment>> {
+    const response = await fetch(`${API_BASE_URL}/agents/requests`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify(payload),
+    });
+    return this.handleResponse<AgentAssignment>(response);
+  }
+
+  async getAgentAssignments(status?: string): Promise<ApiResponse<AgentAssignment[]>> {
+    const query = status ? `?status=${encodeURIComponent(status)}` : '';
+    const response = await fetch(`${API_BASE_URL}/agents/assignments${query}`, {
+      headers: this.getHeaders(),
+    });
+    return this.handleResponse<AgentAssignment[]>(response);
+  }
+
+  async updateAgentRequest(assignmentId: string, payload: AgentApprovalPayload): Promise<ApiResponse<AgentAssignment>> {
+    const response = await fetch(`${API_BASE_URL}/agents/requests/${assignmentId}`, {
+      method: 'PATCH',
+      headers: this.getHeaders(),
+      body: JSON.stringify(payload),
+    });
+    return this.handleResponse<AgentAssignment>(response);
+  }
+
+  async createAgentThread(payload: AgentThreadPayload): Promise<ApiResponse<AgentThread>> {
+    const response = await fetch(`${API_BASE_URL}/agents/threads`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify(payload),
+    });
+    return this.handleResponse<AgentThread>(response);
+  }
+
+  async getAgentThreads(assignmentId?: string): Promise<ApiResponse<AgentThread[]>> {
+    const query = assignmentId ? `?assignmentId=${encodeURIComponent(assignmentId)}` : '';
+    const response = await fetch(`${API_BASE_URL}/agents/threads${query}`, {
+      headers: this.getHeaders(),
+    });
+    return this.handleResponse<AgentThread[]>(response);
+  }
+
+  async getAgentThread(threadId: string): Promise<ApiResponse<AgentThreadDetail>> {
+    const response = await fetch(`${API_BASE_URL}/agents/threads/${threadId}`, {
+      headers: this.getHeaders(),
+    });
+    return this.handleResponse<AgentThreadDetail>(response);
+  }
+
+  async sendAgentMessage(threadId: string, payload: AgentMessagePayload): Promise<ApiResponse<{
+    userMessage: AgentMessage;
+    assistantMessage: AgentMessage;
+  }>> {
+    const response = await fetch(`${API_BASE_URL}/agents/threads/${threadId}/messages`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify(payload),
+    });
+    return this.handleResponse<{
+      userMessage: AgentMessage;
+      assistantMessage: AgentMessage;
+    }>(response);
+  }
+
+  async getAgentArtifacts(assignmentId?: string): Promise<ApiResponse<AgentArtifact[]>> {
+    const query = assignmentId ? `?assignmentId=${encodeURIComponent(assignmentId)}` : '';
+    const response = await fetch(`${API_BASE_URL}/agents/artifacts${query}`, {
+      headers: this.getHeaders(),
+    });
+    return this.handleResponse<AgentArtifact[]>(response);
+  }
+
+  async runAgentAction(assignmentId: string, payload: AgentActionPayload): Promise<ApiResponse<AgentArtifact>> {
+    const response = await fetch(`${API_BASE_URL}/agents/assignments/${assignmentId}/actions`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify(payload),
+    });
+    return this.handleResponse<AgentArtifact>(response);
   }
 }
 

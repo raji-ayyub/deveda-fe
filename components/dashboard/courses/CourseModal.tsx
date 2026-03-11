@@ -8,7 +8,7 @@ import { COURSE_CATEGORIES, COURSE_DIFFICULTIES } from '@/lib/course-content';
 
 interface CourseModalProps {
   course: CourseCatalog | null;
-  onSubmit: (data: any) => void;
+  onSubmit: (data: any, options?: { openCurriculum?: boolean }) => void;
   loading: boolean;
   onClose: () => void;
 }
@@ -35,7 +35,11 @@ const CourseModal: React.FC<CourseModalProps> = ({ course, onSubmit, loading, on
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit(formData);
+    onSubmit(formData, { openCurriculum: true });
+  };
+
+  const submitWithOptions = (options?: { openCurriculum?: boolean }) => {
+    onSubmit(formData, options);
   };
 
   const addTag = () => {
@@ -279,24 +283,39 @@ const CourseModal: React.FC<CourseModalProps> = ({ course, onSubmit, loading, on
                   )}
                 </div>
               </div>
+
+              <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-4">
+                <h4 className="text-sm font-semibold text-blue-950">After saving this course</h4>
+                <p className="mt-2 text-sm text-blue-900">
+                  Open the curriculum studio to write lesson markup, add learning objectives, configure hands-on code workspaces, and use approved course-builder agent suggestions during lesson authoring.
+                </p>
+              </div>
             </form>
           </div>
 
           <div className="bg-gray-50 px-6 py-4 sm:px-8 sm:flex sm:flex-row-reverse border-t border-gray-200">
             <button
-              type="submit"
-              onClick={handleSubmit}
+              type="button"
+              onClick={() => submitWithOptions({ openCurriculum: true })}
               disabled={loading}
               className="w-full sm:w-auto inline-flex justify-center items-center rounded-lg border border-transparent shadow-sm px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-base font-medium text-white hover:opacity-90 focus:outline-none disabled:opacity-75"
             >
               {loading ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  {course ? 'Updating...' : 'Creating...'}
+                  {course ? 'Saving...' : 'Creating...'}
                 </>
               ) : (
-                <>{course ? 'Update Course' : 'Create Course'}</>
+                <>{course ? 'Save + Open Studio' : 'Create + Open Studio'}</>
               )}
+            </button>
+            <button
+              type="button"
+              onClick={() => submitWithOptions({ openCurriculum: false })}
+              disabled={loading}
+              className="mt-3 sm:mt-0 sm:mr-3 w-full sm:w-auto inline-flex justify-center rounded-lg border border-gray-300 shadow-sm px-6 py-3 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none disabled:opacity-75"
+            >
+              {course ? 'Save Only' : 'Create Only'}
             </button>
             <button
               type="button"

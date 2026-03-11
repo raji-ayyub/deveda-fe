@@ -7,6 +7,7 @@ import { ArrowLeft, KeyRound, ShieldCheck, UserCircle2 } from 'lucide-react';
 import CloudinaryUploadField from '@/components/CloudinaryUploadField';
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
+import { getRoleProfilePath } from '@/lib/roleRoutes';
 
 const SettingsPage: React.FC = () => {
   const { user, updateUser, loading: authLoading } = useAuth();
@@ -68,6 +69,20 @@ const SettingsPage: React.FC = () => {
     );
   }
 
+  const backHref = getRoleProfilePath(user.role);
+  const profileDescription =
+    user.role === 'Instructor'
+      ? 'These details appear in your teaching workspace and on instructor-facing surfaces.'
+      : user.role === 'Admin'
+      ? 'These details identify your internal admin account across the dashboard.'
+      : 'These details are shown across the learning experience.';
+  const avatarHelperText =
+    user.role === 'Instructor'
+      ? 'Upload a clear instructor photo for your teaching workspace, course pages, and parent-facing trust.'
+      : user.role === 'Admin'
+      ? 'Upload a recognizable photo for internal account identity.'
+      : 'Upload a friendly learner photo for profiles, certificates, and celebration moments.';
+
   const handleProfileSave = async (event: React.FormEvent) => {
     event.preventDefault();
     setProfileError('');
@@ -123,7 +138,7 @@ const SettingsPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#f8fafc_0%,#ffffff_42%,#eff6ff_100%)] px-4 py-8 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-5xl space-y-6">
-        <Link href="/profile" className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 transition hover:text-blue-700">
+        <Link href={backHref} className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 transition hover:text-blue-700">
           <ArrowLeft className="h-4 w-4" />
           Back to profile
         </Link>
@@ -143,7 +158,7 @@ const SettingsPage: React.FC = () => {
               </div>
               <div>
                 <h2 className="text-xl font-bold text-slate-950">Profile settings</h2>
-                <p className="text-sm text-slate-600">These details are shown across the learning experience.</p>
+                <p className="text-sm text-slate-600">{profileDescription}</p>
               </div>
             </div>
 
@@ -157,7 +172,7 @@ const SettingsPage: React.FC = () => {
                 value={profileForm.avatarUrl}
                 publicId={profileForm.avatarPublicId}
                 suggestedPublicId={user ? `user-${user.id}-avatar` : undefined}
-                helperText="Upload a friendly learner photo for profiles, certificates, and celebration moments."
+                helperText={avatarHelperText}
                 onChange={({ url, publicId }) => setProfileForm((current) => ({ ...current, avatarUrl: url, avatarPublicId: publicId }))}
               />
               <SettingsField label="First name" value={profileForm.firstName} onChange={(value) => setProfileForm((current) => ({ ...current, firstName: value }))} />

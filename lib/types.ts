@@ -97,6 +97,28 @@ export interface CourseCurriculumLesson {
   contentType: string;
   quizId?: string | null;
   quizTitle?: string | null;
+  learningObjectives?: string[];
+  keyTakeaways?: string[];
+  contentMarkdown?: string;
+  practicePrompt?: string | null;
+  instructorNotes?: string | null;
+  playground?: LessonPlayground | null;
+}
+
+export interface LessonPlaygroundCheck {
+  label: string;
+  type: 'includes' | 'output';
+  target: 'html' | 'css' | 'js' | 'console';
+  value: string;
+}
+
+export interface LessonPlayground {
+  mode: 'web' | 'javascript';
+  instructions: string;
+  starterHtml?: string;
+  starterCss?: string;
+  starterJs?: string;
+  checks: LessonPlaygroundCheck[];
 }
 
 export interface CourseCurriculumModule {
@@ -181,6 +203,10 @@ export interface RegisterCredentials {
   firstName: string;
   lastName: string;
   role?: string;
+}
+
+export interface PrivateAdminRegistration extends RegisterCredentials {
+  adminSetupSecret: string;
 }
 
 export interface PasswordChangePayload {
@@ -303,4 +329,115 @@ export interface RecentActivity {
   target: string;
   timestamp: string;
   icon: string;
+}
+
+export interface AgentTemplate {
+  key: string;
+  name: string;
+  description: string;
+  allowedRequesterRoles: string[];
+  requiresApproval: boolean;
+  defaultTitle: string;
+}
+
+export interface AgentAssignment {
+  id: string;
+  userId: string;
+  requestedBy?: string;
+  targetUserId?: string | null;
+  agentType: string;
+  displayName?: string | null;
+  notes?: string;
+  courseSlug?: string | null;
+  lessonSlug?: string | null;
+  status: 'pending' | 'approved' | 'rejected';
+  adminNotes?: string;
+  approvedBy?: string | null;
+  approvedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AgentThread {
+  id: string;
+  assignmentId: string;
+  userId: string;
+  title: string;
+  agentType: string;
+  context: {
+    courseSlug?: string | null;
+    lessonSlug?: string | null;
+  };
+  lastMessagePreview?: string;
+  createdAt: string;
+  updatedAt: string;
+  assignment?: AgentAssignment | null;
+}
+
+export interface AgentMessage {
+  id: string;
+  threadId: string;
+  role: 'user' | 'assistant';
+  content: string;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface AgentThreadDetail {
+  thread: AgentThread;
+  messages: AgentMessage[];
+}
+
+export interface AgentArtifact {
+  id: string;
+  assignmentId: string;
+  threadId?: string | null;
+  userId: string;
+  agentType: string;
+  artifactType: string;
+  title: string;
+  summary: string;
+  status: string;
+  route?: string | null;
+  payload: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface AgentRequestPayload {
+  agentType: string;
+  displayName?: string;
+  notes?: string;
+  courseSlug?: string;
+  lessonSlug?: string;
+  targetUserId?: string;
+}
+
+export interface AgentApprovalPayload {
+  status: 'pending' | 'approved' | 'rejected';
+  adminNotes?: string;
+}
+
+export interface AgentThreadPayload {
+  assignmentId: string;
+  title?: string;
+  initialMessage?: string;
+  courseSlug?: string;
+  lessonSlug?: string;
+}
+
+export interface AgentMessagePayload {
+  message: string;
+  courseSlug?: string;
+  lessonSlug?: string;
+  lessonTitle?: string;
+  currentProgress?: number;
+}
+
+export interface AgentActionPayload {
+  actionType: 'create_course_shell' | 'create_curriculum_draft' | 'apply_curriculum_to_course' | 'save_planning_note' | 'suggest_lesson_content';
+  artifactId?: string;
+  courseSlug?: string;
+  lessonSlug?: string;
+  targetUserId?: string;
+  instruction?: string;
 }
