@@ -19,6 +19,27 @@ import {
   Send
 } from 'lucide-react';
 
+function shuffleArray<T>(items: T[]): T[] {
+  const next = [...items];
+  for (let index = next.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1));
+    [next[index], next[swapIndex]] = [next[swapIndex], next[index]];
+  }
+  return next;
+}
+
+function shuffleQuizQuestions(input: QuizQuestion[]): QuizQuestion[] {
+  return input.map((question) => ({
+    ...question,
+    options: shuffleArray(question.options),
+  }));
+}
+
+function deriveQuizTimer(input: QuizQuestion[]): number {
+  const total = input.reduce((sum, question) => sum + Math.max(question.timeLimit || 60, 10), 0);
+  return Math.max(total, 60);
+}
+
 const QuizPage: React.FC = () => {
   const params = useParams();
   const router = useRouter();
@@ -44,7 +65,7 @@ const QuizPage: React.FC = () => {
 
   useEffect(() => {
     if (quizId) {
-      loadQuiz();
+      void loadQuiz();
     }
   }, [quizId]);
 
@@ -61,8 +82,14 @@ const QuizPage: React.FC = () => {
     try {
       setLoading(true);
       setSubmitError('');
+      setShowResults(false);
+      setQuizResult(null);
+      setCurrentQuestion(0);
+      setAnswers({});
       const response = await api.getQuizQuestions(quizId);
-      setQuestions(response.data);
+      const shuffledQuestions = shuffleQuizQuestions(response.data);
+      setQuestions(shuffledQuestions);
+      setTimeLeft(deriveQuizTimer(shuffledQuestions));
       const catalogRes = await api.getCourseCatalog();
       const matchingCourse = [...catalogRes.data]
         .filter((course) => quizId.startsWith(course.slug))
@@ -84,6 +111,11 @@ const QuizPage: React.FC = () => {
       ...answers,
       [questionId]: answer,
     });
+  };
+
+  const handleRetakeQuiz = async () => {
+    setCelebrationAwards([]);
+    await loadQuiz();
   };
 
   const calculateScore = () => {
@@ -323,7 +355,9 @@ const QuizPage: React.FC = () => {
                   Explore More Courses
                 </button>
                 <button
-                  onClick={() => router.push(`/quiz/${quizId}`)}
+                  onClick={() => {
+                    void handleRetakeQuiz();
+                  }}
                   className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-lg font-medium hover:opacity-90 transition-opacity"
                 >
                   Retake Quiz

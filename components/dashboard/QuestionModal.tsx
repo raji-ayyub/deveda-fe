@@ -45,10 +45,13 @@ const QuestionModal: React.FC<QuestionModalProps> = ({
   const [agentPrompt, setAgentPrompt] = useState('');
   const [drafting, setDrafting] = useState(false);
   const [agentError, setAgentError] = useState('');
+  const [agentSuggestion, setAgentSuggestion] = useState<GeneratedQuestionContentPayload | null>(null);
   const [validationError, setValidationError] = useState('');
   const [submitError, setSubmitError] = useState('');
+  const selectedQuizTitle = quizzes.find((quiz) => quiz.id === formData.quizId)?.title || '';
 
   useEffect(() => {
+    setAgentSuggestion(null);
     if (!initialData) {
       setFormData({
         quizId: '',
@@ -85,6 +88,7 @@ const QuestionModal: React.FC<QuestionModalProps> = ({
       setSubmitError('');
       setAgentError('');
       setAgentPrompt('');
+      setAgentSuggestion(null);
     }
   }, [isOpen]);
 
@@ -196,24 +200,36 @@ const QuestionModal: React.FC<QuestionModalProps> = ({
     try {
       setDrafting(true);
       setAgentError('');
+      setAgentSuggestion(null);
       const response = await api.runAgentAction(agentAssignment.id, {
         actionType: 'generate_question_content',
         instruction:
           agentPrompt.trim() ||
-          `Generate one complete question for quiz ${formData.quizId || 'this quiz'} using the current form context.`,
-        draftPayload: formData,
+          `Generate one complete question for ${selectedQuizTitle || formData.quizId || 'this quiz'} using the current quiz context, the existing draft progress, and a plausible learner checkpoint.`,
+        draftPayload: {
+          ...formData,
+          quizTitle: selectedQuizTitle,
+        },
       });
       const generated = response.data.payload as unknown as GeneratedQuestionContentPayload;
-      setFormData((current) => ({
-        ...current,
-        ...generated,
-        options: generated.options?.length ? generated.options : current.options,
-      }));
+      setAgentSuggestion(generated);
     } catch (error: any) {
       setAgentError(error.message || 'Unable to generate a question draft right now.');
     } finally {
       setDrafting(false);
     }
+  };
+
+  const applyAgentSuggestion = () => {
+    if (!agentSuggestion) {
+      return;
+    }
+
+    setFormData((current) => ({
+      ...current,
+      ...agentSuggestion,
+      options: agentSuggestion.options?.length ? agentSuggestion.options : current.options,
+    }));
   };
 
   if (!isOpen) {
@@ -243,7 +259,7 @@ const QuestionModal: React.FC<QuestionModalProps> = ({
                 Agent autofill
               </div>
               <p className="mt-2 text-sm text-slate-600">
-                Ask the course builder to generate a complete question draft, then review and save it manually.
+                Ask the course builder to suggest a complete question draft, review it in context, then accept it into the form.
               </p>
               <div className="mt-3 flex flex-col gap-3 md:flex-row">
                 <textarea
@@ -260,10 +276,47 @@ const QuestionModal: React.FC<QuestionModalProps> = ({
                   className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-60"
                 >
                   {drafting ? <Loader2 className="h-4 w-4 animate-spin" /> : <WandSparkles className="h-4 w-4" />}
-                  Draft question
+                  Suggest question
                 </button>
               </div>
               {agentError ? <p className="mt-3 text-sm text-rose-600">{agentError}</p> : null}
+              {agentSuggestion ? (
+                <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Suggested question</div>
+                      <div className="mt-2 text-base font-semibold text-slate-950">{agentSuggestion.question}</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={applyAgentSuggestion}
+                      className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
+                    >
+                      <Save className="h-4 w-4" />
+                      Accept suggestion
+                    </button>
+                  </div>
+                  <div className="mt-4 grid gap-4 md:grid-cols-2">
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                      <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Answer options</div>
+                      <div className="mt-3 space-y-2 text-sm text-slate-700">
+                        {agentSuggestion.options.map((option, index) => (
+                          <div key={`${option}-${index}`} className="rounded-xl bg-white px-3 py-2">
+                            {option}
+                            {agentSuggestion.correctAnswer === option ? (
+                              <span className="ml-2 text-xs font-semibold uppercase tracking-[0.14em] text-emerald-700">Correct</span>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                      <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Explanation</div>
+                      <div className="mt-3 text-sm text-slate-700">{agentSuggestion.explanation}</div>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
             </div>
           ) : null}
 

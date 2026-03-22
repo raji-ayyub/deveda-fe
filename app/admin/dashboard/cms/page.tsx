@@ -3,12 +3,23 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { BookOpen, ChevronDown, FileUp, Loader2, Plus, Save, Sparkles, Trash2 } from 'lucide-react';
+import { BookOpen, Bot, ChevronDown, FileUp, Loader2, Plus, Save, Sparkles, Trash2, WandSparkles } from 'lucide-react';
 
 import { CourseModal } from '@/components/dashboard/courses';
 import RichContentRenderer from '@/components/lesson/RichContentRenderer';
 import { api } from '@/lib/api';
-import { ContentGenerationSession, CourseCatalog, CourseCurriculum, CourseCurriculumLesson, CourseCurriculumModule, MilestoneProject } from '@/lib/types';
+import {
+  AgentAssignment,
+  ContentGenerationSession,
+  CourseCatalog,
+  CourseCurriculum,
+  CourseCurriculumLesson,
+  CourseCurriculumModule,
+  GeneratedCourseContentPayload,
+  GeneratedLessonContentPayload,
+  GeneratedModuleContentPayload,
+  MilestoneProject,
+} from '@/lib/types';
 
 const makeLesson = (courseSlug: string, moduleIndex: number, lessonIndex: number): CourseCurriculumLesson => ({
   title: `Lesson ${lessonIndex + 1}`,
@@ -71,6 +82,85 @@ function Preview({ title, content }: { title: string; content: string }) {
   );
 }
 
+function SuggestionList({ title, items }: { title: string; items?: string[] | null }) {
+  if (!items?.length) {
+    return null;
+  }
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+      <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{title}</div>
+      <div className="mt-3 space-y-2 text-sm text-slate-700">
+        {items.map((item, index) => (
+          <div key={`${title}-${index}`} className="rounded-xl bg-slate-50 px-3 py-2">
+            {item}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function AgentAssistPanel({
+  title,
+  description,
+  prompt,
+  onPromptChange,
+  onSuggest,
+  loading,
+  disabled,
+  disabledReason,
+  error,
+  children,
+}: {
+  title: string;
+  description: string;
+  prompt: string;
+  onPromptChange: (value: string) => void;
+  onSuggest: () => void;
+  loading: boolean;
+  disabled?: boolean;
+  disabledReason?: string;
+  error?: string;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-[24px] border border-blue-100 bg-[linear-gradient(135deg,#eff6ff_0%,#f8fafc_55%,#ecfeff_100%)] p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="inline-flex items-center gap-2 rounded-full bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-blue-700">
+            <Bot className="h-3.5 w-3.5" />
+            Agent Assist
+          </div>
+          <h3 className="mt-3 text-base font-bold text-slate-950">{title}</h3>
+          <p className="mt-1 text-sm text-slate-600">{description}</p>
+        </div>
+        <button
+          type="button"
+          onClick={onSuggest}
+          disabled={loading || disabled}
+          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-60"
+        >
+          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <WandSparkles className="h-4 w-4" />}
+          {loading ? 'Thinking...' : 'Suggest'}
+        </button>
+      </div>
+
+      <textarea
+        value={prompt}
+        onChange={(event) => onPromptChange(event.target.value)}
+        rows={3}
+        placeholder="Add any constraints, learner tone, or teaching emphasis you want the assistant to follow."
+        className="mt-4 w-full rounded-2xl border border-blue-100 bg-white px-4 py-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+      />
+
+      {disabledReason ? <p className="mt-2 text-xs text-slate-500">{disabledReason}</p> : null}
+      {error ? <div className="mt-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div> : null}
+      {children ? <div className="mt-4 space-y-4">{children}</div> : null}
+    </div>
+  );
+}
+
 export default function CMSPage() {
   const searchParams = useSearchParams();
   const preferredCourseSlug = searchParams.get('course') || '';
@@ -92,6 +182,15 @@ export default function CMSPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [agentAssignment, setAgentAssignment] = useState<AgentAssignment | null>(null);
+  const [assistantBusyKey, setAssistantBusyKey] = useState('');
+  const [assistantErrors, setAssistantErrors] = useState<Record<string, string>>({});
+  const [coursePrompt, setCoursePrompt] = useState('');
+  const [modulePrompts, setModulePrompts] = useState<Record<string, string>>({});
+  const [lessonPrompts, setLessonPrompts] = useState<Record<string, string>>({});
+  const [courseSuggestion, setCourseSuggestion] = useState<GeneratedCourseContentPayload | null>(null);
+  const [moduleSuggestions, setModuleSuggestions] = useState<Record<string, GeneratedModuleContentPayload>>({});
+  const [lessonSuggestions, setLessonSuggestions] = useState<Record<string, GeneratedLessonContentPayload>>({});
 
   const selectedCourse = useMemo(
     () => courses.find((course) => course.slug === selectedSlug) || null,
@@ -101,6 +200,62 @@ export default function CMSPage() {
     () => curriculum?.modules.reduce((total, module) => total + module.lessons.length, 0) || 0,
     [curriculum]
   );
+
+  const buildDraftPayload = (options?: { moduleIndex?: number; lessonIndex?: number }) => {
+    if (!curriculum) {
+      return null;
+    }
+
+    const payload: Record<string, unknown> = {
+      courseSlug: curriculum.courseSlug,
+      overview: curriculum.overview,
+      learningFlow: curriculum.learningFlow,
+      visualAidMarkdown: curriculum.visualAidMarkdown || '',
+      modules: curriculum.modules,
+      milestoneProjects: curriculum.milestoneProjects,
+    };
+
+    if (typeof options?.moduleIndex === 'number') {
+      const module = curriculum.modules[options.moduleIndex];
+      if (module) {
+        payload.moduleOrder = module.order;
+        payload.moduleTitle = module.title;
+        payload.module = module;
+
+        if (typeof options.lessonIndex === 'number') {
+          const lesson = module.lessons[options.lessonIndex];
+          if (lesson) {
+            payload.lesson = {
+              ...lesson,
+              moduleTitle: module.title,
+              moduleOrder: module.order,
+            };
+          }
+        }
+      }
+    }
+
+    return payload;
+  };
+
+  const setAssistantError = (key: string, value: string) => {
+    setAssistantErrors((current) => {
+      if (!value) {
+        const next = { ...current };
+        delete next[key];
+        return next;
+      }
+      return { ...current, [key]: value };
+    });
+  };
+
+  const updateModulePrompt = (key: string, value: string) => {
+    setModulePrompts((current) => ({ ...current, [key]: value }));
+  };
+
+  const updateLessonPrompt = (key: string, value: string) => {
+    setLessonPrompts((current) => ({ ...current, [key]: value }));
+  };
 
   const loadCourses = async () => {
     try {
@@ -138,6 +293,37 @@ export default function CMSPage() {
   }, [preferredCourseSlug]);
 
   useEffect(() => {
+    const loadAssignment = async () => {
+      try {
+        const response = await api.getAgentAssignments();
+        const approvedAssignment =
+          response.data.find(
+            (assignment) =>
+              assignment.agentType === 'course_builder' &&
+              assignment.status === 'approved' &&
+              assignment.courseSlug === selectedSlug
+          ) ||
+          response.data.find(
+            (assignment) =>
+              assignment.agentType === 'course_builder' &&
+              assignment.status === 'approved' &&
+              !assignment.courseSlug
+          ) ||
+          response.data.find(
+            (assignment) => assignment.agentType === 'course_builder' && assignment.status === 'approved'
+          ) ||
+          null;
+        setAgentAssignment(approvedAssignment);
+      } catch (assignmentError) {
+        console.error('Failed to load curriculum assistant assignment:', assignmentError);
+        setAgentAssignment(null);
+      }
+    };
+
+    void loadAssignment();
+  }, [selectedSlug]);
+
+  useEffect(() => {
     const loadGenerationSession = async () => {
       if (!preferredSessionId || generationSession?.id === preferredSessionId) {
         return;
@@ -161,6 +347,10 @@ export default function CMSPage() {
   useEffect(() => {
     if (!selectedSlug) {
       setCurriculum(null);
+      setCourseSuggestion(null);
+      setModuleSuggestions({});
+      setLessonSuggestions({});
+      setAssistantErrors({});
       return;
     }
     if (generationSession && generationSession.courseSlug && generationSession.courseSlug !== selectedSlug) {
@@ -168,6 +358,10 @@ export default function CMSPage() {
       setSessionFile(null);
       setSessionInstructions('');
     }
+    setCourseSuggestion(null);
+    setModuleSuggestions({});
+    setLessonSuggestions({});
+    setAssistantErrors({});
     loadCurriculum(selectedSlug);
   }, [selectedSlug]);
 
@@ -316,6 +510,221 @@ export default function CMSPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const suggestCourseFraming = async () => {
+    if (!agentAssignment || !curriculum || !selectedCourse) {
+      return;
+    }
+
+    const helperKey = 'course';
+    try {
+      setAssistantBusyKey(helperKey);
+      setAssistantError(helperKey, '');
+      setError('');
+      const response = await api.runAgentAction(agentAssignment.id, {
+        actionType: 'generate_course_content',
+        courseSlug: curriculum.courseSlug,
+        instruction:
+          coursePrompt.trim() ||
+          `Refresh the course framing for ${selectedCourse.title}. Keep it aligned with the current ${curriculum.modules.length}-module draft, the learner level ${selectedCourse.difficulty}, and suggest the next best module and milestone flow based on what is already written.`,
+        draftPayload: buildDraftPayload() || undefined,
+      });
+      setCourseSuggestion(response.data.payload as unknown as GeneratedCourseContentPayload);
+    } catch (assistantError: any) {
+      setAssistantError(helperKey, assistantError.message || 'Unable to suggest course framing right now.');
+    } finally {
+      setAssistantBusyKey('');
+    }
+  };
+
+  const suggestModuleContent = async (moduleIndex: number) => {
+    if (!agentAssignment || !curriculum || !selectedCourse) {
+      return;
+    }
+
+    const module = curriculum.modules[moduleIndex];
+    if (!module) {
+      return;
+    }
+
+    const helperKey = `module-${moduleIndex}`;
+    try {
+      setAssistantBusyKey(helperKey);
+      setAssistantError(helperKey, '');
+      setError('');
+      const previousTitles = curriculum.modules
+        .slice(0, moduleIndex)
+        .map((item) => item.title)
+        .join(', ');
+      const response = await api.runAgentAction(agentAssignment.id, {
+        actionType: 'generate_module_content',
+        courseSlug: curriculum.courseSlug,
+        moduleOrder: module.order,
+        instruction:
+          modulePrompts[helperKey]?.trim() ||
+          `Expand module ${module.order} for ${selectedCourse.title}. Current module title: ${module.title}. Preserve the course pacing, build on earlier modules (${previousTitles || 'none yet'}), and suggest the next best lesson sequence, checkpoint title, and assessment id using the current draft context.`,
+        draftPayload: buildDraftPayload({ moduleIndex }) || undefined,
+      });
+      setModuleSuggestions((current) => ({
+        ...current,
+        [helperKey]: response.data.payload as unknown as GeneratedModuleContentPayload,
+      }));
+    } catch (assistantError: any) {
+      setAssistantError(helperKey, assistantError.message || 'Unable to suggest module content right now.');
+    } finally {
+      setAssistantBusyKey('');
+    }
+  };
+
+  const suggestLessonContent = async (moduleIndex: number, lessonIndex: number) => {
+    if (!agentAssignment || !curriculum || !selectedCourse) {
+      return;
+    }
+
+    const module = curriculum.modules[moduleIndex];
+    const lesson = module?.lessons[lessonIndex];
+    if (!module || !lesson) {
+      return;
+    }
+
+    const helperKey = `lesson-${moduleIndex}-${lessonIndex}`;
+    const previousLessonTitle = lessonIndex > 0 ? module.lessons[lessonIndex - 1]?.title : '';
+    const nextLessonTitle = lessonIndex < module.lessons.length - 1 ? module.lessons[lessonIndex + 1]?.title : '';
+
+    try {
+      setAssistantBusyKey(helperKey);
+      setAssistantError(helperKey, '');
+      setError('');
+      const response = await api.runAgentAction(agentAssignment.id, {
+        actionType: 'generate_lesson_content',
+        courseSlug: curriculum.courseSlug,
+        lessonSlug: lesson.slug,
+        instruction:
+          lessonPrompts[helperKey]?.trim() ||
+          `Generate the next best lesson draft for ${lesson.title} in module ${module.order}: ${module.title}. Teach in the context of ${selectedCourse.title}, connect back to ${previousLessonTitle || 'the module opening'}, and prepare the learner for ${nextLessonTitle || 'the module checkpoint'}.`,
+        draftPayload: buildDraftPayload({ moduleIndex, lessonIndex }) || undefined,
+      });
+      setLessonSuggestions((current) => ({
+        ...current,
+        [helperKey]: response.data.payload as unknown as GeneratedLessonContentPayload,
+      }));
+    } catch (assistantError: any) {
+      setAssistantError(helperKey, assistantError.message || 'Unable to suggest lesson content right now.');
+    } finally {
+      setAssistantBusyKey('');
+    }
+  };
+
+  const applyCourseFramingSuggestion = () => {
+    if (!courseSuggestion) {
+      return;
+    }
+
+    updateCurriculum((current) => ({
+      ...current,
+      overview: courseSuggestion.curriculum.overview,
+      learningFlow: courseSuggestion.curriculum.learningFlow,
+      visualAidMarkdown: courseSuggestion.curriculum.visualAidMarkdown || '',
+    }));
+    setMessage('Applied the suggested course framing to the draft curriculum.');
+  };
+
+  const applyCourseOutlineSuggestion = () => {
+    if (!courseSuggestion) {
+      return;
+    }
+
+    updateCurriculum((current) => ({
+      ...current,
+      overview: courseSuggestion.curriculum.overview,
+      learningFlow: courseSuggestion.curriculum.learningFlow,
+      visualAidMarkdown: courseSuggestion.curriculum.visualAidMarkdown || '',
+      modules: courseSuggestion.curriculum.modules,
+      milestoneProjects: courseSuggestion.curriculum.milestoneProjects,
+    }));
+    setMessage('Applied the full suggested course outline to the draft curriculum.');
+  };
+
+  const applyModuleFramingSuggestion = (moduleIndex: number, suggestion: GeneratedModuleContentPayload) => {
+    updateModule(moduleIndex, (currentModule) => ({
+      ...currentModule,
+      title: suggestion.module.title,
+      description: suggestion.module.description,
+      assessmentTitle: suggestion.module.assessmentTitle || '',
+      assessmentQuizId: suggestion.module.assessmentQuizId || '',
+    }));
+    setMessage(`Applied the suggested framing for module ${suggestion.moduleOrder}.`);
+  };
+
+  const applyModuleLessonsSuggestion = (moduleIndex: number, suggestion: GeneratedModuleContentPayload) => {
+    updateModule(moduleIndex, (currentModule) => ({
+      ...currentModule,
+      lessons: suggestion.module.lessons,
+    }));
+    setMessage(`Applied the suggested lesson sequence for module ${suggestion.moduleOrder}.`);
+  };
+
+  const applyModuleSuggestion = (moduleIndex: number, suggestion: GeneratedModuleContentPayload) => {
+    updateModule(moduleIndex, () => ({
+      ...suggestion.module,
+      order: suggestion.module.order || suggestion.moduleOrder,
+    } as CourseCurriculumModule));
+    setMessage(`Replaced module ${suggestion.moduleOrder} with the suggested draft.`);
+  };
+
+  const addNextSuggestedLesson = (moduleIndex: number, suggestion: GeneratedModuleContentPayload) => {
+    const currentModule = curriculum?.modules[moduleIndex];
+    if (!currentModule) {
+      return;
+    }
+
+    const nextSuggestedLesson = suggestion.module.lessons[currentModule.lessons.length];
+    if (!nextSuggestedLesson) {
+      return;
+    }
+
+    updateModule(moduleIndex, (module) => ({
+      ...module,
+      lessons: [...module.lessons, nextSuggestedLesson],
+    }));
+    setMessage(`Added the next suggested lesson to module ${suggestion.moduleOrder}.`);
+  };
+
+  const applyLessonStructureSuggestion = (moduleIndex: number, lessonIndex: number, suggestion: GeneratedLessonContentPayload) => {
+    updateLesson(moduleIndex, lessonIndex, (currentLesson) => ({
+      ...currentLesson,
+      title: suggestion.lesson.title,
+      slug: suggestion.lesson.slug,
+      libraryLessonSlug: suggestion.lesson.libraryLessonSlug || currentLesson.libraryLessonSlug || suggestion.lesson.slug,
+      summary: suggestion.lesson.summary,
+      durationMinutes: suggestion.lesson.durationMinutes,
+      contentType: suggestion.lesson.contentType,
+      learningObjectives: suggestion.lesson.learningObjectives || [],
+      keyTakeaways: suggestion.lesson.keyTakeaways || [],
+      learningFlow: suggestion.lesson.learningFlow || [],
+    }));
+    setMessage(`Applied the suggested lesson structure for ${suggestion.lesson.title}.`);
+  };
+
+  const applyLessonTeachingSuggestion = (moduleIndex: number, lessonIndex: number, suggestion: GeneratedLessonContentPayload) => {
+    updateLesson(moduleIndex, lessonIndex, (currentLesson) => ({
+      ...currentLesson,
+      contentMarkdown: suggestion.lesson.contentMarkdown || '',
+      visualAidMarkdown: suggestion.lesson.visualAidMarkdown || '',
+      practicePrompt: suggestion.lesson.practicePrompt || '',
+      instructorNotes: suggestion.lesson.instructorNotes || '',
+    }));
+    setMessage(`Applied the suggested teaching content for ${suggestion.lesson.title}.`);
+  };
+
+  const applyLessonSuggestion = (moduleIndex: number, lessonIndex: number, suggestion: GeneratedLessonContentPayload) => {
+    updateLesson(moduleIndex, lessonIndex, (currentLesson) => ({
+      ...currentLesson,
+      ...suggestion.lesson,
+      libraryLessonSlug: suggestion.lesson.libraryLessonSlug || currentLesson.libraryLessonSlug || suggestion.lesson.slug,
+    }));
+    setMessage(`Replaced the lesson draft for ${suggestion.lesson.title}.`);
   };
 
   return (
@@ -577,6 +986,73 @@ export default function CMSPage() {
             <h2 className="text-xl font-bold text-slate-950">Course framing</h2>
             <p className="mt-1 text-sm text-slate-600">Set the explanation, learner flow, and roadmap learners will see.</p>
             <div className="mt-6 space-y-5">
+              <AgentAssistPanel
+                title="Suggest course framing and next curriculum moves"
+                description="The assistant reads the current overview, module flow, and milestones, then suggests a tighter framing you can accept field by field or as a full outline."
+                prompt={coursePrompt}
+                onPromptChange={setCoursePrompt}
+                onSuggest={suggestCourseFraming}
+                loading={assistantBusyKey === 'course'}
+                disabled={!agentAssignment}
+                disabledReason={!agentAssignment ? 'Approve a course builder agent for this instructor to use inline suggestions here.' : ''}
+                error={assistantErrors.course}
+              >
+                {courseSuggestion ? (
+                  <>
+                    <div className="grid gap-4 lg:grid-cols-3">
+                      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                        <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Suggested modules</div>
+                        <div className="mt-2 text-2xl font-black text-slate-950">{courseSuggestion.curriculum.modules.length}</div>
+                      </div>
+                      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                        <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Suggested milestones</div>
+                        <div className="mt-2 text-2xl font-black text-slate-950">{courseSuggestion.curriculum.milestoneProjects.length}</div>
+                      </div>
+                      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                        <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Focus</div>
+                        <div className="mt-2 text-sm font-semibold text-slate-900">
+                          {courseSuggestion.curriculum.modules[0]?.title || 'Refine course promise'}
+                        </div>
+                      </div>
+                    </div>
+                    <Field label="Suggested overview">
+                      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
+                        {courseSuggestion.curriculum.overview}
+                      </div>
+                    </Field>
+                    <SuggestionList title="Suggested learning flow" items={courseSuggestion.curriculum.learningFlow} />
+                    <div className="grid gap-4 lg:grid-cols-2">
+                      <SuggestionList
+                        title="Suggested module path"
+                        items={courseSuggestion.curriculum.modules.map((module) => `${module.order}. ${module.title}`)}
+                      />
+                      <SuggestionList
+                        title="Suggested milestones"
+                        items={courseSuggestion.curriculum.milestoneProjects.map((project) => project.title)}
+                      />
+                    </div>
+                    <div className="flex flex-wrap gap-3">
+                      <button
+                        type="button"
+                        onClick={applyCourseFramingSuggestion}
+                        className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
+                      >
+                        <Save className="h-4 w-4" />
+                        Apply framing only
+                      </button>
+                      <button
+                        type="button"
+                        onClick={applyCourseOutlineSuggestion}
+                        className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700"
+                      >
+                        <Sparkles className="h-4 w-4" />
+                        Apply full outline
+                      </button>
+                    </div>
+                  </>
+                ) : null}
+              </AgentAssistPanel>
+
               <Field label="Overview">
                 <textarea
                   value={curriculum.overview}
@@ -638,6 +1114,89 @@ export default function CMSPage() {
                   </summary>
 
                   <div className="space-y-5 border-t border-slate-200 px-5 py-5">
+                    <AgentAssistPanel
+                      title={`Suggest content for Module ${module.order}`}
+                      description="This keeps the current course draft in view, then suggests stronger framing, a better lesson sequence, and the next lesson to add."
+                      prompt={modulePrompts[`module-${moduleIndex}`] || ''}
+                      onPromptChange={(value) => updateModulePrompt(`module-${moduleIndex}`, value)}
+                      onSuggest={() => suggestModuleContent(moduleIndex)}
+                      loading={assistantBusyKey === `module-${moduleIndex}`}
+                      disabled={!agentAssignment}
+                      disabledReason={!agentAssignment ? 'Approve a course builder agent to unlock inline module suggestions.' : ''}
+                      error={assistantErrors[`module-${moduleIndex}`]}
+                    >
+                      {moduleSuggestions[`module-${moduleIndex}`] ? (
+                        <>
+                          <div className="grid gap-4 md:grid-cols-2">
+                            <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                              <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Suggested title</div>
+                              <div className="mt-2 text-base font-bold text-slate-950">
+                                {moduleSuggestions[`module-${moduleIndex}`].module.title}
+                              </div>
+                            </div>
+                            <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                              <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Suggested checkpoint</div>
+                              <div className="mt-2 text-base font-bold text-slate-950">
+                                {moduleSuggestions[`module-${moduleIndex}`].module.assessmentTitle || 'Applied checkpoint'}
+                              </div>
+                            </div>
+                          </div>
+                          <Field label="Suggested module description">
+                            <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
+                              {moduleSuggestions[`module-${moduleIndex}`].module.description}
+                            </div>
+                          </Field>
+                          <SuggestionList
+                            title="Suggested lesson path"
+                            items={moduleSuggestions[`module-${moduleIndex}`].module.lessons.map(
+                              (lesson, index) => `${index + 1}. ${lesson.title} - ${lesson.summary}`
+                            )}
+                          />
+                          {moduleSuggestions[`module-${moduleIndex}`].module.lessons[module.lessons.length] ? (
+                            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                              Next suggested lesson: <span className="font-semibold">{moduleSuggestions[`module-${moduleIndex}`].module.lessons[module.lessons.length].title}</span>
+                            </div>
+                          ) : null}
+                          <div className="flex flex-wrap gap-3">
+                            <button
+                              type="button"
+                              onClick={() => applyModuleFramingSuggestion(moduleIndex, moduleSuggestions[`module-${moduleIndex}`])}
+                              className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
+                            >
+                              <Save className="h-4 w-4" />
+                              Apply framing
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => applyModuleLessonsSuggestion(moduleIndex, moduleSuggestions[`module-${moduleIndex}`])}
+                              className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700"
+                            >
+                              <Sparkles className="h-4 w-4" />
+                              Apply lessons
+                            </button>
+                            {moduleSuggestions[`module-${moduleIndex}`].module.lessons[module.lessons.length] ? (
+                              <button
+                                type="button"
+                                onClick={() => addNextSuggestedLesson(moduleIndex, moduleSuggestions[`module-${moduleIndex}`])}
+                                className="inline-flex items-center gap-2 rounded-2xl border border-emerald-200 bg-white px-4 py-3 text-sm font-semibold text-emerald-700 transition hover:border-emerald-300"
+                              >
+                                <Plus className="h-4 w-4" />
+                                Add next lesson
+                              </button>
+                            ) : null}
+                            <button
+                              type="button"
+                              onClick={() => applyModuleSuggestion(moduleIndex, moduleSuggestions[`module-${moduleIndex}`])}
+                              className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700"
+                            >
+                              <WandSparkles className="h-4 w-4" />
+                              Replace module draft
+                            </button>
+                          </div>
+                        </>
+                      ) : null}
+                    </AgentAssistPanel>
+
                     <div className="flex justify-end">
                       <button
                         onClick={() =>
@@ -701,6 +1260,83 @@ export default function CMSPage() {
                           </summary>
 
                           <div className="space-y-4 border-t border-slate-200 px-4 py-4">
+                            <AgentAssistPanel
+                              title={`Suggest content for ${lesson.title || `Lesson ${lessonIndex + 1}`}`}
+                              description="The assistant uses the active lesson, surrounding module sequence, and current draft progress to suggest the next best lesson content."
+                              prompt={lessonPrompts[`lesson-${moduleIndex}-${lessonIndex}`] || ''}
+                              onPromptChange={(value) => updateLessonPrompt(`lesson-${moduleIndex}-${lessonIndex}`, value)}
+                              onSuggest={() => suggestLessonContent(moduleIndex, lessonIndex)}
+                              loading={assistantBusyKey === `lesson-${moduleIndex}-${lessonIndex}`}
+                              disabled={!agentAssignment}
+                              disabledReason={!agentAssignment ? 'Approve a course builder agent to unlock inline lesson suggestions.' : ''}
+                              error={assistantErrors[`lesson-${moduleIndex}-${lessonIndex}`]}
+                            >
+                              {lessonSuggestions[`lesson-${moduleIndex}-${lessonIndex}`] ? (
+                                <>
+                                  <div className="grid gap-4 md:grid-cols-2">
+                                    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                                      <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Suggested summary</div>
+                                      <div className="mt-2 text-sm text-slate-700">
+                                        {lessonSuggestions[`lesson-${moduleIndex}-${lessonIndex}`].lesson.summary}
+                                      </div>
+                                    </div>
+                                    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                                      <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Suggested duration</div>
+                                      <div className="mt-2 text-sm font-semibold text-slate-900">
+                                        {lessonSuggestions[`lesson-${moduleIndex}-${lessonIndex}`].lesson.durationMinutes} minutes
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div className="grid gap-4 lg:grid-cols-2">
+                                    <SuggestionList
+                                      title="Suggested objectives"
+                                      items={lessonSuggestions[`lesson-${moduleIndex}-${lessonIndex}`].lesson.learningObjectives}
+                                    />
+                                    <SuggestionList
+                                      title="Suggested takeaways"
+                                      items={lessonSuggestions[`lesson-${moduleIndex}-${lessonIndex}`].lesson.keyTakeaways}
+                                    />
+                                  </div>
+                                  <div className="grid gap-4 lg:grid-cols-2">
+                                    <SuggestionList
+                                      title="Suggested section outline"
+                                      items={lessonSuggestions[`lesson-${moduleIndex}-${lessonIndex}`].plan?.sectionOutline}
+                                    />
+                                    <SuggestionList
+                                      title="Suggested practice arc"
+                                      items={lessonSuggestions[`lesson-${moduleIndex}-${lessonIndex}`].plan?.practiceArc}
+                                    />
+                                  </div>
+                                  <div className="flex flex-wrap gap-3">
+                                    <button
+                                      type="button"
+                                      onClick={() => applyLessonStructureSuggestion(moduleIndex, lessonIndex, lessonSuggestions[`lesson-${moduleIndex}-${lessonIndex}`])}
+                                      className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
+                                    >
+                                      <Save className="h-4 w-4" />
+                                      Apply structure
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => applyLessonTeachingSuggestion(moduleIndex, lessonIndex, lessonSuggestions[`lesson-${moduleIndex}-${lessonIndex}`])}
+                                      className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700"
+                                    >
+                                      <Sparkles className="h-4 w-4" />
+                                      Apply teaching content
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => applyLessonSuggestion(moduleIndex, lessonIndex, lessonSuggestions[`lesson-${moduleIndex}-${lessonIndex}`])}
+                                      className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700"
+                                    >
+                                      <WandSparkles className="h-4 w-4" />
+                                      Replace lesson draft
+                                    </button>
+                                  </div>
+                                </>
+                              ) : null}
+                            </AgentAssistPanel>
+
                             <div className="flex justify-end">
                               <button
                                 onClick={() =>
