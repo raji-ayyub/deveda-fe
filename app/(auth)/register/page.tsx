@@ -9,9 +9,9 @@ import { useAuth } from '@/context/AuthContext';
 import { getRoleRegistrationRedirect } from '@/lib/roleRoutes';
 
 const passwordRules = [
-  'At least 8 characters',
-  'Includes one letter',
-  'Includes one number',
+  { label: 'At least 8 characters', test: (value: string) => value.length >= 8 },
+  { label: 'Includes one letter', test: (value: string) => /[A-Za-z]/.test(value) },
+  { label: 'Includes one number', test: (value: string) => /\d/.test(value) },
 ];
 
 const accountTypes = [
@@ -303,12 +303,12 @@ const RegisterPage: React.FC = () => {
               <div className="mt-3 grid gap-2 text-sm md:grid-cols-3">
                 {passwordRules.map((rule) => (
                   <div
-                    key={rule}
+                    key={rule.label}
                     className={`rounded-lg px-3 py-2 ${
-                      passwordValid ? 'bg-emerald-50 text-emerald-700' : 'bg-white text-gray-600'
+                      rule.test(formData.password) ? 'bg-emerald-50 text-emerald-700' : 'bg-white text-gray-600'
                     }`}
                   >
-                    {rule}
+                    {rule.label}
                   </div>
                 ))}
               </div>

@@ -1,267 +1,202 @@
-
-
-
-// app/dashboard/page.tsx
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import dynamic from 'next/dynamic';
+import { Activity, ArrowRight, BookOpen, FileText, HelpCircle, Loader2, Users } from 'lucide-react';
+
 import { api } from '@/lib/api';
 import { AdminStats, ChartData, RecentActivity } from '@/lib/types';
-import {
-  Users,
-  BookOpen,
-  HelpCircle,
-  TrendingUp,
-  Calendar,
-  ArrowUpRight,
-  ArrowDownRight,
-  Download,
-  Filter,
-  MoreVertical
-} from 'lucide-react';
-import dynamic from 'next/dynamic';
 
-// Dynamically import chart components to avoid SSR issues
 const LineChart = dynamic(() => import('@/components/charts/LineChart'), { ssr: false });
 const PieChart = dynamic(() => import('@/components/charts/PieChart'), { ssr: false });
 
-const DashboardPage: React.FC = () => {
+const quickActions = [
+  { href: '/admin/dashboard/courses', label: 'Manage courses', description: 'Create, import, and organize live catalog items.', icon: <BookOpen className="h-5 w-5" /> },
+  { href: '/admin/dashboard/cms', label: 'Open curriculum studio', description: 'Generate modules, lessons, and course structure.', icon: <Activity className="h-5 w-5" /> },
+  { href: '/admin/dashboard/questions', label: 'Review question bank', description: 'Approve quiz questions and final assessment content.', icon: <FileText className="h-5 w-5" /> },
+];
+
+export default function DashboardPage() {
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [chartData, setChartData] = useState<ChartData | null>(null);
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState('7d');
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    loadDashboardData();
+    const loadDashboard = async () => {
+      try {
+        setLoading(true);
+        setError('');
+        const [statsResponse, chartResponse, activityResponse] = await Promise.all([
+          api.getAdminStats(),
+          api.getChartData(timeRange),
+          api.getRecentActivity(),
+        ]);
+        setStats(statsResponse.data);
+        setChartData(chartResponse.data);
+        setRecentActivity(activityResponse.data);
+      } catch (loadError: any) {
+        setError(loadError.message || 'Unable to load the admin dashboard right now.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    void loadDashboard();
   }, [timeRange]);
-
-  const loadDashboardData = async () => {
-    try {
-      setLoading(true);
-      const [statsRes, chartRes, activityRes] = await Promise.all([
-        api.getAdminStats(),
-        api.getChartData(timeRange),
-        api.getRecentActivity(),
-      ]);
-
-      setStats(statsRes.data);
-      setChartData(chartRes.data);
-      setRecentActivity(activityRes.data);
-    } catch (error) {
-      console.error('Failed to load dashboard data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const getGrowthPercentage = (current: number, previous: number) => {
-    if (previous === 0) return 100;
-    return ((current - previous) / previous) * 100;
-  };
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-96">
+      <div className="flex min-h-[60vh] items-center justify-center">
         <div className="text-center">
-          <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading dashboard...</p>
+          <Loader2 className="mx-auto h-10 w-10 animate-spin text-blue-700" />
+          <p className="mt-3 text-sm text-slate-600">Loading dashboard overview...</p>
         </div>
       </div>
     );
   }
 
+  if (error) {
+    return <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>;
+  }
+
   return (
-    <div className="space-y-8">
-      {/* Quick Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Total Users</p>
-              <p className="text-3xl font-bold text-gray-900 mt-2">{stats?.totalUsers || 0}</p>
-            </div>
-            <div className="p-3 bg-blue-100 rounded-lg">
-              <Users className="w-6 h-6 text-blue-600" />
-            </div>
+    <div className="space-y-6">
+      <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-lg shadow-slate-100">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <h2 className="text-3xl font-black tracking-tight text-slate-950">Platform overview</h2>
+            <p className="mt-2 max-w-3xl text-sm text-slate-600">
+              Watch live user, course, question, and progress activity from one admin surface without relying on mock numbers or filler widgets.
+            </p>
           </div>
-          <div className="flex items-center mt-4">
-            <ArrowUpRight className="w-4 h-4 text-green-500 mr-1" />
-            <span className="text-sm text-green-600 font-medium">
-              +{stats?.recentRegistrations || 0} this week
-            </span>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Active Courses</p>
-              <p className="text-3xl font-bold text-gray-900 mt-2">{stats?.totalCourses || 0}</p>
-            </div>
-            <div className="p-3 bg-purple-100 rounded-lg">
-              <BookOpen className="w-6 h-6 text-purple-600" />
-            </div>
-          </div>
-          <div className="flex items-center mt-4">
-            <ArrowUpRight className="w-4 h-4 text-green-500 mr-1" />
-            <span className="text-sm text-green-600 font-medium">+5 this month</span>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Quiz Questions</p>
-              <p className="text-3xl font-bold text-gray-900 mt-2">{stats?.totalQuestions || 0}</p>
-            </div>
-            <div className="p-3 bg-green-100 rounded-lg">
-              <HelpCircle className="w-6 h-6 text-green-600" />
-            </div>
-          </div>
-          <div className="flex items-center mt-4">
-            <ArrowUpRight className="w-4 h-4 text-green-500 mr-1" />
-            <span className="text-sm text-green-600 font-medium">+42 this month</span>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Avg. Progress</p>
-              <p className="text-3xl font-bold text-gray-900 mt-2">{stats?.averageProgress || 0}%</p>
-            </div>
-            <div className="p-3 bg-yellow-100 rounded-lg">
-              <TrendingUp className="w-6 h-6 text-yellow-600" />
-            </div>
-          </div>
-          <div className="flex items-center mt-4">
-            <ArrowUpRight className="w-4 h-4 text-green-500 mr-1" />
-            <span className="text-sm text-green-600 font-medium">+2.3% from last week</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* User Growth Chart */}
-        <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900">User Growth</h3>
-              <p className="text-sm text-gray-500">New registrations over time</p>
-            </div>
-            <div className="flex items-center space-x-2">
-              <button className="px-3 py-1 text-sm border border-gray-300 rounded-lg hover:bg-gray-50">
-                7D
+          <div className="inline-flex rounded-2xl border border-slate-200 bg-slate-50 p-1">
+            {[
+              { value: '7d', label: '7 days' },
+              { value: '30d', label: '30 days' },
+              { value: '90d', label: '90 days' },
+            ].map((option) => (
+              <button
+                key={option.value}
+                onClick={() => setTimeRange(option.value)}
+                className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
+                  timeRange === option.value ? 'bg-slate-950 text-white' : 'text-slate-600 hover:text-slate-950'
+                }`}
+              >
+                {option.label}
               </button>
-              <button className="px-3 py-1 text-sm border border-gray-300 rounded-lg hover:bg-gray-50">
-                1M
-              </button>
-              <button className="px-3 py-1 text-sm border border-gray-300 rounded-lg hover:bg-gray-50">
-                1Y
-              </button>
-            </div>
-          </div>
-          <div className="h-64">
-            {chartData && <LineChart data={chartData} />}
-          </div>
-        </div>
-
-        {/* Course Categories */}
-        <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900">Course Distribution</h3>
-              <p className="text-sm text-gray-500">By category and difficulty</p>
-            </div>
-            <button className="p-2 hover:bg-gray-100 rounded-lg">
-              <MoreVertical className="w-5 h-5 text-gray-500" />
-            </button>
-          </div>
-          <div className="h-64">
-            {chartData && <PieChart data={chartData} />}
-          </div>
-        </div>
-      </div>
-
-      {/* Recent Activity & Quick Actions */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Recent Activity */}
-        <div className="lg:col-span-2 bg-white rounded-xl shadow-lg p-6 border border-gray-200">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900">Recent Activity</h3>
-              <p className="text-sm text-gray-500">Latest actions across the platform</p>
-            </div>
-            <button className="text-blue-600 text-sm font-medium hover:text-blue-700">
-              View all →
-            </button>
-          </div>
-          <div className="space-y-4">
-            {recentActivity.map((activity) => (
-              <div key={activity.id} className="flex items-center p-3 hover:bg-gray-50 rounded-lg">
-                <div className="w-10 h-10 bg-gradient-to-r from-blue-100 to-purple-100 rounded-lg flex items-center justify-center mr-3">
-                  <span className="text-blue-600">{activity.icon}</span>
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-900">
-                    {activity.userName} <span className="font-normal text-gray-600">{activity.action}</span> {activity.target}
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {new Date(activity.timestamp).toLocaleString()}
-                  </p>
-                </div>
-              </div>
             ))}
           </div>
         </div>
+      </section>
 
-        {/* Quick Actions */}
-        <div className="bg-gradient-to-br from-blue-500 to-purple-500 rounded-xl shadow-lg p-6 text-white">
-          <h3 className="text-lg font-semibold mb-6">Quick Actions</h3>
-          <div className="space-y-4">
-            <button className="w-full bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-lg p-4 text-left transition-colors">
-              <div className="flex items-center">
-                <Users className="w-5 h-5 mr-3" />
-                <div>
-                  <p className="font-medium">Add New User</p>
-                  <p className="text-sm opacity-90">Create a new user account</p>
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <StatCard label="Users" value={stats?.totalUsers || 0} icon={<Users className="h-5 w-5" />} helper={`${stats?.recentRegistrations || 0} recent registrations`} />
+        <StatCard label="Courses" value={stats?.totalCourses || 0} icon={<BookOpen className="h-5 w-5" />} helper="Live catalog entries" />
+        <StatCard label="Questions" value={stats?.totalQuestions || 0} icon={<HelpCircle className="h-5 w-5" />} helper="Active assessment items" />
+        <StatCard label="Average progress" value={`${stats?.averageProgress || 0}%`} icon={<Activity className="h-5 w-5" />} helper="Across enrolled learners" />
+      </section>
+
+      <section className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+        <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-lg shadow-slate-100">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-xl font-bold text-slate-950">User growth</h3>
+              <p className="mt-1 text-sm text-slate-600">Real registration activity for the selected time window.</p>
+            </div>
+          </div>
+          <div className="mt-6 h-72">{chartData ? <LineChart data={chartData} /> : <EmptyChart text="No chart data available yet." />}</div>
+        </div>
+
+        <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-lg shadow-slate-100">
+          <div>
+            <h3 className="text-xl font-bold text-slate-950">Course distribution</h3>
+            <p className="mt-1 text-sm text-slate-600">Current catalog spread by category and difficulty.</p>
+          </div>
+          <div className="mt-6 h-72">{chartData ? <PieChart data={chartData} /> : <EmptyChart text="No distribution data available yet." />}</div>
+        </div>
+      </section>
+
+      <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+        <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-lg shadow-slate-100">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-xl font-bold text-slate-950">Recent activity</h3>
+              <p className="mt-1 text-sm text-slate-600">Latest actions across users, courses, quizzes, and content workflows.</p>
+            </div>
+          </div>
+
+          <div className="mt-6 space-y-3">
+            {recentActivity.length > 0 ? (
+              recentActivity.map((activity) => (
+                <div key={activity.id} className="rounded-2xl border border-slate-200 px-4 py-4">
+                  <div className="text-sm font-semibold text-slate-950">
+                    {activity.userName} <span className="font-normal text-slate-600">{activity.action}</span> {activity.target}
+                  </div>
+                  <div className="mt-1 text-xs text-slate-500">{new Date(activity.timestamp).toLocaleString()}</div>
                 </div>
+              ))
+            ) : (
+              <div className="rounded-2xl border border-dashed border-slate-300 px-6 py-10 text-center text-sm text-slate-500">
+                No platform activity has been recorded yet.
               </div>
-            </button>
-            <button className="w-full bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-lg p-4 text-left transition-colors">
-              <div className="flex items-center">
-                <BookOpen className="w-5 h-5 mr-3" />
-                <div>
-                  <p className="font-medium">Create Course</p>
-                  <p className="text-sm opacity-90">Add new course to catalog</p>
-                </div>
-              </div>
-            </button>
-            <button className="w-full bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-lg p-4 text-left transition-colors">
-              <div className="flex items-center">
-                <HelpCircle className="w-5 h-5 mr-3" />
-                <div>
-                  <p className="font-medium">Add Quiz</p>
-                  <p className="text-sm opacity-90">Create new quiz questions</p>
-                </div>
-              </div>
-            </button>
-            <button className="w-full bg-white/10 hover:bg-white/20 backdrop-blur-sm rounded-lg p-4 text-left transition-colors">
-              <div className="flex items-center">
-                <Download className="w-5 h-5 mr-3" />
-                <div>
-                  <p className="font-medium">Export Data</p>
-                  <p className="text-sm opacity-90">Download platform analytics</p>
-                </div>
-              </div>
-            </button>
+            )}
           </div>
         </div>
-      </div>
+
+        <div className="rounded-[28px] border border-slate-200 bg-slate-950 p-6 text-white shadow-2xl shadow-slate-300">
+          <h3 className="text-xl font-bold">Next actions</h3>
+          <p className="mt-2 text-sm text-slate-300">Jump straight into the main operational surfaces.</p>
+          <div className="mt-6 space-y-3">
+            {quickActions.map((action) => (
+              <Link
+                key={action.href}
+                href={action.href}
+                className="flex items-start justify-between rounded-2xl bg-white/10 px-4 py-4 transition hover:bg-white/15"
+              >
+                <div className="flex gap-3">
+                  <div className="mt-1 text-cyan-300">{action.icon}</div>
+                  <div>
+                    <div className="font-semibold text-white">{action.label}</div>
+                    <div className="mt-1 text-sm text-slate-300">{action.description}</div>
+                  </div>
+                </div>
+                <ArrowRight className="mt-1 h-4 w-4 text-slate-300" />
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
     </div>
   );
-};
+}
 
-export default DashboardPage;
+function StatCard({
+  label,
+  value,
+  icon,
+  helper,
+}: {
+  label: string;
+  value: string | number;
+  icon: React.ReactNode;
+  helper: string;
+}) {
+  return (
+    <div className="rounded-[24px] border border-slate-200 bg-white px-5 py-5 shadow-lg shadow-slate-100">
+      <div className="flex items-center justify-between">
+        <div className="text-sm font-medium text-slate-500">{label}</div>
+        <div className="rounded-2xl bg-blue-50 p-2 text-blue-700">{icon}</div>
+      </div>
+      <div className="mt-4 text-3xl font-black tracking-tight text-slate-950">{value}</div>
+      <div className="mt-2 text-sm text-slate-500">{helper}</div>
+    </div>
+  );
+}
+
+function EmptyChart({ text }: { text: string }) {
+  return <div className="flex h-full items-center justify-center rounded-2xl border border-dashed border-slate-300 text-sm text-slate-500">{text}</div>;
+}

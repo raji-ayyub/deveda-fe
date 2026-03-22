@@ -26,8 +26,13 @@ import {
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
 import { CourseCatalog, CourseCurriculum, CourseCurriculumModule, UserCourse } from '@/lib/types';
+import RichContentRenderer from '@/components/lesson/RichContentRenderer';
 
 type CourseTab = 'overview' | 'curriculum' | 'enrollments';
+
+function isPublishedLesson(lesson: { generationStatus?: string }) {
+  return lesson.generationStatus !== 'planned';
+}
 
 export default function SingleCoursePage() {
   const params = useParams();
@@ -370,6 +375,15 @@ export default function SingleCoursePage() {
                   </div>
                 </section>
 
+                {curriculum?.visualAidMarkdown ? (
+                  <section className="rounded-3xl bg-white p-6 shadow-lg shadow-slate-200">
+                    <h2 className="text-2xl font-bold text-slate-950">Learning roadmap</h2>
+                    <div className="mt-5 rounded-[24px] border border-slate-200 bg-slate-50 p-5">
+                      <RichContentRenderer content={curriculum.visualAidMarkdown} />
+                    </div>
+                  </section>
+                ) : null}
+
                 <section className="rounded-3xl bg-white p-6 shadow-lg shadow-slate-200">
                   <div className="flex items-center justify-between gap-4">
                     <div>
@@ -444,40 +458,54 @@ export default function SingleCoursePage() {
                         </div>
 
                         <div className="divide-y divide-slate-200">
-                          {module.lessons.map((lesson) => (
-                            <div key={lesson.slug} className="flex items-center justify-between gap-4 px-6 py-4">
-                              <div className="flex items-start gap-4">
-                                <div className="rounded-full bg-blue-50 p-2 text-blue-700">
-                                  <Play className="h-4 w-4" />
-                                </div>
-                                <div>
-                                  <h4 className="font-semibold text-slate-950">{lesson.title}</h4>
-                                  <p className="mt-1 text-sm text-slate-600">{lesson.summary}</p>
-                                  <div className="mt-2 flex flex-wrap gap-3 text-xs text-slate-500">
-                                    <span>{lesson.durationMinutes} min</span>
-                                    <span className="capitalize">{lesson.contentType}</span>
-                                    {lesson.quizId ? <span>Quiz: {lesson.quizId}</span> : null}
+                          {module.lessons.map((lesson) => {
+                            const published = isPublishedLesson(lesson);
+                            return (
+                              <div key={lesson.slug} className="flex items-center justify-between gap-4 px-6 py-4">
+                                <div className="flex items-start gap-4">
+                                  <div className="rounded-full bg-blue-50 p-2 text-blue-700">
+                                    <Play className="h-4 w-4" />
+                                  </div>
+                                  <div>
+                                    <h4 className="font-semibold text-slate-950">{lesson.title}</h4>
+                                    <p className="mt-1 text-sm text-slate-600">{lesson.summary}</p>
+                                    <div className="mt-2 flex flex-wrap gap-3 text-xs text-slate-500">
+                                      <span>{lesson.durationMinutes} min</span>
+                                      <span className="capitalize">{lesson.contentType}</span>
+                                      {!published ? <span className="font-semibold text-amber-700">Planned</span> : null}
+                                      {lesson.quizId ? <span>Quiz: {lesson.quizId}</span> : null}
+                                    </div>
                                   </div>
                                 </div>
+                                {isLearner && isEnrolled && published ? (
+                                  <button
+                                    onClick={() => router.push(`/courses/${slug}/learn?lesson=${lesson.slug}`)}
+                                    className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700"
+                                  >
+                                    Open
+                                  </button>
+                                ) : null}
                               </div>
-                              {isLearner && isEnrolled ? (
-                                <button
-                                  onClick={() => router.push(`/courses/${slug}/learn`)}
-                                  className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700"
-                                >
-                                  Open
-                                </button>
-                              ) : null}
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
 
                         {module.assessmentTitle ? (
                           <div className="border-t border-slate-200 bg-amber-50 px-6 py-4">
-                            <div className="flex items-center gap-3 text-sm text-amber-900">
-                              <Award className="h-4 w-4" />
-                              <span className="font-semibold">{module.assessmentTitle}</span>
-                              {module.assessmentQuizId ? <span className="text-amber-700">Quiz ID: {module.assessmentQuizId}</span> : null}
+                            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                              <div className="flex flex-wrap items-center gap-3 text-sm text-amber-900">
+                                <Award className="h-4 w-4" />
+                                <span className="font-semibold">{module.assessmentTitle}</span>
+                                {module.assessmentQuizId ? <span className="text-amber-700">Quiz ID: {module.assessmentQuizId}</span> : null}
+                              </div>
+                              {isLearner && isEnrolled && module.assessmentQuizId ? (
+                                <button
+                                  onClick={() => router.push(`/quiz/${module.assessmentQuizId}`)}
+                                  className="inline-flex items-center justify-center rounded-xl border border-amber-200 bg-white px-3 py-2 text-sm font-semibold text-amber-900 transition hover:border-amber-300 hover:bg-amber-100"
+                                >
+                                  Start assessment
+                                </button>
+                              ) : null}
                             </div>
                           </div>
                         ) : null}

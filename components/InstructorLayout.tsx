@@ -39,6 +39,7 @@ const InstructorLayout: React.FC<InstructorLayoutProps> = ({ children }) => {
   const navigation = [
     { name: 'Dashboard', href: '/instructor/dashboard', current: pathname === '/instructor/dashboard', icon: <GraduationCap className="h-5 w-5" /> },
     { name: 'Courses', href: '/instructor/dashboard/courses', current: pathname.startsWith('/instructor/dashboard/courses'), icon: <BookOpen className="h-5 w-5" /> },
+    { name: 'Lessons', href: '/instructor/dashboard/lessons', current: pathname.startsWith('/instructor/dashboard/lessons'), icon: <LibraryBig className="h-5 w-5" /> },
     { name: 'Quizzes', href: '/instructor/dashboard/quizzes', current: pathname.startsWith('/instructor/dashboard/quizzes'), icon: <HelpCircle className="h-5 w-5" /> },
     { name: 'Questions', href: '/instructor/dashboard/questions', current: pathname.startsWith('/instructor/dashboard/questions'), icon: <FileText className="h-5 w-5" /> },
     { name: 'Curriculum', href: '/instructor/dashboard/cms', current: pathname.startsWith('/instructor/dashboard/cms'), icon: <LibraryBig className="h-5 w-5" /> },

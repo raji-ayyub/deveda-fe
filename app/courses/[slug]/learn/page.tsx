@@ -1,84 +1,170 @@
-// app/courses/[slug]/learn/page.tsx
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { ArrowLeft, BookOpen, Bot, CheckCircle, ChevronLeft, ChevronRight, Clock, FileText, HelpCircle, Play, Star, Target, Video } from 'lucide-react';
+
 import { AchievementCelebrationModal } from '@/components/achievements/AchievementCelebrationModal';
 import LessonTutorDrawer from '@/components/agents/LessonTutorDrawer';
-import RichContentRenderer from '@/components/lesson/RichContentRenderer';
 import LessonCodePlayground from '@/components/lesson/LessonCodePlayground';
+import RichContentRenderer from '@/components/lesson/RichContentRenderer';
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
-import {
-  ArrowLeft, Play, CheckCircle, BookOpen,
-  Clock, ChevronRight, ChevronLeft,
-  Target, Star, Video, FileText,
-  HelpCircle,
-  Bot
-} from 'lucide-react';
-import { CourseCurriculum, UserAchievement } from '@/lib/types';
+import { CourseCurriculumLesson, UserAchievement, UserCourse } from '@/lib/types';
+
+type LessonPlayerItem = CourseCurriculumLesson & {
+  moduleTitle: string;
+  moduleOrder: number;
+  assessmentTitle?: string | null;
+};
+
+function isGeneratedLesson(lesson: CourseCurriculumLesson) {
+  return lesson.generationStatus !== 'planned';
+}
+
+function deriveCompletedLessonSlugs(userCourse: UserCourse | null, lessonList: LessonPlayerItem[]) {
+  const validSlugs = new Set(lessonList.map((lesson) => lesson.slug));
+  const stored = (userCourse?.completedLessonSlugs || []).filter((slug) => validSlugs.has(slug));
+  if (stored.length > 0) {
+    return Array.from(new Set(stored));
+  }
+
+  const progress = userCourse?.progress || 0;
+  const completedCount = lessonList.length > 0 ? Math.floor((progress / 100) * lessonList.length) : 0;
+  return lessonList.slice(0, completedCount).map((lesson) => lesson.slug);
+}
+
+function firstIncompleteLessonSlug(lessonList: LessonPlayerItem[], completedLessonSlugs: string[]) {
+  const completed = new Set(completedLessonSlugs);
+  return lessonList.find((lesson) => !completed.has(lesson.slug))?.slug || lessonList[0]?.slug || '';
+}
 
 const CourseLearnPage: React.FC = () => {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user } = useAuth();
   const isLearner = user?.role === 'Student';
-  
+
   const slug = params.slug as string;
-  
+  const requestedLessonSlug = searchParams.get('lesson') || '';
+
   const [loading, setLoading] = useState(true);
   const [course, setCourse] = useState<any>(null);
-  const [curriculum, setCurriculum] = useState<CourseCurriculum | null>(null);
-  const [userCourse, setUserCourse] = useState<any>(null);
-  const [currentLesson, setCurrentLesson] = useState(0);
+  const [curriculum, setCurriculum] = useState<any>(null);
+  const [userCourse, setUserCourse] = useState<UserCourse | null>(null);
+  const [activeLessonSlug, setActiveLessonSlug] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [celebrationAwards, setCelebrationAwards] = useState<UserAchievement[]>([]);
   const [lessonTutorOpen, setLessonTutorOpen] = useState(false);
 
   useEffect(() => {
-    if (slug && user && isLearner) {
-      loadCourseData();
-    } else if (user && !isLearner) {
-      setLoading(false);
+    const loadCourseData = async () => {
+      if (!slug || !user || !isLearner) {
+        if (user && !isLearner) {
+          setLoading(false);
+        }
+        return;
+      }
+
+      try {
+        setLoading(true);
+        const [courseRes, curriculumRes, userCoursesRes] = await Promise.all([
+          api.getCourseBySlug(slug),
+          api.getCourseCurriculum(slug),
+          api.getUserCourses(user.id),
+        ]);
+        setCourse(courseRes.data);
+        setCurriculum(curriculumRes.data);
+        setUserCourse(userCoursesRes.data.find((item) => item.courseSlug === slug) || null);
+      } catch (error) {
+        console.error('Failed to load course:', error);
+        router.push(`/courses/${slug}`);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    void loadCourseData();
+  }, [isLearner, router, slug, user]);
+
+  const lessonList = useMemo<LessonPlayerItem[]>(
+    () =>
+      curriculum?.modules.flatMap((module: any) =>
+        module.lessons.filter(isGeneratedLesson).map((lesson: CourseCurriculumLesson) => ({
+          ...lesson,
+          moduleTitle: module.title,
+          moduleOrder: module.order,
+          assessmentTitle: module.assessmentTitle,
+        }))
+      ) || [],
+    [curriculum]
+  );
+
+  const totalLessons = lessonList.length;
+  const completedLessonSlugs = useMemo(() => deriveCompletedLessonSlugs(userCourse, lessonList), [lessonList, userCourse]);
+  const completedLessonSet = useMemo(() => new Set(completedLessonSlugs), [completedLessonSlugs]);
+  const lessonProgressValue = totalLessons > 0 ? Math.round((completedLessonSlugs.length / totalLessons) * 100) : 0;
+  const progressValue = Math.max(userCourse?.progress || 0, lessonProgressValue);
+
+  useEffect(() => {
+    if (!lessonList.length) {
+      if (activeLessonSlug) {
+        setActiveLessonSlug('');
+      }
+      return;
     }
-  }, [slug, user, isLearner]);
 
-  const loadCourseData = async () => {
-    try {
-      setLoading(true);
-      
-      // Get course details
-      const courseRes = await api.getCourseBySlug(slug);
-      setCourse(courseRes.data);
+    const validLessonSlugs = new Set(lessonList.map((lesson) => lesson.slug));
+    const preferredSlug =
+      (requestedLessonSlug && validLessonSlugs.has(requestedLessonSlug) && requestedLessonSlug) ||
+      (activeLessonSlug && validLessonSlugs.has(activeLessonSlug) && activeLessonSlug) ||
+      ((userCourse?.currentLessonSlug && validLessonSlugs.has(userCourse.currentLessonSlug) && userCourse.currentLessonSlug) || '') ||
+      firstIncompleteLessonSlug(lessonList, completedLessonSlugs);
 
-      const curriculumRes = await api.getCourseCurriculum(slug);
-      setCurriculum(curriculumRes.data);
-      
-      // Get user progress
-      const userCoursesRes = await api.getUserCourses(user!.id);
-      const userCourseData = userCoursesRes.data.find(c => c.courseSlug === slug);
-      setUserCourse(userCourseData || null);
-      
-    } catch (error) {
-      console.error('Failed to load course:', error);
-      router.push(`/courses/${slug}`);
-    } finally {
-      setLoading(false);
+    if (preferredSlug && preferredSlug !== activeLessonSlug) {
+      setActiveLessonSlug(preferredSlug);
     }
-  };
+  }, [activeLessonSlug, completedLessonSlugs, lessonList, requestedLessonSlug, userCourse?.currentLessonSlug]);
 
-  const updateProgress = async (progress: number) => {
-    if (!user || !userCourse) return;
+  const currentLessonIndex = useMemo(() => {
+    if (!lessonList.length) {
+      return 0;
+    }
+    const index = lessonList.findIndex((lesson) => lesson.slug === activeLessonSlug);
+    return index >= 0 ? index : 0;
+  }, [activeLessonSlug, lessonList]);
+
+  const activeLesson = lessonList[currentLessonIndex];
+  const activeModule = curriculum?.modules.find((module: any) => module.title === activeLesson?.moduleTitle) || null;
+  const remainingMinutes = lessonList.slice(currentLessonIndex).reduce((total, lesson) => total + lesson.durationMinutes, 0);
+
+  useEffect(() => {
+    if (!activeLesson) {
+      return;
+    }
+    const nextUrl = `/courses/${slug}/learn?lesson=${activeLesson.slug}`;
+    if (typeof window !== 'undefined' && window.location.pathname + window.location.search !== nextUrl) {
+      router.replace(nextUrl, { scroll: false });
+    }
+  }, [activeLesson, router, slug]);
+
+  const syncCourseProgress = async (nextCompletedLessonSlugs: string[], nextCurrentLessonSlug: string | null) => {
+    if (!user || !userCourse) {
+      return;
+    }
+
+    const validSlugs = new Set(lessonList.map((lesson) => lesson.slug));
+    const normalizedCompletedSlugs = Array.from(new Set(nextCompletedLessonSlugs)).filter((lessonSlug) => validSlugs.has(lessonSlug));
+    const lessonBasedProgress = totalLessons > 0 ? Math.round((normalizedCompletedSlugs.length / totalLessons) * 100) : 0;
+    const nextProgress = Math.max(userCourse.progress || 0, lessonBasedProgress);
+    const completed = nextProgress >= 100 || (totalLessons > 0 && normalizedCompletedSlugs.length >= totalLessons);
 
     try {
-      const completed = progress >= 100;
-      const response = await api.updateCourseProgress(
-        user.id,
-        slug,
-        progress,
-        completed
-      );
-
+      const response = await api.updateCourseProgress(user.id, slug, nextProgress, completed, {
+        completedLessonSlugs: normalizedCompletedSlugs,
+        currentLessonSlug: nextCurrentLessonSlug,
+      });
       setUserCourse(response.data.course);
       if (response.data.awards.length > 0) {
         setCelebrationAwards(response.data.awards);
@@ -88,21 +174,39 @@ const CourseLearnPage: React.FC = () => {
     }
   };
 
+  const handleLessonSelect = (lessonSlug: string) => {
+    setActiveLessonSlug(lessonSlug);
+    void syncCourseProgress(completedLessonSlugs, lessonSlug);
+  };
+
   const handleLessonComplete = () => {
-    if (!course || !userCourse || totalLessons === 0) return;
-    
-    const lessonProgress = 100 / totalLessons;
-    const newProgress = Math.min(userCourse.progress + lessonProgress, 100);
-    
-    updateProgress(newProgress);
-    setCurrentLesson(Math.min(currentLesson + 1, totalLessons - 1));
+    if (!activeLesson) {
+      return;
+    }
+
+    const nextCompletedLessonSlugs = Array.from(new Set([...completedLessonSlugs, activeLesson.slug]));
+    const nextPendingLesson =
+      lessonList.slice(currentLessonIndex + 1).find((lesson) => !nextCompletedLessonSlugs.includes(lesson.slug)) ||
+      lessonList[currentLessonIndex + 1] ||
+      activeLesson;
+
+    setActiveLessonSlug(nextPendingLesson.slug);
+    void syncCourseProgress(nextCompletedLessonSlugs, nextPendingLesson.slug);
+  };
+
+  const goToAdjacentLesson = (direction: -1 | 1) => {
+    const targetIndex = currentLessonIndex + direction;
+    if (targetIndex < 0 || targetIndex >= totalLessons) {
+      return;
+    }
+    handleLessonSelect(lessonList[targetIndex].slug);
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
-          <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <div className="mx-auto h-16 w-16 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
           <p className="mt-4 text-gray-600">Loading course content...</p>
         </div>
       </div>
@@ -117,10 +221,7 @@ const CourseLearnPage: React.FC = () => {
           <p className="mt-3 text-sm text-slate-300">
             Instructors review course content from the catalog and manage delivery from the instructor dashboard instead of the learner lesson player.
           </p>
-          <button
-            onClick={() => router.push('/instructor/dashboard')}
-            className="mt-6 rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-950"
-          >
+          <button onClick={() => router.push('/instructor/dashboard')} className="mt-6 rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-950">
             Open instructor dashboard
           </button>
         </div>
@@ -130,13 +231,10 @@ const CourseLearnPage: React.FC = () => {
 
   if (!course || !userCourse) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">Course Not Found</h1>
-          <button
-            onClick={() => router.push('/courses')}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg"
-          >
+          <h1 className="mb-4 text-2xl font-bold text-gray-900">Course Not Found</h1>
+          <button onClick={() => router.push('/courses')} className="rounded-lg bg-blue-600 px-4 py-2 text-white">
             Browse Courses
           </button>
         </div>
@@ -144,40 +242,19 @@ const CourseLearnPage: React.FC = () => {
     );
   }
 
-  const lessonList =
-    curriculum?.modules.flatMap((module) =>
-      module.lessons.map((lesson) => ({
-        ...lesson,
-        moduleTitle: module.title,
-        moduleOrder: module.order,
-        assessmentTitle: module.assessmentTitle,
-      }))
-    ) || [];
-  const totalLessons = lessonList.length;
-  const activeLesson = lessonList[currentLesson];
-  const completedLessons = Math.floor((userCourse.progress / 100) * totalLessons);
-  const remainingMinutes = lessonList.slice(currentLesson).reduce((total, lesson) => total + lesson.durationMinutes, 0);
-  const activeModule = curriculum?.modules.find((module) => module.title === activeLesson?.moduleTitle) || null;
-
-  if (totalLessons === 0) {
+  if (!activeLesson || totalLessons === 0) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-950 px-4">
         <div className="max-w-xl rounded-[28px] border border-slate-800 bg-slate-900 p-8 text-center shadow-2xl">
           <h1 className="text-2xl font-bold text-white">No lessons published yet</h1>
           <p className="mt-3 text-sm text-slate-300">
-            This course has been created, but the lesson curriculum has not been published yet. Check back after the instructor adds the first lessons.
+            This course has a shell or draft curriculum, but learner-ready lessons have not been generated yet. Check back after the instructor publishes the first module.
           </p>
           <div className="mt-6 flex flex-wrap justify-center gap-3">
-            <button
-              onClick={() => router.push(`/courses/${slug}`)}
-              className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-950"
-            >
+            <button onClick={() => router.push(`/courses/${slug}`)} className="rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-950">
               Return to course page
             </button>
-            <button
-              onClick={() => router.push('/courses')}
-              className="rounded-2xl border border-slate-700 px-4 py-3 text-sm font-semibold text-slate-200"
-            >
+            <button onClick={() => router.push('/courses')} className="rounded-2xl border border-slate-700 px-4 py-3 text-sm font-semibold text-slate-200">
               Browse other courses
             </button>
           </div>
@@ -188,65 +265,43 @@ const CourseLearnPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-900">
-      <AchievementCelebrationModal
-        achievements={celebrationAwards}
-        learnerName={user ? user.firstName : 'Learner'}
-        onClose={() => setCelebrationAwards([])}
+      <AchievementCelebrationModal achievements={celebrationAwards} learnerName={user ? user.firstName : 'Learner'} onClose={() => setCelebrationAwards([])} />
+      <LessonTutorDrawer
+        open={lessonTutorOpen}
+        onClose={() => setLessonTutorOpen(false)}
+        courseSlug={slug}
+        courseTitle={course.title}
+        lessonSlug={activeLesson.slug}
+        lessonTitle={activeLesson.title}
+        currentProgress={progressValue}
       />
-      {course && (
-        <LessonTutorDrawer
-          open={lessonTutorOpen}
-          onClose={() => setLessonTutorOpen(false)}
-          courseSlug={slug}
-          courseTitle={course.title}
-          lessonSlug={activeLesson?.slug}
-          lessonTitle={activeLesson?.title}
-          currentProgress={Math.round(userCourse.progress)}
-        />
-      )}
-      {/* Top Navigation */}
-      <div className="bg-gray-800 border-b border-gray-700">
+
+      <div className="border-b border-gray-700 bg-gray-800">
         <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center">
-            <button
-              onClick={() => router.push(`/courses/${slug}`)}
-              className="flex items-center text-gray-300 hover:text-white mr-4"
-            >
-              <ArrowLeft className="w-4 h-4 mr-2" />
+            <button onClick={() => router.push(`/courses/${slug}`)} className="mr-4 flex items-center text-gray-300 hover:text-white">
+              <ArrowLeft className="mr-2 h-4 w-4" />
               Back to Course
             </button>
             <div className="hidden md:block">
               <h1 className="text-lg font-semibold text-white">{course.title}</h1>
-              <p className="text-sm text-gray-400">
-                Lesson {currentLesson + 1} of {totalLessons}
-              </p>
+              <p className="text-sm text-gray-400">Lesson {currentLessonIndex + 1} of {totalLessons}</p>
             </div>
           </div>
-          
+
           <div className="flex items-center space-x-4">
             <div className="hidden md:block">
-              <div className="w-48 bg-gray-700 rounded-full h-2">
-                <div
-                  className="bg-gradient-to-r from-green-500 to-emerald-500 h-2 rounded-full transition-all duration-500"
-                  style={{ width: `${userCourse.progress}%` }}
-                />
+              <div className="h-2 w-48 rounded-full bg-gray-700">
+                <div className="h-2 rounded-full bg-gradient-to-r from-green-500 to-emerald-500 transition-all duration-500" style={{ width: `${progressValue}%` }} />
               </div>
-              <p className="text-xs text-gray-400 mt-1">
-                {userCourse.progress.toFixed(1)}% complete
-              </p>
+              <p className="mt-1 text-xs text-gray-400">{progressValue}% complete</p>
             </div>
-            
+
             <div className="flex items-center space-x-2">
-              <button
-                onClick={() => setSidebarOpen((current) => !current)}
-                className="rounded-xl border border-gray-600 px-3 py-2 text-sm font-semibold text-gray-200 transition hover:border-gray-500 hover:text-white"
-              >
+              <button onClick={() => setSidebarOpen((current) => !current)} className="rounded-xl border border-gray-600 px-3 py-2 text-sm font-semibold text-gray-200 transition hover:border-gray-500 hover:text-white">
                 {sidebarOpen ? 'Hide outline' : 'Show outline'}
               </button>
-              <button
-                onClick={() => setLessonTutorOpen((current) => !current)}
-                className="rounded-xl border border-cyan-500/40 bg-cyan-500/10 px-3 py-2 text-sm font-semibold text-cyan-200 transition hover:bg-cyan-500/20"
-              >
+              <button onClick={() => setLessonTutorOpen((current) => !current)} className="rounded-xl border border-cyan-500/40 bg-cyan-500/10 px-3 py-2 text-sm font-semibold text-cyan-200 transition hover:bg-cyan-500/20">
                 {lessonTutorOpen ? 'Hide tutor' : 'Open tutor'}
               </button>
             </div>
@@ -255,132 +310,99 @@ const CourseLearnPage: React.FC = () => {
       </div>
 
       <div className="flex h-[calc(100vh-64px)]">
-        {/* Sidebar */}
-        {sidebarOpen && (
-          <div className="w-80 bg-gray-800 border-r border-gray-700 overflow-y-auto">
+        {sidebarOpen ? (
+          <div className="w-80 overflow-y-auto border-r border-gray-700 bg-gray-800">
             <div className="p-4">
-              <div className="flex items-center justify-between mb-4">
+              <div className="mb-4 flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-white">Course Content</h2>
-                <button
-                  onClick={() => setSidebarOpen(false)}
-                  className="text-gray-400 hover:text-white"
-                >
-                  <ChevronLeft className="w-5 h-5" />
+                <button onClick={() => setSidebarOpen(false)} className="text-gray-400 hover:text-white">
+                  <ChevronLeft className="h-5 w-5" />
                 </button>
               </div>
-              
+
               <div className="space-y-1">
-                {lessonList.map((lesson, index) => (
-                  <button
-                    key={lesson.slug}
-                    onClick={() => setCurrentLesson(index)}
-                    className={`w-full text-left px-3 py-3 rounded-lg transition-colors ${
-                      currentLesson === index
-                        ? 'bg-blue-600 text-white'
-                        : 'text-gray-300 hover:bg-gray-700'
-                    }`}
-                  >
-                    <div className="flex items-center">
-                      <div className="w-6 h-6 rounded-full bg-gray-700 flex items-center justify-center mr-3">
-                        {index < currentLesson ? (
-                          <CheckCircle className="w-3 h-3 text-green-500" />
-                        ) : (
-                          <Play className="w-3 h-3" />
-                        )}
-                      </div>
-                      <div className="flex-1">
-                        <div className="font-medium">
-                          Lesson {index + 1}: {lesson.title}
+                {lessonList.map((lesson, index) => {
+                  const isActive = lesson.slug === activeLesson.slug;
+                  const isCompleted = completedLessonSet.has(lesson.slug);
+                  return (
+                    <button
+                      key={lesson.slug}
+                      onClick={() => handleLessonSelect(lesson.slug)}
+                      className={`w-full rounded-lg px-3 py-3 text-left transition-colors ${isActive ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-700'}`}
+                    >
+                      <div className="flex items-center">
+                        <div className="mr-3 flex h-6 w-6 items-center justify-center rounded-full bg-gray-700">
+                          {isCompleted ? <CheckCircle className="h-3 w-3 text-green-500" /> : <Play className="h-3 w-3" />}
                         </div>
-                        <div className="text-sm opacity-75">
-                          {lesson.durationMinutes} min / {index < currentLesson ? 'Completed' : 'Not started'}
+                        <div className="flex-1">
+                          <div className="font-medium">Lesson {index + 1}: {lesson.title}</div>
+                          <div className="text-sm opacity-75">{lesson.durationMinutes} min / {isCompleted ? 'Completed' : isActive ? 'In progress' : 'Not started'}</div>
                         </div>
+                        {isActive ? <ChevronRight className="h-4 w-4" /> : null}
                       </div>
-                      {index === currentLesson && (
-                        <ChevronRight className="w-4 h-4" />
-                      )}
-                    </div>
-                  </button>
-                ))}
+                    </button>
+                  );
+                })}
               </div>
-              
-              <div className="mt-6 pt-6 border-t border-gray-700">
-                <h3 className="text-sm font-semibold text-gray-400 mb-3">At a glance</h3>
+
+              <div className="mt-6 border-t border-gray-700 pt-6">
+                <h3 className="mb-3 text-sm font-semibold text-gray-400">At a glance</h3>
                 <div className="space-y-2">
                   <div className="flex items-center rounded p-2 text-gray-300">
-                    <BookOpen className="w-4 h-4 mr-2" />
-                    <span>{activeLesson?.moduleTitle || 'Current module'}</span>
+                    <BookOpen className="mr-2 h-4 w-4" />
+                    <span>{activeLesson.moduleTitle}</span>
                   </div>
                   <div className="flex items-center rounded p-2 text-gray-300">
-                    <FileText className="w-4 h-4 mr-2" />
-                    <span className="capitalize">{activeLesson?.contentType || 'lesson'}</span>
+                    <FileText className="mr-2 h-4 w-4" />
+                    <span className="capitalize">{activeLesson.contentType}</span>
                   </div>
                   <button onClick={() => setLessonTutorOpen(true)} className="flex w-full items-center rounded p-2 text-gray-300 transition hover:bg-gray-700">
-                    <Bot className="w-4 h-4 mr-2" />
+                    <Bot className="mr-2 h-4 w-4" />
                     <span>Open lesson tutor</span>
                   </button>
                 </div>
               </div>
             </div>
           </div>
-        )}
-
-        {/* Main Content */}
+        ) : null}
         <div className="flex-1 overflow-y-auto">
           <div className="p-6">
-            {/* Video Player */}
-            <div className="bg-black rounded-xl overflow-hidden mb-6">
-              <div className="aspect-video bg-gradient-to-br from-gray-900 to-black flex items-center justify-center">
+            <div className="mb-6 overflow-hidden rounded-xl bg-black">
+              <div className="flex aspect-video items-center justify-center bg-gradient-to-br from-gray-900 to-black">
                 <div className="text-center">
-                  <div className="w-16 h-16 bg-white/10 backdrop-blur-sm rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Play className="w-8 h-8 text-white" />
+                  <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white/10 backdrop-blur-sm">
+                    <Play className="h-8 w-8 text-white" />
                   </div>
-                  <p className="text-gray-300">{activeLesson?.title || `Lesson ${currentLesson + 1}`} video will play here</p>
+                  <p className="text-gray-300">{activeLesson.title} lesson media will play here</p>
                 </div>
               </div>
               <div className="bg-gray-800 px-4 py-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="text-lg font-semibold text-white">
-                      Lesson {currentLesson + 1}: {activeLesson?.title || 'Current lesson'}
-                    </h3>
-                    <p className="text-gray-400">{activeLesson?.durationMinutes || 15} minutes</p>
+                    <h3 className="text-lg font-semibold text-white">Lesson {currentLessonIndex + 1}: {activeLesson.title}</h3>
+                    <p className="text-gray-400">{activeLesson.durationMinutes} minutes</p>
                   </div>
-                  <div className="flex items-center space-x-4">
-                    <button
-                      onClick={() => setCurrentLesson(Math.min(totalLessons - 1, currentLesson + 1))}
-                      disabled={currentLesson === totalLessons - 1}
-                      className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      Next Lesson
-                    </button>
-                  </div>
+                  <button onClick={() => goToAdjacentLesson(1)} disabled={currentLessonIndex === totalLessons - 1} className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
+                    Next Lesson
+                  </button>
                 </div>
               </div>
             </div>
 
-            {/* Lesson Content */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
               <div className="lg:col-span-2">
-                <div className="bg-gray-800 rounded-xl p-6">
-                  <div className="flex items-center justify-between mb-6">
+                <div className="rounded-xl bg-gray-800 p-6">
+                  <div className="mb-6 flex items-center justify-between">
                     <h2 className="text-2xl font-bold text-white">Lesson Content</h2>
-                    <button
-                      onClick={() => setSidebarOpen((current) => !current)}
-                      className="p-2 text-gray-400 hover:text-white"
-                    >
-                      {sidebarOpen ? <ChevronLeft className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
+                    <button onClick={() => setSidebarOpen((current) => !current)} className="p-2 text-gray-400 hover:text-white">
+                      {sidebarOpen ? <ChevronLeft className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
                     </button>
                   </div>
-                  
+
                   <div className="space-y-6">
                     <div>
-                      <h3 className="mb-3 text-xl font-semibold text-white">
-                        {activeLesson?.title || 'Current lesson'}
-                      </h3>
-                      <p className="text-gray-300">
-                        {activeLesson?.summary || 'This lesson summary will appear here once the curriculum is available.'}
-                      </p>
+                      <h3 className="mb-3 text-xl font-semibold text-white">{activeLesson.title}</h3>
+                      <p className="text-gray-300">{activeLesson.summary}</p>
                     </div>
 
                     <div className="rounded-lg bg-gray-700 p-4">
@@ -388,20 +410,20 @@ const CourseLearnPage: React.FC = () => {
                       <div className="grid gap-3 md:grid-cols-3">
                         <div className="rounded-lg bg-gray-800 p-3">
                           <div className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-400">Module</div>
-                          <div className="mt-2 text-sm font-medium text-white">{activeLesson?.moduleTitle || 'Current module'}</div>
+                          <div className="mt-2 text-sm font-medium text-white">{activeLesson.moduleTitle}</div>
                         </div>
                         <div className="rounded-lg bg-gray-800 p-3">
                           <div className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-400">Format</div>
-                          <div className="mt-2 text-sm font-medium capitalize text-white">{activeLesson?.contentType || 'lesson'}</div>
+                          <div className="mt-2 text-sm font-medium capitalize text-white">{activeLesson.contentType}</div>
                         </div>
                         <div className="rounded-lg bg-gray-800 p-3">
                           <div className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-400">Estimated time</div>
-                          <div className="mt-2 text-sm font-medium text-white">{activeLesson?.durationMinutes || 0} minutes</div>
+                          <div className="mt-2 text-sm font-medium text-white">{activeLesson.durationMinutes} minutes</div>
                         </div>
                       </div>
                     </div>
 
-                    {activeLesson?.learningObjectives?.length ? (
+                    {activeLesson.learningObjectives?.length ? (
                       <div className="rounded-lg bg-gray-700 p-4">
                         <h4 className="mb-3 text-lg font-semibold text-white">Learning objectives</h4>
                         <ul className="ml-5 list-disc space-y-2 text-sm text-gray-200">
@@ -412,86 +434,87 @@ const CourseLearnPage: React.FC = () => {
                       </div>
                     ) : null}
 
+                    {activeLesson.learningFlow?.length ? (
+                      <div className="rounded-lg bg-gray-700 p-4">
+                        <h4 className="mb-3 text-lg font-semibold text-white">Learning flow</h4>
+                        <ol className="ml-5 list-decimal space-y-2 text-sm text-gray-200">
+                          {activeLesson.learningFlow.map((step) => (
+                            <li key={step}>{step}</li>
+                          ))}
+                        </ol>
+                      </div>
+                    ) : null}
+
                     <div className="rounded-[24px] bg-white p-6 text-slate-900">
-                      <RichContentRenderer content={activeLesson?.contentMarkdown || ''} />
+                      <RichContentRenderer content={activeLesson.contentMarkdown || ''} />
                     </div>
 
-                    {activeLesson?.practicePrompt ? (
+                    {activeLesson.visualAidMarkdown ? (
+                      <div className="rounded-[24px] border border-cyan-500/20 bg-cyan-500/10 p-6">
+                        <h4 className="mb-4 text-lg font-semibold text-white">Visual aid</h4>
+                        <div className="rounded-[20px] bg-white p-5 text-slate-900">
+                          <RichContentRenderer content={activeLesson.visualAidMarkdown} />
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {activeLesson.practicePrompt ? (
                       <div className="rounded-lg border border-blue-800/50 bg-gradient-to-r from-blue-900/30 to-purple-900/30 p-4">
                         <div className="mb-2 flex items-center">
                           <Target className="mr-2 h-5 w-5 text-blue-400" />
                           <h5 className="font-semibold text-white">Practice challenge</h5>
                         </div>
                         <p className="mb-3 text-gray-300">{activeLesson.practicePrompt}</p>
-                        <button
-                          onClick={() => setLessonTutorOpen(true)}
-                          className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
-                        >
+                        <button onClick={() => setLessonTutorOpen(true)} className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700">
                           Ask lesson tutor
                         </button>
                       </div>
                     ) : null}
 
-                    {activeLesson?.playground ? <LessonCodePlayground playground={activeLesson.playground} /> : null}
+                    {activeLesson.quizId ? (
+                      <div className="rounded-lg border border-amber-800/50 bg-gradient-to-r from-amber-900/30 to-orange-900/30 p-4">
+                        <div className="mb-2 flex items-center">
+                          <FileText className="mr-2 h-5 w-5 text-amber-300" />
+                          <h5 className="font-semibold text-white">{activeLesson.quizTitle || `${activeLesson.title} assessment`}</h5>
+                        </div>
+                        <p className="mb-3 text-sm text-gray-300">
+                          Open the linked assessment whenever you are ready to prove this lesson in a scored format.
+                        </p>
+                        <button onClick={() => router.push(`/quiz/${activeLesson.quizId}`)} className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-slate-950 hover:bg-amber-400">
+                          Start lesson assessment
+                        </button>
+                      </div>
+                    ) : null}
+
+                    {activeLesson.playground ? <LessonCodePlayground playground={activeLesson.playground} /> : null}
                   </div>
                 </div>
-                
-                {/* Navigation */}
-                <div className="flex justify-between mt-6">
-                  <button
-                    onClick={() => setCurrentLesson(Math.max(0, currentLesson - 1))}
-                    disabled={currentLesson === 0}
-                    className="px-6 py-3 bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
-                  >
-                    <ChevronLeft className="w-4 h-4 mr-2" />
+
+                <div className="mt-6 flex justify-between gap-4">
+                  <button onClick={() => goToAdjacentLesson(-1)} disabled={currentLessonIndex === 0} className="flex items-center rounded-lg bg-gray-800 px-6 py-3 text-gray-300 hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-50">
+                    <ChevronLeft className="mr-2 h-4 w-4" />
                     Previous Lesson
                   </button>
-                  <button
-                    onClick={handleLessonComplete}
-                    className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg hover:opacity-90 flex items-center"
-                  >
+                  <button onClick={handleLessonComplete} className="flex items-center rounded-lg bg-gradient-to-r from-green-600 to-emerald-600 px-6 py-3 text-white hover:opacity-90">
                     Mark Complete
-                    <CheckCircle className="w-4 h-4 ml-2" />
+                    <CheckCircle className="ml-2 h-4 w-4" />
                   </button>
-                  <button
-                    onClick={() => setCurrentLesson(Math.min(totalLessons - 1, currentLesson + 1))}
-                    disabled={currentLesson === totalLessons - 1}
-                    className="px-6 py-3 bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
-                  >
+                  <button onClick={() => goToAdjacentLesson(1)} disabled={currentLessonIndex === totalLessons - 1} className="flex items-center rounded-lg bg-gray-800 px-6 py-3 text-gray-300 hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-50">
                     Next Lesson
-                    <ChevronRight className="w-4 h-4 ml-2" />
+                    <ChevronRight className="ml-2 h-4 w-4" />
                   </button>
                 </div>
               </div>
-              
-              {/* Sidebar */}
+
               <div className="lg:col-span-1">
                 <div className="sticky top-6 space-y-6">
-                  {/* Progress Card */}
-                  <div className="bg-gradient-to-r from-blue-900/50 to-purple-900/50 rounded-xl p-6 border border-blue-800/30">
-                    <h3 className="text-lg font-semibold text-white mb-4">Your Progress</h3>
-                    <div className="text-center mb-4">
-                      <div className="relative w-32 h-32 mx-auto">
-                        <svg className="w-full h-full" viewBox="0 0 100 100">
-                          <circle
-                            cx="50"
-                            cy="50"
-                            r="45"
-                            fill="none"
-                            stroke="#374151"
-                            strokeWidth="10"
-                          />
-                          <circle
-                            cx="50"
-                            cy="50"
-                            r="45"
-                            fill="none"
-                            stroke="url(#gradient)"
-                            strokeWidth="10"
-                            strokeLinecap="round"
-                            strokeDasharray={`${userCourse.progress * 2.83} 283`}
-                            transform="rotate(-90 50 50)"
-                          />
+                  <div className="rounded-xl border border-blue-800/30 bg-gradient-to-r from-blue-900/50 to-purple-900/50 p-6">
+                    <h3 className="mb-4 text-lg font-semibold text-white">Your Progress</h3>
+                    <div className="mb-4 text-center">
+                      <div className="relative mx-auto h-32 w-32">
+                        <svg className="h-full w-full" viewBox="0 0 100 100">
+                          <circle cx="50" cy="50" r="45" fill="none" stroke="#374151" strokeWidth="10" />
+                          <circle cx="50" cy="50" r="45" fill="none" stroke="url(#gradient)" strokeWidth="10" strokeLinecap="round" strokeDasharray={`${progressValue * 2.83} 283`} transform="rotate(-90 50 50)" />
                           <defs>
                             <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
                               <stop offset="0%" stopColor="#3b82f6" />
@@ -500,76 +523,87 @@ const CourseLearnPage: React.FC = () => {
                           </defs>
                         </svg>
                         <div className="absolute inset-0 flex items-center justify-center">
-                          <span className="text-3xl font-bold text-white">{userCourse.progress.toFixed(0)}%</span>
+                          <span className="text-3xl font-bold text-white">{progressValue}%</span>
                         </div>
                       </div>
                     </div>
                     <div className="space-y-3">
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-300">Completed Lessons</span>
-                        <span className="text-white font-medium">
-                          {completedLessons}/{totalLessons}
-                        </span>
+                        <span className="font-medium text-white">{completedLessonSlugs.length}/{totalLessons}</span>
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-300">Estimated remaining</span>
-                        <span className="text-white font-medium">{remainingMinutes} min</span>
+                        <span className="font-medium text-white">{remainingMinutes} min</span>
                       </div>
                     </div>
                   </div>
-                  
-                  {/* Course context */}
-                  <div className="bg-gray-800 rounded-xl p-6">
-                    <h3 className="text-lg font-semibold text-white mb-4">Course context</h3>
+                  <div className="rounded-xl bg-gray-800 p-6">
+                    <h3 className="mb-4 text-lg font-semibold text-white">Course context</h3>
                     <div className="space-y-3">
                       <div className="flex items-center rounded-lg bg-gray-700 p-3">
-                        <Video className="w-5 h-5 text-blue-400 mr-3" />
+                        <Video className="mr-3 h-5 w-5 text-blue-400" />
                         <div className="flex-1">
-                          <div className="text-white font-medium">Current module</div>
-                          <div className="text-sm text-gray-400">{activeLesson?.moduleTitle || 'Current module details appear here.'}</div>
+                          <div className="font-medium text-white">Current module</div>
+                          <div className="text-sm text-gray-400">{activeLesson.moduleTitle}</div>
                         </div>
                       </div>
                       <div className="flex items-center rounded-lg bg-gray-700 p-3">
-                        <FileText className="w-5 h-5 text-green-400 mr-3" />
+                        <FileText className="mr-3 h-5 w-5 text-green-400" />
                         <div className="flex-1">
-                          <div className="text-white font-medium">Lesson type</div>
-                          <div className="text-sm capitalize text-gray-400">{activeLesson?.contentType || 'lesson'}</div>
+                          <div className="font-medium text-white">Lesson type</div>
+                          <div className="text-sm capitalize text-gray-400">{activeLesson.contentType}</div>
                         </div>
                       </div>
                       <div className="rounded-lg bg-gray-700 p-3">
-                        <div className="text-white font-medium">Key takeaways</div>
+                        <div className="font-medium text-white">Key takeaways</div>
                         <div className="mt-2 space-y-2 text-sm text-gray-300">
-                          {(activeLesson?.keyTakeaways || []).slice(0, 3).map((takeaway) => (
+                          {(activeLesson.keyTakeaways || []).slice(0, 3).map((takeaway) => (
                             <div key={takeaway}>{takeaway}</div>
                           ))}
                         </div>
                       </div>
+                      {curriculum?.learningFlow?.length ? (
+                        <div className="rounded-lg bg-gray-700 p-3">
+                          <div className="font-medium text-white">Course flow</div>
+                          <div className="mt-2 space-y-2 text-sm text-gray-300">
+                            {curriculum.learningFlow.slice(0, 4).map((step: string) => (
+                              <div key={step}>{step}</div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
                       <button onClick={() => setLessonTutorOpen(true)} className="group flex w-full items-center rounded-lg bg-gray-700 p-3 text-left transition-colors hover:bg-gray-600">
-                        <HelpCircle className="w-5 h-5 text-yellow-400 mr-3" />
+                        <HelpCircle className="mr-3 h-5 w-5 text-yellow-400" />
                         <div className="flex-1">
-                          <div className="text-white font-medium">Need another explanation?</div>
+                          <div className="font-medium text-white">Need another explanation?</div>
                           <div className="text-sm text-gray-400">Open the lesson tutor for examples and step-by-step help.</div>
                         </div>
-                        <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-white" />
+                        <ChevronRight className="h-4 w-4 text-gray-400 group-hover:text-white" />
                       </button>
                     </div>
                   </div>
-                  
-                  {/* Module checkpoint */}
-                  <div className="bg-gradient-to-r from-yellow-900/30 to-orange-900/30 rounded-xl p-6 border border-yellow-800/30">
-                    <div className="flex items-center mb-4">
-                      <Star className="w-5 h-5 text-yellow-400 mr-3" />
+
+                  <div className="rounded-xl border border-yellow-800/30 bg-gradient-to-r from-yellow-900/30 to-orange-900/30 p-6">
+                    <div className="mb-4 flex items-center">
+                      <Star className="mr-3 h-5 w-5 text-yellow-400" />
                       <h3 className="text-lg font-semibold text-white">Module checkpoint</h3>
                     </div>
-                    <p className="text-gray-300 mb-4">
-                      {activeModule?.assessmentTitle
-                        ? `${activeModule.assessmentTitle} is the next checkpoint for this module.`
-                        : 'This module does not yet have a checkpoint configured.'}
+                    <p className="mb-4 text-gray-300">
+                      {activeModule?.assessmentTitle ? `${activeModule.assessmentTitle} is the next checkpoint for this module.` : 'This module does not yet have a checkpoint configured.'}
                     </p>
                     <div className="flex items-center text-sm text-gray-400">
-                      <Clock className="w-4 h-4 mr-2" />
+                      <Clock className="mr-2 h-4 w-4" />
                       <span>{activeModule?.assessmentQuizId ? `Quiz ID: ${activeModule.assessmentQuizId}` : 'Checkpoint can be added from the curriculum studio.'}</span>
                     </div>
+                    {activeModule?.assessmentQuizId ? (
+                      <button
+                        onClick={() => router.push(`/quiz/${activeModule.assessmentQuizId}`)}
+                        className="mt-4 rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-amber-400"
+                      >
+                        Start module checkpoint
+                      </button>
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -578,23 +612,17 @@ const CourseLearnPage: React.FC = () => {
         </div>
       </div>
 
-      <button
-        onClick={() => setLessonTutorOpen((current) => !current)}
-        className="fixed bottom-6 right-6 z-40 inline-flex items-center gap-2 rounded-full bg-cyan-500 px-5 py-3 text-sm font-semibold text-slate-950 shadow-2xl transition hover:bg-cyan-400"
-      >
+      <button onClick={() => setLessonTutorOpen((current) => !current)} className="fixed bottom-6 right-6 z-40 inline-flex items-center gap-2 rounded-full bg-cyan-500 px-5 py-3 text-sm font-semibold text-slate-950 shadow-2xl transition hover:bg-cyan-400">
         <Bot className="h-4 w-4" />
         {lessonTutorOpen ? 'Close tutor' : 'Lesson tutor'}
       </button>
 
-      {!sidebarOpen && (
-        <button
-          onClick={() => setSidebarOpen(true)}
-          className="fixed bottom-6 left-6 z-40 inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-semibold text-slate-950 shadow-2xl transition hover:bg-slate-100"
-        >
+      {!sidebarOpen ? (
+        <button onClick={() => setSidebarOpen(true)} className="fixed bottom-6 left-6 z-40 inline-flex items-center gap-2 rounded-full bg-white px-5 py-3 text-sm font-semibold text-slate-950 shadow-2xl transition hover:bg-slate-100">
           <BookOpen className="h-4 w-4" />
           Show course content
         </button>
-      )}
+      ) : null}
     </div>
   );
 };

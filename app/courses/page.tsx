@@ -1,153 +1,124 @@
-// app/courses/page.tsx
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { ArrowRight, BookOpen, CheckCircle2, Clock3, Loader2, Search } from 'lucide-react';
+
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
-import { 
-  Search, Filter, Clock, Users, BookOpen, 
-  Star, TrendingUp, ArrowRight, CheckCircle,
-  Award, BarChart3, Loader2, AlertCircle
-} from 'lucide-react';
 import { CourseCatalog, UserCourse } from '@/lib/types';
-import { useRouter } from 'next/navigation';
-import { COURSE_CATEGORY_COLORS, COURSE_DIFFICULTY_COLORS } from '@/lib/course-content';
+import { getRoleLoginRedirect } from '@/lib/roleRoutes';
 
-const CoursesPage: React.FC = () => {
-  const { user } = useAuth();
+type CatalogStats = {
+  total_courses: number;
+  total_enrollments: number;
+  unique_enrolled_users: number;
+  popular_courses: Array<{ _id: string; count: number }>;
+  categories: Array<{ _id: string; count: number }>;
+  difficulties: Array<{ _id: string; count: number }>;
+};
+
+export default function CoursesPage() {
   const router = useRouter();
+  const { user } = useAuth();
   const isLearner = user?.role === 'Student';
-  
+
   const [courses, setCourses] = useState<CourseCatalog[]>([]);
   const [userCourses, setUserCourses] = useState<UserCourse[]>([]);
-  const [filteredCourses, setFilteredCourses] = useState<CourseCatalog[]>([]);
+  const [catalogStats, setCatalogStats] = useState<CatalogStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [enrolling, setEnrolling] = useState<string | null>(null);
-  const [loadError, setLoadError] = useState('');
-  
-  // Filters
+  const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('All');
-  const [selectedDifficulty, setSelectedDifficulty] = useState<string>('All');
-  const [selectedSort, setSelectedSort] = useState<string>('popular');
-  
-  // Stats
-  const [categories, setCategories] = useState<string[]>([]);
-  const [stats, setStats] = useState({
-    totalCourses: 0,
-    totalEnrolled: 0,
-    completionRate: 0,
-    averageRating: 0,
-  });
+  const [categoryFilter, setCategoryFilter] = useState('All');
+  const [difficultyFilter, setDifficultyFilter] = useState('All');
+  const [sortBy, setSortBy] = useState<'popular' | 'newest' | 'duration' | 'title'>('popular');
 
   useEffect(() => {
-    loadCourses();
-  }, [user]);
+    const loadCatalog = async () => {
+      try {
+        setLoading(true);
+        setError('');
+        const [catalogResponse, statsResponse, enrollmentsResponse] = await Promise.all([
+          api.getCourseCatalog(),
+          api.getCourseCatalogStats(),
+          isLearner && user ? api.getUserCourses(user.id) : Promise.resolve({ data: [] as UserCourse[] }),
+        ]);
 
-  const loadCourses = async () => {
-    try {
-      setLoading(true);
-      setLoadError('');
-      const catalogRes = await api.getCourseCatalog();
-      const userCoursesRes = isLearner ? await api.getUserCourses(user!.id) : { data: [] };
+        setCourses(catalogResponse.data);
+        setCatalogStats(statsResponse.data as CatalogStats);
+        setUserCourses(enrollmentsResponse.data);
+      } catch (loadError: any) {
+        setError(loadError.message || 'Unable to load the course catalog right now.');
+      } finally {
+        setLoading(false);
+      }
+    };
 
-      const allCourses = catalogRes.data;
-      const userEnrollments = userCoursesRes.data;
-      
-      setCourses(allCourses);
-      setUserCourses(userEnrollments);
-      
-      // Extract unique categories
-      const uniqueCategories = Array.from(
-        new Set(allCourses.map(course => course.category))
-      ).filter(Boolean);
-      setCategories(['All', ...uniqueCategories]);
-      
-      // Calculate stats
-      const totalEnrolled = userEnrollments.length;
-      const completedCourses = userEnrollments.filter(course => course.completed).length;
-      const completionRate = totalEnrolled > 0 ? (completedCourses / totalEnrolled) * 100 : 0;
-      
-      setStats({
-        totalCourses: allCourses.length,
-        totalEnrolled,
-        completionRate,
-        averageRating: 0,
-      });
-      
-      filterAndSortCourses(allCourses, userEnrollments);
-    } catch (error) {
-      console.error('Failed to load courses:', error);
-      setCourses([]);
-      setUserCourses([]);
-      setFilteredCourses([]);
-      setCategories(['All']);
-      setStats({
-        totalCourses: 0,
-        totalEnrolled: 0,
-        completionRate: 0,
-        averageRating: 0,
-      });
-      setLoadError('We could not load the course catalog right now.');
-    } finally {
-      setLoading(false);
-    }
-  };
+    void loadCatalog();
+  }, [isLearner, user]);
 
-  const filterAndSortCourses = (coursesList: CourseCatalog[], enrollments: UserCourse[]) => {
-    let filtered = [...coursesList];
-    
-    // Apply search filter
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase();
-      filtered = filtered.filter(course =>
-        course.title.toLowerCase().includes(term) ||
-        course.description.toLowerCase().includes(term) ||
-        course.tags.some(tag => tag.toLowerCase().includes(term))
-      );
+  const popularityMap = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const item of catalogStats?.popular_courses || []) {
+      if (item?._id) {
+        map.set(item._id, item.count || 0);
+      }
     }
-    
-    // Apply category filter
-    if (selectedCategory !== 'All') {
-      filtered = filtered.filter(course => course.category === selectedCategory);
-    }
-    
-    // Apply difficulty filter
-    if (selectedDifficulty !== 'All') {
-      filtered = filtered.filter(course => course.difficulty === selectedDifficulty);
-    }
-    
-    // Apply sorting
-    switch (selectedSort) {
-      case 'popular':
-        filtered.sort((a, b) => {
-          // In real app, this would be based on enrollment count
-          return b.duration - a.duration; // Using duration as proxy for now
-        });
-        break;
-      case 'newest':
-        filtered.sort((a, b) => 
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-        );
-        break;
-      case 'difficulty':
-        const difficultyOrder = { 'Beginner': 0, 'Intermediate': 1, 'Advanced': 2, 'Mastery': 3 };
-        filtered.sort((a, b) => 
-          difficultyOrder[a.difficulty as keyof typeof difficultyOrder] - 
-          difficultyOrder[b.difficulty as keyof typeof difficultyOrder]
-        );
-        break;
-      case 'duration':
-        filtered.sort((a, b) => a.duration - b.duration);
-        break;
-    }
-    
-    setFilteredCourses(filtered);
-  };
+    return map;
+  }, [catalogStats]);
 
-  useEffect(() => {
-    filterAndSortCourses(courses, userCourses);
-  }, [searchTerm, selectedCategory, selectedDifficulty, selectedSort, courses, userCourses]);
+  const categories = useMemo(
+    () => ['All', ...Array.from(new Set(courses.map((course) => course.category).filter(Boolean)))],
+    [courses]
+  );
+
+  const difficulties = useMemo(
+    () => ['All', ...Array.from(new Set(courses.map((course) => course.difficulty).filter(Boolean)))],
+    [courses]
+  );
+
+  const filteredCourses = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+    const filtered = courses.filter((course) => {
+      if (categoryFilter !== 'All' && course.category !== categoryFilter) {
+        return false;
+      }
+      if (difficultyFilter !== 'All' && course.difficulty !== difficultyFilter) {
+        return false;
+      }
+      if (!query) {
+        return true;
+      }
+      return [course.title, course.description, course.slug, ...course.tags].join(' ').toLowerCase().includes(query);
+    });
+
+    filtered.sort((left, right) => {
+      if (sortBy === 'popular') {
+        return (popularityMap.get(right.slug) || 0) - (popularityMap.get(left.slug) || 0);
+      }
+      if (sortBy === 'newest') {
+        return new Date(right.createdAt || 0).getTime() - new Date(left.createdAt || 0).getTime();
+      }
+      if (sortBy === 'duration') {
+        return left.duration - right.duration;
+      }
+      return left.title.localeCompare(right.title);
+    });
+
+    return filtered;
+  }, [categoryFilter, courses, difficultyFilter, popularityMap, searchTerm, sortBy]);
+
+  const enrolledCourseMap = useMemo(() => {
+    return new Map(userCourses.map((course) => [course.courseSlug, course]));
+  }, [userCourses]);
+
+  const learnerStats = useMemo(() => {
+    const completed = userCourses.filter((course) => course.completed).length;
+    const inProgress = userCourses.filter((course) => !course.completed && course.progress > 0).length;
+    return { completed, inProgress };
+  }, [userCourses]);
 
   const handleEnroll = async (courseSlug: string) => {
     if (!user) {
@@ -156,673 +127,268 @@ const CoursesPage: React.FC = () => {
     }
 
     if (!isLearner) {
-      router.push('/instructor/dashboard/courses');
+      router.push(getRoleLoginRedirect(user.role));
       return;
     }
 
     try {
       setEnrolling(courseSlug);
-      const enrollment = await api.enrollCourse(user!.id, {
+      setError('');
+      const targetCourse = courses.find((course) => course.slug === courseSlug);
+      const response = await api.enrollCourse(user.id, {
         courseSlug,
-        category: courses.find(c => c.slug === courseSlug)?.category,
-        difficulty: courses.find(c => c.slug === courseSlug)?.difficulty,
+        category: targetCourse?.category,
+        difficulty: targetCourse?.difficulty,
       });
-      
-      // Update user courses
-      setUserCourses([...userCourses, enrollment.data]);
-      
-      // Navigate to course page or show success message
+      setUserCourses((current) => [...current, response.data]);
       router.push(`/courses/${courseSlug}`);
-    } catch (error) {
-      console.error('Failed to enroll:', error);
-      alert('Failed to enroll in course. Please try again.');
+    } catch (enrollError: any) {
+      setError(enrollError.message || 'Unable to enroll in this course right now.');
     } finally {
       setEnrolling(null);
     }
   };
 
-  const isUserEnrolled = (courseSlug: string) => {
-    return userCourses.some(course => course.courseSlug === courseSlug);
-  };
-
-  const getUserProgress = (courseSlug: string) => {
-    const userCourse = userCourses.find(course => course.courseSlug === courseSlug);
-    return userCourse ? userCourse.progress : 0;
-  };
-
-  const getDifficultyColor = (difficulty: string) => {
-    return COURSE_DIFFICULTY_COLORS[difficulty] || 'bg-gray-100 text-gray-800';
-  };
-
-  const getCategoryColor = (category: string) => {
-    return COURSE_CATEGORY_COLORS[category] || 'bg-gray-100 text-gray-800';
-  };
-
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center bg-slate-50">
         <div className="text-center">
-          <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading courses...</p>
+          <Loader2 className="mx-auto h-10 w-10 animate-spin text-blue-700" />
+          <p className="mt-3 text-sm text-slate-600">Loading course catalog...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 py-8">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="mb-8">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="min-h-screen bg-[linear-gradient(180deg,#f8fafc_0%,#ffffff_45%,#eef2ff_100%)] px-4 py-8 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl space-y-6">
+        <section className="rounded-[32px] border border-slate-200 bg-white p-8 shadow-2xl shadow-slate-200">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Explore Coding Courses</h1>
-              <p className="text-gray-600 mt-2">Follow focused frontend, backend, and systems design paths</p>
-            </div>
-            <div className="flex items-center space-x-4">
-              {isLearner ? (
-                <>
-                  <div className="flex items-center space-x-2 text-sm text-gray-600">
-                    <BookOpen className="w-4 h-4" />
-                    <span>{userCourses.length} enrolled</span>
-                  </div>
-                  <div className="flex items-center space-x-2 text-sm text-gray-600">
-                    <CheckCircle className="w-4 h-4" />
-                    <span>
-                      {userCourses.filter(c => c.completed).length} completed
-                    </span>
-                  </div>
-                </>
-              ) : (
-                <div className="flex items-center space-x-2 text-sm text-blue-700">
-                  <BookOpen className="w-4 h-4" />
-                  <span>Instructor catalog view</span>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {loadError && (
-          <div className="mb-8 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-            {loadError}
-          </div>
-        )}
-
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white rounded-xl shadow p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500">Total Courses</p>
-                <p className="text-3xl font-bold text-gray-900 mt-1">{stats.totalCourses}</p>
+              <div className="inline-flex rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-blue-700">
+                Coding catalog
               </div>
-              <div className="p-3 bg-blue-100 rounded-lg">
-                <BookOpen className="w-6 h-6 text-blue-600" />
-              </div>
-            </div>
-            <div className="mt-4 flex items-center text-sm text-green-600">
-              <TrendingUp className="w-4 h-4 mr-1" />
-              <span>Updated from the live catalog</span>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl shadow p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500">{isLearner ? 'Your Enrollments' : 'Teaching View'}</p>
-                <p className="text-3xl font-bold text-gray-900 mt-1">{stats.totalEnrolled}</p>
-              </div>
-              <div className="p-3 bg-green-100 rounded-lg">
-                <Users className="w-6 h-6 text-green-600" />
-              </div>
-            </div>
-            {isLearner ? (
-              <div className="mt-4">
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div 
-                    className="bg-gradient-to-r from-green-500 to-emerald-500 h-2 rounded-full transition-all duration-500"
-                    style={{ width: `${stats.completionRate}%` }}
-                  />
-                </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  {stats.completionRate.toFixed(1)}% completion rate
-                </p>
-              </div>
-            ) : (
-              <p className="mt-4 text-sm text-gray-500">
-                Instructor accounts review the catalog here but manage course delivery from the instructor workspace.
+              <h1 className="mt-4 text-3xl font-black tracking-tight text-slate-950">Explore real course paths</h1>
+              <p className="mt-3 max-w-3xl text-sm text-slate-600">
+                Browse the current catalog, compare tracks, and jump into the path that fits the skill you want to build next.
               </p>
-            )}
-          </div>
-
-          <div className="bg-white rounded-xl shadow p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500">Course Rating</p>
-                <p className="text-3xl font-bold text-gray-900 mt-1">
-                  {stats.averageRating > 0 ? stats.averageRating.toFixed(1) : 'N/A'}
-                </p>
-              </div>
-              <div className="p-3 bg-yellow-100 rounded-lg">
-                <Star className="w-6 h-6 text-yellow-600" />
-              </div>
             </div>
-            <div className="mt-4 flex items-center">
-              {stats.averageRating > 0 ? (
-                [...Array(5)].map((_, i) => (
-                  <Star
-                    key={i}
-                    className={`w-4 h-4 ${
-                      i < Math.floor(stats.averageRating)
-                        ? 'text-yellow-400 fill-yellow-400'
-                        : 'text-gray-300'
-                    }`}
-                  />
-                ))
-              ) : (
-                <p className="text-sm text-gray-500">Ratings will appear when learner reviews are available.</p>
-              )}
+
+            <div className="grid gap-3 sm:grid-cols-3">
+              <HeroStat label="Courses" value={String(catalogStats?.total_courses || courses.length)} />
+              <HeroStat label="Enrollments" value={String(catalogStats?.total_enrollments || 0)} />
+              <HeroStat label="Learners" value={String(catalogStats?.unique_enrolled_users || 0)} />
             </div>
           </div>
 
-          <div className="bg-white rounded-xl shadow p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500">Learning Time</p>
-                <p className="text-3xl font-bold text-gray-900 mt-1">
-                  {Math.round(userCourses.reduce((sum, course) => {
-                    const courseData = courses.find(c => c.slug === course.courseSlug);
-                    return sum + (courseData?.duration || 0) * (course.progress / 100);
-                  }, 0) / 60)}h
-                </p>
-              </div>
-              <div className="p-3 bg-purple-100 rounded-lg">
-                <Clock className="w-6 h-6 text-purple-600" />
-              </div>
+          {isLearner ? (
+            <div className="mt-6 flex flex-wrap gap-3 text-sm text-slate-600">
+              <span className="inline-flex items-center gap-2 rounded-2xl bg-slate-50 px-4 py-3">
+                <BookOpen className="h-4 w-4 text-blue-700" />
+                {userCourses.length} enrolled
+              </span>
+              <span className="inline-flex items-center gap-2 rounded-2xl bg-slate-50 px-4 py-3">
+                <CheckCircle2 className="h-4 w-4 text-emerald-700" />
+                {learnerStats.completed} completed
+              </span>
+              <span className="inline-flex items-center gap-2 rounded-2xl bg-slate-50 px-4 py-3">
+                <Clock3 className="h-4 w-4 text-amber-700" />
+                {learnerStats.inProgress} in progress
+              </span>
             </div>
-            <p className="text-sm text-gray-500 mt-4">
-              Total time spent learning
-            </p>
-          </div>
-        </div>
-
-        {/* Search and Filters */}
-        <div className="bg-white rounded-xl shadow p-6 mb-8">
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-            {/* Search */}
-            <div className="lg:col-span-2">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <input
-                  type="text"
-                  placeholder="Search courses by title, description, or tags..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-            </div>
-
-            {/* Category Filter */}
-            <div>
-              <select
-                value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none"
-              >
-                {categories.map(category => (
-                  <option key={category} value={category}>
-                    {category === 'All' ? 'All Categories' : category}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Sort Filter */}
-            <div>
-              <select
-                value={selectedSort}
-                onChange={(e) => setSelectedSort(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none"
-              >
-                <option value="popular">Most Popular</option>
-                <option value="newest">Newest First</option>
-                <option value="difficulty">Difficulty</option>
-                <option value="duration">Duration</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Difficulty Filters */}
-          <div className="mt-6 flex flex-wrap gap-2">
-            <button
-              onClick={() => setSelectedDifficulty('All')}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                selectedDifficulty === 'All'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              All Levels
-            </button>
-            {['Beginner', 'Intermediate', 'Advanced', 'Mastery'].map(level => (
+          ) : user ? (
+            <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-600">
+              This view is read-only for your role. Manage live course creation and curriculum from your workspace instead.
               <button
-                key={level}
-                onClick={() => setSelectedDifficulty(level)}
-                className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                  selectedDifficulty === level
-                    ? getDifficultyColor(level) + ' font-semibold'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
+                onClick={() => router.push(getRoleLoginRedirect(user.role))}
+                className="ml-2 font-semibold text-blue-700"
               >
-                {level}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Courses Grid */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold text-gray-900">
-              Available Courses ({filteredCourses.length})
-            </h2>
-            <div className="flex items-center space-x-2 text-gray-600">
-              <Filter className="w-4 h-4" />
-              <span className="text-sm">Filtered and sorted</span>
-            </div>
-          </div>
-
-          {filteredCourses.length === 0 ? (
-            <div className="bg-white rounded-xl shadow p-12 text-center">
-              <BookOpen className="w-16 h-16 text-gray-300 mx-auto" />
-              <h3 className="text-xl font-semibold text-gray-700 mt-4">No courses found</h3>
-              <p className="text-gray-500 mt-2">
-                Try adjusting your search or filters to find what you're looking for.
-              </p>
-              <button
-                onClick={() => {
-                  setSearchTerm('');
-                  setSelectedCategory('All');
-                  setSelectedDifficulty('All');
-                }}
-                className="mt-4 text-blue-600 hover:text-blue-700 font-medium"
-              >
-                Clear all filters →
+                Open workspace
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredCourses.map(course => {
-                const isEnrolled = isUserEnrolled(course.slug);
-                const progress = getUserProgress(course.slug);
-                
-                return (
-                  <div
-                    key={course.id}
-                    className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300"
-                  >
-                    {/* Course Thumbnail */}
-                    <div className="h-48 bg-gradient-to-r from-blue-500 to-purple-600 relative overflow-hidden">
-                      {isLearner && isEnrolled && progress > 0 && (
-                        <div className="absolute top-4 right-4">
-                          <div className="relative">
-                            <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
-                              <span className="text-white font-bold text-sm">
-                                {progress}%
-                              </span>
-                            </div>
-                            <div className="absolute inset-0 rounded-full border-2 border-white/30 animate-ping"></div>
-                          </div>
-                        </div>
-                      )}
-                      
-                      {/* Category Badge */}
-                      <div className="absolute top-4 left-4">
-                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${getCategoryColor(course.category)}`}>
-                          {course.category}
-                        </span>
-                      </div>
-                      
-                      {/* Difficulty Badge */}
-                      <div className="absolute bottom-4 left-4">
-                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${getDifficultyColor(course.difficulty)}`}>
-                          {course.difficulty}
-                        </span>
-                      </div>
-                    </div>
-                    
-                    {/* Course Content */}
-                    <div className="p-6">
-                      <h3 className="text-xl font-bold text-gray-900 mb-2 line-clamp-2">
-                        {course.title}
-                      </h3>
-                      
-                      <p className="text-gray-600 mb-4 line-clamp-3">
-                        {course.description}
-                      </p>
-                      
-                      {/* Course Meta */}
-                      <div className="flex items-center justify-between text-sm text-gray-500 mb-4">
-                        <div className="flex items-center space-x-4">
-                          <div className="flex items-center">
-                            <Clock className="w-4 h-4 mr-1" />
-                            <span>{course.duration} min</span>
-                          </div>
-                          <div className="flex items-center">
-                            <BookOpen className="w-4 h-4 mr-1" />
-                            <span>{course.totalLessons} lessons</span>
-                          </div>
-                        </div>
-                        <div className="flex items-center">
-                          <Star className="w-4 h-4 text-yellow-400 fill-yellow-400 mr-1" />
-                          <span>4.5</span>
-                        </div>
-                      </div>
-                      
-                      {/* Prerequisites */}
-                      {course.prerequisites && course.prerequisites.length > 0 && (
-                        <div className="mb-4">
-                          <p className="text-sm text-gray-500 mb-2">Prerequisites:</p>
-                          <div className="flex flex-wrap gap-2">
-                            {course.prerequisites.slice(0, 3).map((preq, index) => (
-                              <span
-                                key={index}
-                                className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded"
-                              >
-                                {preq}
-                              </span>
-                            ))}
-                            {course.prerequisites.length > 3 && (
-                              <span className="px-2 py-1 text-gray-400 text-xs">
-                                +{course.prerequisites.length - 3} more
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                      
-                      {/* Progress Bar for enrolled courses */}
-                      {isLearner && isEnrolled && progress > 0 && (
-                        <div className="mb-4">
-                          <div className="flex justify-between text-sm mb-1">
-                            <span className="text-gray-600">Your progress</span>
-                            <span className="font-medium text-blue-600">{progress}%</span>
-                          </div>
-                          <div className="w-full bg-gray-200 rounded-full h-2">
-                            <div
-                              className="bg-gradient-to-r from-green-500 to-emerald-500 h-2 rounded-full transition-all duration-500"
-                              style={{ width: `${progress}%` }}
-                            />
-                          </div>
-                        </div>
-                      )}
-                      
-                      {/* Action Button */}
-                      {isLearner ? (
-                        <button
-                          onClick={() => {
-                            if (isEnrolled) {
-                              router.push(`/courses/${course.slug}`);
-                            } else {
-                              handleEnroll(course.slug);
-                            }
-                          }}
-                          disabled={enrolling === course.slug}
-                          className={`w-full py-3 rounded-lg font-medium transition-all duration-300 flex items-center justify-center ${
-                            isEnrolled
-                              ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:shadow-lg'
-                              : 'bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:shadow-lg'
-                          } ${enrolling === course.slug ? 'opacity-75 cursor-not-allowed' : ''}`}
-                        >
-                          {enrolling === course.slug ? (
-                            <>
-                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                              Enrolling...
-                            </>
-                          ) : isEnrolled ? (
-                            <>
-                              {progress === 100 ? 'Completed' : 'Continue Learning'}
-                              <ArrowRight className="w-4 h-4 ml-2" />
-                            </>
-                          ) : (
-                            <>
-                              Enroll Now
-                              <ArrowRight className="w-4 h-4 ml-2" />
-                            </>
-                          )}
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => router.push(`/courses/${course.slug}`)}
-                          className="w-full py-3 rounded-lg bg-gradient-to-r from-slate-900 to-blue-700 font-medium text-white transition-all duration-300 hover:shadow-lg"
-                        >
-                          Review Course
-                        </button>
-                      )}
-                      
-                      {/* View Details Link */}
-                      <button
-                        onClick={() => router.push(`/courses/${course.slug}`)}
-                        className="w-full mt-3 text-center text-blue-600 hover:text-blue-700 font-medium text-sm"
-                      >
-                        View course details
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
+            <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-600">
+              Sign in as a learner to enroll and track progress from this catalog.
+              <Link href="/login" className="ml-2 font-semibold text-blue-700">
+                Go to login
+              </Link>
             </div>
           )}
-        </div>
+        </section>
 
-        {/* Learning Paths Section */}
-        <div className="mb-12">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6">Coding Paths</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg p-6 text-white">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-xl font-bold">Beginner Track</h3>
-                <Award className="w-8 h-8" />
-              </div>
-              <p className="mb-4 opacity-90">
-                Start with frontend and backend fundamentals built for first-time coding learners.
-              </p>
-              <div className="text-sm opacity-75">
-                <div className="flex items-center justify-between mb-2">
-                  <span>Courses</span>
-                  <span>{courses.filter(c => c.difficulty === 'Beginner').length}</span>
-                </div>
-                <div className="flex items-center justify-between mb-2">
-                  <span>Avg. Duration</span>
-                  <span>
-                    {Math.round(
-                      courses
-                        .filter(c => c.difficulty === 'Beginner')
-                        .reduce((sum, c) => sum + c.duration, 0) /
-                        (courses.filter(c => c.difficulty === 'Beginner').length || 1)
-                    )} min
-                  </span>
-                </div>
-              </div>
-              <button
-                onClick={() => {
-                  setSelectedDifficulty('Beginner');
-                  setSelectedCategory('All');
-                }}
-                className="mt-6 w-full bg-white text-blue-600 py-2 rounded-lg font-medium hover:bg-blue-50 transition-colors"
-              >
-                Explore Path
-              </button>
-            </div>
+        {error ? (
+          <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>
+        ) : null}
 
-            <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-lg p-6 text-white">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-xl font-bold">Intermediate Track</h3>
-                <TrendingUp className="w-8 h-8" />
-              </div>
-              <p className="mb-4 opacity-90">
-                Build confidence with React, FastAPI, and deeper project-based implementation.
-              </p>
-              <div className="text-sm opacity-75">
-                <div className="flex items-center justify-between mb-2">
-                  <span>Courses</span>
-                  <span>{courses.filter(c => c.difficulty === 'Intermediate').length}</span>
-                </div>
-                <div className="flex items-center justify-between mb-2">
-                  <span>Avg. Duration</span>
-                  <span>
-                    {Math.round(
-                      courses
-                        .filter(c => c.difficulty === 'Intermediate')
-                        .reduce((sum, c) => sum + c.duration, 0) /
-                        (courses.filter(c => c.difficulty === 'Intermediate').length || 1)
-                    )} min
-                  </span>
-                </div>
-              </div>
-              <button
-                onClick={() => {
-                  setSelectedDifficulty('Intermediate');
-                  setSelectedCategory('All');
-                }}
-                className="mt-6 w-full bg-white text-purple-600 py-2 rounded-lg font-medium hover:bg-purple-50 transition-colors"
-              >
-                Explore Path
-              </button>
+        <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-lg shadow-slate-100">
+          <div className="grid gap-4 lg:grid-cols-[1.2fr_0.6fr_0.6fr_0.6fr]">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+              <input
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Search by title, description, slug, or tags"
+                className="w-full rounded-2xl border border-slate-200 py-3 pl-11 pr-4 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+              />
             </div>
-
-            <div className="bg-gradient-to-br from-red-500 to-orange-500 rounded-xl shadow-lg p-6 text-white">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-xl font-bold">Advanced Track</h3>
-                <BarChart3 className="w-8 h-8" />
-              </div>
-              <p className="mb-4 opacity-90">
-                Push into production-grade frontend, backend, and systems design decisions.
-              </p>
-              <div className="text-sm opacity-75">
-                <div className="flex items-center justify-between mb-2">
-                  <span>Courses</span>
-                  <span>{courses.filter(c => c.difficulty === 'Advanced').length}</span>
-                </div>
-                <div className="flex items-center justify-between mb-2">
-                  <span>Avg. Duration</span>
-                  <span>
-                    {Math.round(
-                      courses
-                        .filter(c => c.difficulty === 'Advanced')
-                        .reduce((sum, c) => sum + c.duration, 0) /
-                        (courses.filter(c => c.difficulty === 'Advanced').length || 1)
-                    )} min
-                  </span>
-                </div>
-              </div>
-              <button
-                onClick={() => {
-                  setSelectedDifficulty('Advanced');
-                  setSelectedCategory('All');
-                }}
-                className="mt-6 w-full bg-white text-orange-600 py-2 rounded-lg font-medium hover:bg-orange-50 transition-colors"
-              >
-                Explore Path
-              </button>
-            </div>
+            <select
+              value={categoryFilter}
+              onChange={(event) => setCategoryFilter(event.target.value)}
+              className="rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+            >
+              {categories.map((category) => (
+                <option key={category} value={category}>
+                  {category === 'All' ? 'All categories' : category}
+                </option>
+              ))}
+            </select>
+            <select
+              value={difficultyFilter}
+              onChange={(event) => setDifficultyFilter(event.target.value)}
+              className="rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+            >
+              {difficulties.map((difficulty) => (
+                <option key={difficulty} value={difficulty}>
+                  {difficulty === 'All' ? 'All levels' : difficulty}
+                </option>
+              ))}
+            </select>
+            <select
+              value={sortBy}
+              onChange={(event) => setSortBy(event.target.value as typeof sortBy)}
+              className="rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+            >
+              <option value="popular">Most enrolled</option>
+              <option value="newest">Newest</option>
+              <option value="duration">Shortest duration</option>
+              <option value="title">Title</option>
+            </select>
           </div>
-        </div>
+        </section>
 
-        {/* Recommended Section */}
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-6">Recommended Next Courses</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {isLearner && userCourses.length > 0 ? (
-              courses
-                .filter(course => 
-                  !userCourses.some(uc => uc.courseSlug === course.slug) &&
-                  course.category === userCourses[0]?.category
-                )
-                .slice(0, 2)
-                .map(course => (
-                  <div
-                    key={course.id}
-                    className="bg-white rounded-xl shadow p-6 hover:shadow-lg transition-shadow"
-                  >
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <div className="flex items-center space-x-2 mb-2">
-                          <span className={`px-2 py-1 text-xs rounded ${getCategoryColor(course.category)}`}>
-                            {course.category}
-                          </span>
-                          <span className="text-sm text-gray-500">• Based on your interests</span>
-                        </div>
-                        <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                          {course.title}
-                        </h3>
-                        <p className="text-gray-600 text-sm mb-4 line-clamp-2">
-                          {course.description}
-                        </p>
+        <section className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+          {filteredCourses.map((course) => {
+            const enrollment = enrolledCourseMap.get(course.slug);
+            const isEnrolled = Boolean(enrollment);
+            const popularity = popularityMap.get(course.slug) || 0;
+
+            return (
+              <article key={course.id} className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-lg shadow-slate-100">
+                <div className="border-b border-slate-100 bg-[linear-gradient(135deg,#eff6ff_0%,#ffffff_60%,#eef2ff_100%)] px-6 py-5">
+                  <div className="flex flex-wrap gap-2">
+                    <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">{course.category}</span>
+                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">{course.difficulty}</span>
+                  </div>
+                  <h2 className="mt-4 text-2xl font-bold text-slate-950">{course.title}</h2>
+                  <p className="mt-2 text-sm text-slate-600">{course.description}</p>
+                </div>
+
+                <div className="space-y-4 px-6 py-6">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <MetaPill label="Duration" value={`${course.duration} min`} />
+                    <MetaPill label="Lessons" value={String(course.totalLessons)} />
+                    <MetaPill label="Quizzes" value={String(course.totalQuizzes)} />
+                    <MetaPill label="Enrollments" value={String(popularity)} />
+                  </div>
+
+                  {course.tags.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {course.tags.slice(0, 4).map((tag) => (
+                        <span key={tag} className="rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-600">
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {isLearner && enrollment ? (
+                    <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4">
+                      <div className="flex items-center justify-between text-sm text-emerald-800">
+                        <span className="font-semibold">Your progress</span>
+                        <span>{enrollment.progress}%</span>
                       </div>
-                      <div className="p-3 bg-blue-50 rounded-lg">
-                        <BookOpen className="w-6 h-6 text-blue-600" />
+                      <div className="mt-3 h-2 rounded-full bg-emerald-100">
+                        <div className="h-2 rounded-full bg-emerald-500" style={{ width: `${enrollment.progress}%` }} />
                       </div>
                     </div>
+                  ) : null}
+
+                  <div className="flex gap-3">
                     <button
-                      onClick={() => handleEnroll(course.slug)}
-                      disabled={enrolling === course.slug}
-                      className="w-full mt-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white py-2 rounded-lg font-medium hover:shadow-md transition-shadow disabled:opacity-75"
+                      onClick={() => {
+                        if (isEnrolled) {
+                          router.push(`/courses/${course.slug}`);
+                          return;
+                        }
+                        if (!isLearner) {
+                          router.push(`/courses/${course.slug}`);
+                          return;
+                        }
+                        void handleEnroll(course.slug);
+                      }}
+                      disabled={Boolean(enrolling === course.slug)}
+                      className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-60"
                     >
                       {enrolling === course.slug ? (
                         <>
-                          <Loader2 className="w-4 h-4 animate-spin inline mr-2" />
-                          Enrolling...
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Working...
+                        </>
+                      ) : isEnrolled ? (
+                        <>
+                          Continue
+                          <ArrowRight className="h-4 w-4" />
+                        </>
+                      ) : isLearner ? (
+                        <>
+                          Enroll
+                          <ArrowRight className="h-4 w-4" />
                         </>
                       ) : (
-                        'Enroll in Course'
+                        <>
+                          View details
+                          <ArrowRight className="h-4 w-4" />
+                        </>
                       )}
                     </button>
+                    <Link
+                      href={`/courses/${course.slug}`}
+                      className="inline-flex items-center justify-center rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700"
+                    >
+                      Open
+                    </Link>
                   </div>
-                ))
-            ) : isLearner ? (
-              <div className="col-span-2 bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl shadow p-8 text-center">
-                <AlertCircle className="w-12 h-12 text-blue-400 mx-auto mb-4" />
-                <h3 className="text-xl font-semibold text-gray-800 mb-2">
-                  Start Your Coding Journey
-                </h3>
-                <p className="text-gray-600 mb-6">
-                  Enroll in your first course to get personalized recommendations!
-                </p>
-                <button
-                  onClick={() => {
-                    const firstCourse = courses[0];
-                    if (firstCourse) {
-                      handleEnroll(firstCourse.slug);
-                    }
-                  }}
-                  className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-lg font-medium hover:shadow-lg transition-shadow"
-                >
-                  Enroll in a Course
-                </button>
-              </div>
-            ) : (
-              <div className="col-span-2 rounded-xl border border-slate-200 bg-white p-8 text-center shadow">
-                <BookOpen className="mx-auto h-12 w-12 text-blue-500" />
-                <h3 className="mt-4 text-xl font-semibold text-slate-900">Instructor accounts do not use learner enrollments</h3>
-                <p className="mt-2 text-sm text-slate-600">
-                  Review course pages here, then switch to the instructor dashboard to manage curriculum, quizzes, and question banks.
-                </p>
-                <button
-                  onClick={() => router.push('/instructor/dashboard')}
-                  className="mt-6 rounded-lg bg-slate-950 px-6 py-3 font-medium text-white transition hover:bg-blue-700"
-                >
-                  Open instructor dashboard
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
+                </div>
+              </article>
+            );
+          })}
+        </section>
+
+        {filteredCourses.length === 0 ? (
+          <section className="rounded-[28px] border border-dashed border-slate-300 bg-white px-6 py-14 text-center text-sm text-slate-500">
+            No courses match the current filters.
+          </section>
+        ) : null}
       </div>
     </div>
   );
-};
+}
 
-export default CoursesPage;
+function HeroStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl bg-slate-50 px-4 py-4">
+      <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{label}</div>
+      <div className="mt-2 text-3xl font-black text-slate-950">{value}</div>
+    </div>
+  );
+}
+
+function MetaPill({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl bg-slate-50 px-4 py-3">
+      <div className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">{label}</div>
+      <div className="mt-2 text-sm font-semibold text-slate-900">{value}</div>
+    </div>
+  );
+}

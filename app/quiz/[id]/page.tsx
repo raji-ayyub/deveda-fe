@@ -4,6 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { AchievementCelebrationModal } from '@/components/achievements/AchievementCelebrationModal';
+import ConfirmationDialog from '@/components/ui/ConfirmationDialog';
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
 import { QuizQuestion, CourseCatalog, UserAchievement } from '@/lib/types';
@@ -38,6 +39,8 @@ const QuizPage: React.FC = () => {
     correctAnswers: number;
   } | null>(null);
   const [celebrationAwards, setCelebrationAwards] = useState<UserAchievement[]>([]);
+  const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
+  const [submitError, setSubmitError] = useState('');
 
   useEffect(() => {
     if (quizId) {
@@ -50,21 +53,24 @@ const QuizPage: React.FC = () => {
       const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
       return () => clearTimeout(timer);
     } else if (timeLeft === 0 && !showResults) {
-      handleSubmit();
+      void handleSubmit(true);
     }
   }, [timeLeft, showResults]);
 
   const loadQuiz = async () => {
     try {
       setLoading(true);
+      setSubmitError('');
       const response = await api.getQuizQuestions(quizId);
       setQuestions(response.data);
-      
-      // Try to find course info if quiz is associated with a course
-      const courseSlug = quizId.split('_')[0]; // Assuming format: "course_slug_quiz_id"
-      const catalogRes = await api.getCourseCatalog({ search: courseSlug });
-      if (catalogRes.data.length > 0) {
-        setCourseInfo(catalogRes.data[0]);
+      const catalogRes = await api.getCourseCatalog();
+      const matchingCourse = [...catalogRes.data]
+        .filter((course) => quizId.startsWith(course.slug))
+        .sort((left, right) => right.slug.length - left.slug.length)[0];
+      if (matchingCourse) {
+        setCourseInfo(matchingCourse);
+      } else {
+        setCourseInfo(null);
       }
     } catch (error) {
       console.error('Failed to load quiz:', error);
@@ -91,16 +97,16 @@ const QuizPage: React.FC = () => {
     return { score, correctAnswers: correct };
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (forceSubmit = false) => {
     if (questions.length === 0) return;
     
-    if (Object.keys(answers).length < questions.length) {
-      if (!confirm('You have unanswered questions. Submit anyway?')) {
-        return;
-      }
+    if (!forceSubmit && Object.keys(answers).length < questions.length) {
+      setShowSubmitConfirm(true);
+      return;
     }
 
     setSubmitting(true);
+    setSubmitError('');
     try {
       const { score, correctAnswers } = calculateScore();
       const passed = score >= 60;
@@ -111,7 +117,7 @@ const QuizPage: React.FC = () => {
         correctAnswers,
       });
 
-      if (user) {
+      if (user?.role === 'Student') {
         // Submit quiz attempt to backend
         const response = await api.submitQuizAttempt(user.id, {
           quizId,
@@ -126,9 +132,10 @@ const QuizPage: React.FC = () => {
       setShowResults(true);
     } catch (error) {
       console.error('Failed to submit quiz:', error);
-      alert('Failed to submit quiz. Please try again.');
+      setSubmitError('Failed to submit quiz. Please try again.');
     } finally {
       setSubmitting(false);
+      setShowSubmitConfirm(false);
     }
   };
 
@@ -338,6 +345,18 @@ const QuizPage: React.FC = () => {
         learnerName={user ? user.firstName : 'Learner'}
         onClose={() => setCelebrationAwards([])}
       />
+      <ConfirmationDialog
+        isOpen={showSubmitConfirm}
+        title="Submit with unanswered questions?"
+        description="You still have unanswered questions. Submit now if you want to grade the quiz with the remaining answers left blank."
+        confirmLabel="Submit quiz"
+        tone="neutral"
+        busy={submitting}
+        onCancel={() => setShowSubmitConfirm(false)}
+        onConfirm={() => {
+          void handleSubmit(true);
+        }}
+      />
       {/* Top Bar */}
       <div className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -376,6 +395,18 @@ const QuizPage: React.FC = () => {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {submitError ? (
+          <div className="mb-6 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{submitError}</div>
+        ) : null}
+        {!user ? (
+          <div className="mb-6 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">
+            You can take this quiz without signing in, but progress and attempts will not be saved.
+          </div>
+        ) : user.role !== 'Student' ? (
+          <div className="mb-6 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">
+            Your current role can review this quiz, but attempt results are only stored for student accounts.
+          </div>
+        ) : null}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Left Side - Question */}
           <div className="lg:col-span-2">
@@ -472,7 +503,9 @@ const QuizPage: React.FC = () => {
                     </button>
                   ) : (
                     <button
-                      onClick={handleSubmit}
+                      onClick={() => {
+                        void handleSubmit();
+                      }}
                       disabled={submitting}
                       className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-lg font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
                     >

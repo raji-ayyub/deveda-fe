@@ -124,11 +124,15 @@ export default function AgentHub() {
   const selectedArtifacts = selectedAssignment ? artifacts.filter((artifact) => artifact.assignmentId === selectedAssignment.id) : [];
   const latestCourseShell = selectedArtifacts.find((artifact) => artifact.artifactType === 'course_shell') || null;
   const latestCurriculumDraft = selectedArtifacts.find((artifact) => artifact.artifactType === 'curriculum_draft') || null;
+  const latestCourseGeneration = selectedArtifacts.find((artifact) => artifact.artifactType === 'course_content_generation') || null;
   const draftCourseSlug =
     typeof latestCurriculumDraft?.payload?.courseSlug === 'string' ? latestCurriculumDraft.payload.courseSlug : undefined;
+  const generatedCourseSlug =
+    typeof latestCourseGeneration?.payload?.courseSlug === 'string' ? latestCourseGeneration.payload.courseSlug : undefined;
   const createdCourseSlug =
     typeof latestCourseShell?.payload?.courseSlug === 'string' ? latestCourseShell.payload.courseSlug : undefined;
-  const availableCourseSlug = selectedAssignment?.courseSlug || createdCourseSlug || draftCourseSlug || undefined;
+  const availableCourseSlug =
+    selectedAssignment?.courseSlug || createdCourseSlug || generatedCourseSlug || draftCourseSlug || undefined;
   const canCreateCurriculumDraft = Boolean(availableCourseSlug);
   const canApplyCurriculum = Boolean(availableCourseSlug);
   const visibleThreads = selectedAssignment ? threads.filter((thread) => thread.assignmentId === selectedAssignment.id) : threads;
@@ -258,7 +262,10 @@ export default function AgentHub() {
       setError('');
       const response = await api.runAgentAction(selectedAssignment.id, {
         actionType,
-        artifactId: actionType === 'apply_curriculum_to_course' ? latestCurriculumDraft?.id : undefined,
+        artifactId:
+          actionType === 'apply_curriculum_to_course'
+            ? latestCurriculumDraft?.id || latestCourseGeneration?.id
+            : undefined,
         courseSlug: availableCourseSlug,
         lessonSlug: selectedAssignment.lessonSlug || undefined,
         targetUserId: selectedAssignment.targetUserId || undefined,
@@ -536,7 +543,11 @@ export default function AgentHub() {
                       disabled={sending || !canApplyCurriculum}
                       className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-60"
                     >
-                      {latestCurriculumDraft ? 'Apply latest draft' : 'Generate and apply'}
+                      {latestCurriculumDraft
+                        ? 'Apply latest draft'
+                        : latestCourseGeneration
+                        ? 'Apply generated outline'
+                        : 'Generate and apply'}
                     </button>
                   </>
                 )}

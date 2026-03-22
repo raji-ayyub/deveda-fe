@@ -32,6 +32,8 @@ export interface UserCourse {
   difficulty: string;
   progress: number;
   completed: boolean;
+  completedLessonSlugs?: string[];
+  currentLessonSlug?: string | null;
   lastAccessed: string | null;
   enrolledAt: string;
 }
@@ -92,6 +94,9 @@ export interface CourseCatalog {
 export interface CourseCurriculumLesson {
   title: string;
   slug: string;
+  libraryLessonSlug?: string | null;
+  source?: string;
+  generationStatus?: 'planned' | 'generated' | string;
   summary: string;
   durationMinutes: number;
   contentType: string;
@@ -99,7 +104,9 @@ export interface CourseCurriculumLesson {
   quizTitle?: string | null;
   learningObjectives?: string[];
   keyTakeaways?: string[];
+  learningFlow?: string[];
   contentMarkdown?: string;
+  visualAidMarkdown?: string | null;
   practicePrompt?: string | null;
   instructorNotes?: string | null;
   playground?: LessonPlayground | null;
@@ -125,6 +132,8 @@ export interface CourseCurriculumModule {
   title: string;
   description: string;
   order: number;
+  source?: string;
+  generationStatus?: 'planned' | 'generated' | string;
   lessons: CourseCurriculumLesson[];
   assessmentTitle?: string | null;
   assessmentQuizId?: string | null;
@@ -143,6 +152,8 @@ export interface CourseCurriculum {
   id: string;
   courseSlug: string;
   overview: string;
+  learningFlow: string[];
+  visualAidMarkdown?: string;
   modules: CourseCurriculumModule[];
   milestoneProjects: MilestoneProject[];
   updatedAt: string;
@@ -403,6 +414,96 @@ export interface AgentArtifact {
   createdAt: string;
 }
 
+export interface LessonContentPlanPayload {
+  courseSlug: string;
+  lessonSlug: string;
+  moduleTitle: string;
+  lessonTitle: string;
+  instruction?: string;
+  learnerPromise?: string;
+  planningNotes?: string[];
+  sectionOutline?: string[];
+  recommendedObjectives?: string[];
+  bestPractices?: string[];
+  practiceArc?: string[];
+  playgroundMode?: 'web' | 'javascript';
+  playgroundBrief?: string;
+  summary?: string;
+}
+
+export interface GeneratedLessonContentPayload {
+  courseSlug: string;
+  lessonSlug: string;
+  moduleTitle: string;
+  lesson: CourseCurriculumLesson;
+  plan?: LessonContentPlanPayload;
+  instruction?: string;
+}
+
+export interface CourseContentPlanModuleBlueprint {
+  title: string;
+  order: number;
+  goal: string;
+  lessonCount: number;
+  deliveryPattern: string[];
+  lessonBlueprints: {
+    title: string;
+    goal: string;
+  }[];
+}
+
+export interface CourseContentPlanPayload {
+  courseSlug: string;
+  courseTitle: string;
+  instruction?: string;
+  backgroundAgents?: string[];
+  planningNotes?: string[];
+  moduleBlueprints?: CourseContentPlanModuleBlueprint[];
+  milestoneStrategy?: string[];
+}
+
+export interface GeneratedCourseContentPayload {
+  courseSlug: string;
+  instruction?: string;
+  planningNotes?: string[];
+  courseContext?: Record<string, unknown>;
+  curriculum: Pick<CourseCurriculum, 'courseSlug' | 'overview' | 'learningFlow' | 'visualAidMarkdown' | 'modules' | 'milestoneProjects'>;
+}
+
+export interface CourseCatalogDraftPayload {
+  slug: string;
+  title: string;
+  description: string;
+  category: string;
+  difficulty: string;
+  duration: number;
+  totalLessons: number;
+  totalQuizzes: number;
+  instructor: string;
+  prerequisites: string[];
+  tags: string[];
+}
+
+export interface GeneratedModuleContentPayload {
+  courseSlug: string;
+  moduleOrder: number;
+  module: CourseCurriculumModule;
+  instruction?: string;
+}
+
+export interface GeneratedQuestionContentPayload {
+  quizId: string;
+  question: string;
+  options: string[];
+  correctAnswer: string;
+  explanation: string;
+  points: number;
+  timeLimit: number;
+  questionType: string;
+  difficulty: string;
+  isActive: boolean;
+}
+
 export interface AgentRequestPayload {
   agentType: string;
   displayName?: string;
@@ -434,10 +535,116 @@ export interface AgentMessagePayload {
 }
 
 export interface AgentActionPayload {
-  actionType: 'create_course_shell' | 'create_curriculum_draft' | 'apply_curriculum_to_course' | 'save_planning_note' | 'suggest_lesson_content';
+  actionType:
+    | 'draft_course_catalog'
+    | 'create_course_shell'
+    | 'create_curriculum_draft'
+    | 'apply_curriculum_to_course'
+    | 'save_planning_note'
+    | 'suggest_lesson_content'
+    | 'plan_lesson_content'
+    | 'generate_lesson_content'
+    | 'plan_course_content'
+    | 'generate_course_content'
+    | 'generate_module_content'
+    | 'generate_question_content';
   artifactId?: string;
   courseSlug?: string;
   lessonSlug?: string;
+  moduleOrder?: number;
+  questionCount?: number;
   targetUserId?: string;
   instruction?: string;
+  draftPayload?: Record<string, unknown>;
+}
+
+export interface LessonCourseRef {
+  courseSlug: string;
+  courseTitle: string;
+  moduleTitle: string;
+  moduleOrder: number;
+  lessonSlug: string;
+}
+
+export interface LessonLibraryItem {
+  id: string;
+  slug: string;
+  title: string;
+  summary: string;
+  durationMinutes: number;
+  contentType: string;
+  source?: string;
+  learningObjectives?: string[];
+  keyTakeaways?: string[];
+  learningFlow?: string[];
+  visualAidMarkdown?: string;
+  courseRefs: LessonCourseRef[];
+  updatedAt?: string;
+  accessStatus: 'available' | 'locked' | 'draft';
+  entryRoute?: string | null;
+}
+
+export interface ContentIngestionResult {
+  intent: 'course' | 'lesson' | 'quiz' | 'question_bank';
+  fileName: string;
+  extractedTextPreview: string;
+  summary: string;
+  course: CourseCatalog | null;
+  curriculum: CourseCurriculum | null;
+  lessons: LessonLibraryItem[];
+  questions: QuizQuestion[];
+  stats: {
+    lessonCount: number;
+    questionCount: number;
+    quizCount: number;
+  };
+}
+
+export interface ContentGenerationScanModule {
+  order: number;
+  title: string;
+  description: string;
+  lessonCount: number;
+  lessonTitles: string[];
+  estimatedQuestionCount: number;
+}
+
+export interface ContentGenerationScan {
+  summary: string;
+  recommendedCourse: {
+    title: string;
+    description: string;
+    category: string;
+    difficulty: string;
+    tags: string[];
+  };
+  overview: string;
+  learningFlow: string[];
+  visualAidMarkdown: string;
+  modules: ContentGenerationScanModule[];
+  milestoneProjects: MilestoneProject[];
+}
+
+export interface ContentGenerationSession {
+  id: string;
+  intent: 'course';
+  status: string;
+  fileName: string;
+  courseSlug?: string | null;
+  sourcePreview: string;
+  summary: string;
+  scan: ContentGenerationScan;
+  generation: {
+    shellCreated?: boolean;
+    generatedModules?: number[];
+    generatedQuestionModules?: number[];
+  };
+  course?: {
+    slug: string;
+    title: string;
+  } | null;
+  curriculum?: CourseCurriculum | null;
+  generatedQuestions?: QuizQuestion[];
+  createdAt?: string;
+  updatedAt?: string;
 }

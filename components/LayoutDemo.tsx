@@ -1,7 +1,8 @@
 // components/LayoutDemo.tsx
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
+import ConfirmationDialog from '@/components/ui/ConfirmationDialog';
 
 interface Box {
   id: string;
@@ -27,6 +28,8 @@ export default function LayoutDemo() {
   const [bgImage, setBgImage] = useState<string>('');
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
+  const [copyMessage, setCopyMessage] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
   const dragStartPos = useRef({ x: 0, y: 0 });
   const boxStartPos = useRef({ left: 0, top: 0, width: 0, height: 0 });
@@ -36,24 +39,6 @@ export default function LayoutDemo() {
     { label: 'Medium', width: 120, height: 72 },
     { label: 'Large', width: 180, height: 110 },
   ];
-
-  useEffect(() => {
-    // Load saved data from localStorage
-    const savedBoxes = localStorage.getItem('layout_demo_boxes');
-    const savedImage = localStorage.getItem('layout_demo_image');
-    
-    if (savedBoxes) {
-      setBoxes(JSON.parse(savedBoxes));
-    }
-    if (savedImage) {
-      setBgImage(savedImage);
-    }
-  }, []);
-
-  useEffect(() => {
-    // Save boxes to localStorage
-    localStorage.setItem('layout_demo_boxes', JSON.stringify(boxes));
-  }, [boxes]);
 
   const generateId = () => `box-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
@@ -94,7 +79,6 @@ export default function LayoutDemo() {
     reader.onload = (event) => {
       const dataUrl = event.target?.result as string;
       setBgImage(dataUrl);
-      localStorage.setItem('layout_demo_image', dataUrl);
     };
     reader.readAsDataURL(file);
   };
@@ -174,17 +158,15 @@ export default function LayoutDemo() {
   };
 
   const clearAll = () => {
-    if (confirm('Remove all boxes and clear saved layout?')) {
-      setBoxes([]);
-      setBgImage('');
-      localStorage.removeItem('layout_demo_boxes');
-      localStorage.removeItem('layout_demo_image');
-    }
+    setBoxes([]);
+    setBgImage('');
+    setConfirmClear(false);
   };
 
   const copyToClipboard = async () => {
     await navigator.clipboard.writeText(output || generateHTML());
-    alert('Copied to clipboard!');
+    setCopyMessage('Layout markup copied to clipboard.');
+    window.setTimeout(() => setCopyMessage(''), 2400);
   };
 
   return (
@@ -194,7 +176,7 @@ export default function LayoutDemo() {
         <div className="flex flex-wrap gap-4 mb-4 items-center">
           <label className="relative">
             <span className="cursor-pointer px-4 py-2 border border-gray-300 rounded-lg bg-white hover:bg-gray-50 transition-colors flex items-center gap-2">
-              📁 Choose Image
+              Choose Image
             </span>
             <input
               type="file"
@@ -205,7 +187,7 @@ export default function LayoutDemo() {
           </label>
           
           <button
-            onClick={clearAll}
+            onClick={() => setConfirmClear(true)}
             className="px-4 py-2 border border-gray-300 rounded-lg bg-white hover:bg-gray-50 transition-colors"
           >
             Clear Layout
@@ -219,6 +201,7 @@ export default function LayoutDemo() {
             Click on a box to rename its class.
           </div>
         </div>
+        {copyMessage ? <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{copyMessage}</div> : null}
 
         {/* Preview Area */}
         <div
@@ -330,6 +313,15 @@ export default function LayoutDemo() {
           {output || '// Click "Show HTML Structure" to generate code'}
         </pre>
       </div>
+      <ConfirmationDialog
+        isOpen={confirmClear}
+        title="Clear layout"
+        description="Remove all layout boxes and the selected background image from the demo canvas?"
+        confirmLabel="Clear layout"
+        tone="neutral"
+        onCancel={() => setConfirmClear(false)}
+        onConfirm={clearAll}
+      />
     </div>
   );
 }

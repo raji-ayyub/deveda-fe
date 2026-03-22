@@ -16,12 +16,15 @@ import {
   AuthSession,
   ChartData,
   CloudinaryUploadSignature,
+  ContentGenerationSession,
+  ContentIngestionResult,
   CourseCatalog,
   CourseCurriculum,
   CourseEnrollment,
   CourseProgressResponse,
   CourseWithDetails,
   LoginCredentials,
+  LessonLibraryItem,
   PasswordChangePayload,
   PrivateAdminRegistration,
   QuestionWithDetails,
@@ -38,8 +41,8 @@ import {
   QuizAttemptSubmission,
 } from './types';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-// const API_BASE_URL ='http://localhost:8000';
+// const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_BASE_URL = 'http://localhost:8000';
 
 
 
@@ -51,7 +54,7 @@ class ApiService {
 
   constructor() {
     if (typeof window !== 'undefined') {
-      this.token = localStorage.getItem(TOKEN_STORAGE_KEY);
+      this.token = sessionStorage.getItem(TOKEN_STORAGE_KEY);
     }
   }
 
@@ -64,6 +67,14 @@ class ApiService {
       headers.Authorization = `Bearer ${this.token}`;
     }
 
+    return headers;
+  }
+
+  private getUploadHeaders(): HeadersInit {
+    const headers: HeadersInit = {};
+    if (this.token) {
+      headers.Authorization = `Bearer ${this.token}`;
+    }
     return headers;
   }
 
@@ -86,7 +97,7 @@ class ApiService {
       return null;
     }
 
-    const stored = localStorage.getItem(USER_STORAGE_KEY);
+    const stored = sessionStorage.getItem(USER_STORAGE_KEY);
     if (!stored) {
       return null;
     }
@@ -125,19 +136,19 @@ class ApiService {
     this.token = session.accessToken || null;
     if (typeof window !== 'undefined') {
       if (session.accessToken) {
-        localStorage.setItem(TOKEN_STORAGE_KEY, session.accessToken);
+        sessionStorage.setItem(TOKEN_STORAGE_KEY, session.accessToken);
       } else {
-        localStorage.removeItem(TOKEN_STORAGE_KEY);
+        sessionStorage.removeItem(TOKEN_STORAGE_KEY);
       }
-      localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(session.user));
+      sessionStorage.setItem(USER_STORAGE_KEY, JSON.stringify(session.user));
     }
   }
 
   private clearSession() {
     this.token = null;
     if (typeof window !== 'undefined') {
-      localStorage.removeItem(TOKEN_STORAGE_KEY);
-      localStorage.removeItem(USER_STORAGE_KEY);
+      sessionStorage.removeItem(TOKEN_STORAGE_KEY);
+      sessionStorage.removeItem(USER_STORAGE_KEY);
     }
   }
 
@@ -293,7 +304,7 @@ class ApiService {
     const result = await this.handleResponse<User>(response);
 
     if (typeof window !== 'undefined') {
-      localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(result.data));
+      sessionStorage.setItem(USER_STORAGE_KEY, JSON.stringify(result.data));
     }
 
     return result;
@@ -374,9 +385,16 @@ class ApiService {
     return this.handleResponse<CourseCurriculum>(response);
   }
 
+  async getLessonLibrary(): Promise<ApiResponse<LessonLibraryItem[]>> {
+    const response = await fetch(`${API_BASE_URL}/lessons/library`, {
+      headers: this.getUploadHeaders(),
+    });
+    return this.handleResponse<LessonLibraryItem[]>(response);
+  }
+
   async updateCourseCurriculum(
     slug: string,
-    payload: Pick<CourseCurriculum, 'overview' | 'modules' | 'milestoneProjects'>
+    payload: Pick<CourseCurriculum, 'overview' | 'learningFlow' | 'visualAidMarkdown' | 'modules' | 'milestoneProjects'>
   ): Promise<ApiResponse<CourseCurriculum>> {
     const response = await fetch(`${API_BASE_URL}/courses/catalog/${slug}/curriculum`, {
       method: 'PUT',
@@ -406,12 +424,21 @@ class ApiService {
     userId: string,
     courseSlug: string,
     progress: number,
-    completed?: boolean
+    completed?: boolean,
+    options?: {
+      completedLessonSlugs?: string[];
+      currentLessonSlug?: string | null;
+    }
   ): Promise<ApiResponse<CourseProgressResponse>> {
     const response = await fetch(`${API_BASE_URL}/users/${userId}/courses/${courseSlug}/progress`, {
       method: 'PATCH',
       headers: this.getHeaders(),
-      body: JSON.stringify({ progress, completed }),
+      body: JSON.stringify({
+        progress,
+        completed,
+        completedLessonSlugs: options?.completedLessonSlugs,
+        currentLessonSlug: options?.currentLessonSlug,
+      }),
     });
     return this.handleResponse<CourseProgressResponse>(response);
   }
@@ -643,6 +670,76 @@ class ApiService {
       body: JSON.stringify(payload),
     });
     return this.handleResponse<AgentArtifact>(response);
+  }
+
+  async ingestLearningContent(payload: {
+    intent: 'course' | 'lesson' | 'quiz' | 'question_bank';
+    file: File;
+    courseSlug?: string;
+    instructions?: string;
+  }): Promise<ApiResponse<ContentIngestionResult>> {
+    const body = new FormData();
+    body.append('intent', payload.intent);
+    body.append('sourceFile', payload.file);
+    if (payload.courseSlug) {
+      body.append('courseSlug', payload.courseSlug);
+    }
+    if (payload.instructions) {
+      body.append('instructions', payload.instructions);
+    }
+
+    const response = await fetch(`${API_BASE_URL}/content/intake`, {
+      method: 'POST',
+      headers: this.getUploadHeaders(),
+      body,
+    });
+    return this.handleResponse<ContentIngestionResult>(response);
+  }
+
+  async uploadContentGenerationSession(payload: {
+    file: File;
+    courseSlug?: string;
+    instructions?: string;
+  }): Promise<ApiResponse<ContentGenerationSession>> {
+    const body = new FormData();
+    body.append('sourceFile', payload.file);
+    if (payload.courseSlug) {
+      body.append('courseSlug', payload.courseSlug);
+    }
+    if (payload.instructions) {
+      body.append('instructions', payload.instructions);
+    }
+
+    const response = await fetch(`${API_BASE_URL}/content/intake/sessions/upload`, {
+      method: 'POST',
+      headers: this.getUploadHeaders(),
+      body,
+    });
+    return this.handleResponse<ContentGenerationSession>(response);
+  }
+
+  async getContentGenerationSession(sessionId: string): Promise<ApiResponse<ContentGenerationSession>> {
+    const response = await fetch(`${API_BASE_URL}/content/intake/sessions/${sessionId}`, {
+      headers: this.getHeaders(),
+    });
+    return this.handleResponse<ContentGenerationSession>(response);
+  }
+
+  async runContentGenerationAction(
+    sessionId: string,
+    payload: {
+      actionType: 'create_course_shell' | 'generate_overview' | 'generate_module' | 'generate_questions';
+      moduleOrder?: number;
+      questionCount?: number;
+      instructions?: string;
+    }
+  ): Promise<ApiResponse<ContentGenerationSession>> {
+    const response = await fetch(`${API_BASE_URL}/content/intake/sessions/${sessionId}/actions`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify(payload),
+    });
+    return this.handleResponse<ContentGenerationSession>(response);
   }
 }
 

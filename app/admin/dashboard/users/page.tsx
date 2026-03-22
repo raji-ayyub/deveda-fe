@@ -22,6 +22,7 @@ import {
   Users,
   X
 } from 'lucide-react';
+import ConfirmationDialog from '@/components/ui/ConfirmationDialog';
 
 const UsersManagementPage: React.FC = () => {
   const [users, setUsers] = useState<UserWithDetails[]>([]);
@@ -34,6 +35,8 @@ const UsersManagementPage: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [usersPerPage] = useState(10);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [deleteUserId, setDeleteUserId] = useState<string | null>(null);
+  const [pageError, setPageError] = useState('');
   const [creatingUser, setCreatingUser] = useState(false);
   const [createError, setCreateError] = useState('');
   const [createForm, setCreateForm] = useState({
@@ -55,10 +58,12 @@ const UsersManagementPage: React.FC = () => {
   const loadUsers = async () => {
     try {
       setLoading(true);
+      setPageError('');
       const response = await api.getUsersWithDetails();
       setUsers(response.data);
     } catch (error) {
       console.error('Failed to load users:', error);
+      setPageError('Unable to load users right now.');
     } finally {
       setLoading(false);
     }
@@ -101,15 +106,13 @@ const UsersManagementPage: React.FC = () => {
   };
 
   const deleteUser = async (userId: string) => {
-    if (!confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
-      return;
-    }
-
     try {
       await api.deleteUser(userId);
       setUsers(users.filter(user => user.id !== userId));
+      setDeleteUserId(null);
     } catch (error) {
       console.error('Failed to delete user:', error);
+      setPageError('Unable to delete the selected user right now.');
     }
   };
 
@@ -238,7 +241,6 @@ const UsersManagementPage: React.FC = () => {
             <option value="Admin">Admin</option>
             <option value="Instructor">Instructor</option>
             <option value="Student">Student</option>
-            <option value="User">User</option>
           </select>
 
           {/* Status Filter */}
@@ -264,6 +266,9 @@ const UsersManagementPage: React.FC = () => {
       </div>
 
       {/* Users Table */}
+      {pageError ? (
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{pageError}</div>
+      ) : null}
       <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
         {/* Table Header */}
         <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
@@ -381,7 +386,7 @@ const UsersManagementPage: React.FC = () => {
                         <Edit className="w-4 h-4 text-gray-500 hover:text-blue-600" />
                       </button>
                       <button
-                        onClick={() => deleteUser(user.id)}
+                        onClick={() => setDeleteUserId(user.id)}
                         className="p-1 hover:bg-gray-100 rounded"
                         title="Delete"
                       >
@@ -535,6 +540,19 @@ const UsersManagementPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      <ConfirmationDialog
+        isOpen={Boolean(deleteUserId)}
+        title="Delete user"
+        description="This will remove the user account and the related learning records tied to it. This action cannot be undone."
+        confirmLabel="Delete user"
+        onCancel={() => setDeleteUserId(null)}
+        onConfirm={() => {
+          if (deleteUserId) {
+            void deleteUser(deleteUserId);
+          }
+        }}
+      />
     </div>
   );
 };

@@ -12,12 +12,14 @@ import {
   Clock,
   CheckCircle,
   BarChart3,
+  LibraryBig,
   Loader2
 } from 'lucide-react';
 import { CourseModal } from '@/components/dashboard/courses';
 import {CourseRow} from '@/components/dashboard/courses';
 import {Filters} from '@/components/dashboard/courses';
 import {StatsCard} from '@/components/dashboard/courses';
+import ConfirmationDialog from '@/components/ui/ConfirmationDialog';
 
 const CoursesManagementPage: React.FC = () => {
   const router = useRouter();
@@ -33,6 +35,7 @@ const CoursesManagementPage: React.FC = () => {
   const [editingCourse, setEditingCourse] = useState<CourseCatalog | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const [pendingDeleteCourseSlug, setPendingDeleteCourseSlug] = useState<string | null>(null);
   const [stats, setStats] = useState({
     totalCourses: 0,
     averageDuration: 0,
@@ -121,7 +124,7 @@ const CoursesManagementPage: React.FC = () => {
       }
     } catch (error) {
       console.error('Failed to create course:', error);
-      alert('Failed to create course. Please try again.');
+      setError('Failed to create the course. Please try again.');
     } finally {
       setActionLoading(null);
     }
@@ -147,25 +150,60 @@ const CoursesManagementPage: React.FC = () => {
       }
     } catch (error) {
       console.error('Failed to update course:', error);
-      alert('Failed to update course. Please try again.');
+      setError('Failed to update the course. Please try again.');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleStartCourseImport = async (payload: { file: File; instructions: string; courseSlug?: string }) => {
+    try {
+      setActionLoading('import');
+      setError('');
+      const sessionResponse = await api.uploadContentGenerationSession({
+        file: payload.file,
+        courseSlug: payload.courseSlug,
+        instructions: payload.instructions,
+      });
+
+      let session = sessionResponse.data;
+      if (!payload.courseSlug) {
+        const shellResponse = await api.runContentGenerationAction(session.id, {
+          actionType: 'create_course_shell',
+          instructions: payload.instructions,
+        });
+        session = shellResponse.data;
+      }
+
+      setShowCreateModal(false);
+      setShowEditModal(false);
+      setEditingCourse(null);
+      await loadCourses();
+
+      const courseSlug = session.courseSlug || session.course?.slug || payload.courseSlug || '';
+      const query = new URLSearchParams();
+      if (courseSlug) {
+        query.set('course', courseSlug);
+      }
+      query.set('session', session.id);
+      router.push(`${cmsRouteBase}?${query.toString()}`);
+    } catch (importError: any) {
+      throw new Error(importError.message || 'Unable to start the course import flow right now.');
     } finally {
       setActionLoading(null);
     }
   };
 
   const handleDeleteCourse = async (courseSlug: string) => {
-    if (!confirm('Are you sure you want to delete this course? This action cannot be undone.')) {
-      return;
-    }
-
     try {
       setActionLoading(`delete-${courseSlug}`);
       setError('');
       await api.deleteCourseCatalog(courseSlug);
       setCourses(courses.filter(c => c.slug !== courseSlug));
+      setPendingDeleteCourseSlug(null);
     } catch (error) {
       console.error('Failed to delete course:', error);
-      alert('Failed to delete course. Please try again.');
+      setError('Failed to delete the course. Please try again.');
     } finally {
       setActionLoading(null);
     }
@@ -218,6 +256,13 @@ const CoursesManagementPage: React.FC = () => {
           <p className="text-gray-600">Manage the coding curriculum across frontend, backend, and systems design</p>
         </div>
         <div className="flex items-center space-x-3">
+          <button
+            onClick={() => router.push(pathname.startsWith('/instructor') ? '/instructor/dashboard/lessons' : '/admin/dashboard/lessons')}
+            className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            <LibraryBig className="w-4 h-4 mr-2" />
+            Manage lessons
+          </button>
           <button
             onClick={loadCourses}
             className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50"
@@ -312,7 +357,7 @@ const CoursesManagementPage: React.FC = () => {
                 setEditingCourse(course);
                 setShowEditModal(true);
               }}
-              onDelete={handleDeleteCourse}
+              onDelete={(courseSlug) => setPendingDeleteCourseSlug(courseSlug)}
               onOpenStudio={openCurriculumStudio}
               actionLoading={actionLoading}
               getDifficultyColor={getDifficultyColor}
@@ -368,7 +413,9 @@ const CoursesManagementPage: React.FC = () => {
             (data, options) => handleUpdateCourse(editingCourse.slug, data, options) : 
             handleCreateCourse
           }
+          onStartImport={handleStartCourseImport}
           loading={actionLoading === 'create' || actionLoading === 'update'}
+          importing={actionLoading === 'import'}
           onClose={() => {
             setShowCreateModal(false);
             setShowEditModal(false);
@@ -376,6 +423,20 @@ const CoursesManagementPage: React.FC = () => {
           }}
         />
       )}
+
+      <ConfirmationDialog
+        isOpen={Boolean(pendingDeleteCourseSlug)}
+        title="Delete course"
+        description="This will remove the course, its curriculum, linked lessons, enrollments, and generated assessment data. This action cannot be undone."
+        confirmLabel="Delete course"
+        busy={Boolean(pendingDeleteCourseSlug && actionLoading === `delete-${pendingDeleteCourseSlug}`)}
+        onCancel={() => setPendingDeleteCourseSlug(null)}
+        onConfirm={() => {
+          if (pendingDeleteCourseSlug) {
+            void handleDeleteCourse(pendingDeleteCourseSlug);
+          }
+        }}
+      />
     </div>
   );
 };

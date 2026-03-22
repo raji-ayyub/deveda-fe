@@ -1,183 +1,145 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { AlertCircle, ArrowRight, BookOpen, Loader2, Trophy } from 'lucide-react';
+
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
-import { QuizQuestion, CourseCatalog } from '@/lib/types';
-import {
-  BookOpen,
-  Trophy,
-  Clock,
-  ArrowRight,
-  AlertCircle,
-} from 'lucide-react';
+import { CourseCatalog, QuizWithDetails } from '@/lib/types';
 
-type QuizSummary = {
-  quizId: string;
-  title: string;
-  courseSlug?: string;
-  difficulty?: string;
-  questionCount: number;
-};
+function findCourseForQuiz(quizId: string, courses: CourseCatalog[]): CourseCatalog | null {
+  const matches = courses
+    .filter((course) => quizId.startsWith(course.slug))
+    .sort((left, right) => right.slug.length - left.slug.length);
+  return matches[0] || null;
+}
 
-const QuizListPage: React.FC = () => {
+export default function QuizListPage() {
   const router = useRouter();
   const { user } = useAuth();
-
-  const [quizzes, setQuizzes] = useState<QuizSummary[]>([]);
+  const [quizzes, setQuizzes] = useState<QuizWithDetails[]>([]);
   const [courses, setCourses] = useState<CourseCatalog[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    loadQuizzes();
+    const loadQuizzes = async () => {
+      try {
+        setLoading(true);
+        setError('');
+        const [quizResponse, courseResponse] = await Promise.all([api.getQuizzes(), api.getCourseCatalog()]);
+        setQuizzes(quizResponse.data);
+        setCourses(courseResponse.data);
+      } catch (loadError: any) {
+        setError(loadError.message || 'Unable to load quizzes right now.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    void loadQuizzes();
   }, []);
 
-  const loadQuizzes = async () => {
-    try {
-      setLoading(true);
-
-      // Fetch all quiz questions
-      const questionRes = await api.getAllQuizQuestions();
-      const questions: QuizQuestion[] = questionRes.data;
-
-      // Group questions by quizId
-      const quizMap: Record<string, QuizQuestion[]> = {};
-      questions.forEach(q => {
-        if (!quizMap[q.quizId]) quizMap[q.quizId] = [];
-        quizMap[q.quizId].push(q);
-      });
-
-      // Fetch course catalog
-      const catalogRes = await api.getCourseCatalog();
-      setCourses(catalogRes.data || []);
-
-      const summaries: QuizSummary[] = Object.entries(quizMap).map(
-        ([quizId, qs]) => {
-          const courseSlug = quizId.split('_')[0];
-          const course = catalogRes.data?.find(
-            (c: CourseCatalog) => c.slug === courseSlug
-          );
-
-          return {
-            quizId,
-            title: course ? `${course.title} Quiz` : quizId.replace(/_/g, ' '),
-            courseSlug,
-            difficulty: course?.difficulty,
-            questionCount: qs.length,
-          };
-        }
-      );
-
-      setQuizzes(summaries);
-    } catch (err) {
-      console.error('Failed to load quizzes', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const getDifficultyColor = (difficulty?: string) => {
-    switch (difficulty) {
-      case 'Beginner':
-        return 'bg-green-100 text-green-800';
-      case 'Intermediate':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'Advanced':
-        return 'bg-red-100 text-red-800';
-      default:
-        return 'bg-gray-100 text-gray-700';
-    }
-  };
+  const summaries = useMemo(() => {
+    return quizzes.map((quiz) => {
+      const linkedCourse = quiz.courseSlug ? courses.find((course) => course.slug === quiz.courseSlug) : findCourseForQuiz(quiz.id, courses);
+      return {
+        ...quiz,
+        linkedCourse,
+      };
+    });
+  }, [courses, quizzes]);
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-blue-50">
+      <div className="flex min-h-screen items-center justify-center bg-slate-50">
         <div className="text-center">
-          <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto" />
-          <p className="mt-4 text-gray-600">Loading quizzes...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (quizzes.length === 0) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-blue-50">
-        <div className="text-center max-w-md">
-          <AlertCircle className="w-16 h-16 text-gray-300 mx-auto" />
-          <h2 className="text-2xl font-bold text-gray-900 mt-4">
-            No Quizzes Available
-          </h2>
-          <p className="text-gray-600 mt-2">
-            Quizzes will appear here once they are created.
-          </p>
+          <Loader2 className="mx-auto h-10 w-10 animate-spin text-blue-700" />
+          <p className="mt-3 text-sm text-slate-600">Loading quizzes...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 py-10 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-10">
-          <h1 className="text-3xl font-bold text-gray-900">Quizzes</h1>
-          <p className="text-gray-600 mt-2">
-            Test your knowledge and track your progress
+    <div className="min-h-screen bg-[linear-gradient(180deg,#f8fafc_0%,#ffffff_45%,#eef2ff_100%)] px-4 py-8 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl space-y-6">
+        <section className="rounded-[32px] border border-slate-200 bg-white p-8 shadow-2xl shadow-slate-200">
+          <h1 className="text-3xl font-black tracking-tight text-slate-950">Quiz library</h1>
+          <p className="mt-3 max-w-3xl text-sm text-slate-600">
+            Take live assessment checkpoints backed by the current question bank. Logged-in student accounts can save attempts back to course progress.
           </p>
-        </div>
-
-        {/* Quiz Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-          {quizzes.map(quiz => (
-            <div
-              key={quiz.quizId}
-              className="bg-white rounded-2xl shadow-lg p-6 flex flex-col justify-between"
-            >
-              <div>
-                <div className="flex items-center justify-between mb-4">
-                  <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-500 rounded-lg flex items-center justify-center">
-                    <Trophy className="w-6 h-6 text-white" />
-                  </div>
-                  <span
-                    className={`px-3 py-1 rounded-full text-sm font-medium ${getDifficultyColor(
-                      quiz.difficulty
-                    )}`}
-                  >
-                    {quiz.difficulty || 'Mixed'}
-                  </span>
-                </div>
-
-                <h3 className="text-xl font-bold text-gray-900 mb-2">
-                  {quiz.title}
-                </h3>
-
-                <div className="space-y-2 text-sm text-gray-600">
-                  <div className="flex items-center">
-                    <BookOpen className="w-4 h-4 mr-2" />
-                    {quiz.questionCount} Questions
-                  </div>
-                  <div className="flex items-center">
-                    <Clock className="w-4 h-4 mr-2" />
-                    30 Minutes
-                  </div>
-                </div>
-              </div>
-
-              <button
-                onClick={() => router.push(`/quiz/${quiz.quizId}`)}
-                className="mt-6 flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-lg font-medium hover:opacity-90 transition-opacity"
-              >
-                Start Quiz
-                <ArrowRight className="w-4 h-4" />
-              </button>
+          {!user ? (
+            <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-600">
+              You can preview quizzes without signing in, but attempts only count toward course progress for signed-in student accounts.
             </div>
-          ))}
-        </div>
+          ) : user.role !== 'Student' ? (
+            <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-600">
+              Your current role can review quizzes here, but quiz attempts are only stored for student accounts.
+            </div>
+          ) : null}
+        </section>
+
+        {error ? (
+          <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>
+        ) : null}
+
+        {summaries.length === 0 ? (
+          <section className="rounded-[28px] border border-slate-200 bg-white px-6 py-14 text-center shadow-lg shadow-slate-100">
+            <AlertCircle className="mx-auto h-12 w-12 text-slate-300" />
+            <h2 className="mt-4 text-xl font-bold text-slate-950">No quizzes available yet</h2>
+            <p className="mt-2 text-sm text-slate-600">Quiz items will appear here as soon as questions are published to the bank.</p>
+          </section>
+        ) : (
+          <section className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+            {summaries.map((quiz) => (
+              <article key={quiz.id} className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-lg shadow-slate-100">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="rounded-2xl bg-blue-50 p-3 text-blue-700">
+                    <Trophy className="h-5 w-5" />
+                  </div>
+                  <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                    {quiz.totalQuestions || 0} questions
+                  </div>
+                </div>
+
+                <h2 className="mt-5 text-xl font-bold text-slate-950">{quiz.title}</h2>
+                <p className="mt-2 text-sm text-slate-600">Quiz ID: {quiz.id}</p>
+
+                {quiz.linkedCourse ? (
+                  <div className="mt-4 rounded-2xl bg-slate-50 px-4 py-4 text-sm text-slate-700">
+                    <div className="font-semibold text-slate-950">{quiz.linkedCourse.title}</div>
+                    <div className="mt-1">{quiz.linkedCourse.category} / {quiz.linkedCourse.difficulty}</div>
+                  </div>
+                ) : (
+                  <div className="mt-4 rounded-2xl border border-slate-200 px-4 py-4 text-sm text-slate-600">
+                    This quiz is not currently linked to a course card.
+                  </div>
+                )}
+
+                <div className="mt-6 flex gap-3">
+                  <button
+                    onClick={() => router.push(`/quiz/${quiz.id}`)}
+                    className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
+                  >
+                    Start quiz
+                    <ArrowRight className="h-4 w-4" />
+                  </button>
+                  {quiz.linkedCourse ? (
+                    <button
+                      onClick={() => router.push(`/courses/${quiz.linkedCourse!.slug}`)}
+                      className="inline-flex items-center justify-center rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700"
+                    >
+                      <BookOpen className="h-4 w-4" />
+                    </button>
+                  ) : null}
+                </div>
+              </article>
+            ))}
+          </section>
+        )}
       </div>
     </div>
   );
-};
-
-export default QuizListPage;
+}

@@ -1,368 +1,187 @@
-// Main Dashboard Page - Fixed for Next.js
+'use client';
+
 import Link from 'next/link';
-import { 
-  BookOpen, Code, Brain, GraduationCap, 
-  ArrowRight, Zap, Target, Users, 
-  Clock, TrendingUp, Award, Shield,
-  CheckCircle, Star, Globe, Terminal
-} from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { BookLock, BookOpen, Clock3, Loader2, Lock, Sparkles } from 'lucide-react';
 
-const LearningDashboard = () => {
-  const lessons = [
-    {
-      id: 1,
-      title: "CSS Flexbox",
-      description: "Master modern CSS layout with Flexbox",
-      icon: <Globe className="w-8 h-8" />,
-      color: "from-blue-500 to-cyan-500",
-      duration: "25 min",
-      difficulty: "Beginner",
-      completed: false,
-      link: "/lessons/flexbox"
-    },
-    {
-      id: 2,
-      title: "Async API Basics",
-      description: "Learn how to make asynchronous API calls with JavaScript",
-      icon: <Code className="w-8 h-8" />,
-      color: "from-green-500 to-emerald-500",
-      duration: "20 min",
-      difficulty: "Beginner",
-      completed: false,
-      link: "/lessons/async-api"
-    },
-    {
-      id: 3,
-      title: "HTML & DOM Manipulation",
-      description: "Master DOM manipulation after fetching API data",
-      icon: <Brain className="w-8 h-8" />,
-      color: "from-purple-500 to-pink-500",
-      duration: "30 min",
-      difficulty: "Intermediate",
-      completed: false,
-      link: "/lessons/html-dom"
-    },
-    {
-      id: 4,
-      title: "CSS Grid Layout",
-      description: "Learn 2D layout system with CSS Grid",
-      icon: <Terminal className="w-8 h-8" />,
-      color: "from-orange-500 to-red-500",
-      duration: "35 min",
-      difficulty: "Intermediate",
-      completed: false,
-      link: "/lessons/css-grid"
-    }
-  ];
+import { useAuth } from '@/context/AuthContext';
+import { api } from '@/lib/api';
+import { LessonLibraryItem } from '@/lib/types';
 
-  const progress = {
-    completedLessons: 0,
-    totalLessons: 4,
-    score: 0,
-    streak: 1
-  };
+export default function LessonsPage() {
+  const router = useRouter();
+  const { user } = useAuth();
+  const [lessons, setLessons] = useState<LessonLibraryItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const loadLessons = async () => {
+      try {
+        setLoading(true);
+        setError('');
+        const response = await api.getLessonLibrary();
+        setLessons(response.data);
+      } catch (loadError: any) {
+        setError(loadError.message || 'Unable to load the lesson library right now.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadLessons();
+  }, []);
+
+  const stats = useMemo(
+    () => ({
+      total: lessons.length,
+      available: lessons.filter((lesson) => lesson.accessStatus === 'available').length,
+      locked: lessons.filter((lesson) => lesson.accessStatus === 'locked').length,
+    }),
+    [lessons]
+  );
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
-      {/* Header */}
-      <header className="bg-gradient-to-r from-blue-600 to-purple-600 text-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center">
-                <GraduationCap className="w-8 h-8" />
-              </div>
-              <div>
-                <h1 className="text-3xl font-bold">Web Development Learning Hub</h1>
-                <p className="text-blue-100">Master modern web technologies with interactive lessons</p>
-              </div>
-            </div>
-            <div className="flex items-center space-x-4">
-              <div className="text-right">
-                <div className="text-sm text-blue-200">Learning Streak</div>
-                <div className="text-xl font-bold flex items-center">
-                  <Zap className="w-5 h-5 mr-1 text-yellow-300" />
-                  {progress.streak} day
-                </div>
-              </div>
-              <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center">
-                <div className="text-lg font-bold">{progress.score}%</div>
-              </div>
-            </div>
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top,#dbeafe_0%,#f8fafc_45%,#eef2ff_100%)]">
+      <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
+        <section className="rounded-[32px] border border-slate-200 bg-[linear-gradient(135deg,#0f172a_0%,#1d4ed8_58%,#38bdf8_100%)] p-8 text-white shadow-2xl shadow-slate-300">
+          <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-100">
+            <Sparkles className="h-3.5 w-3.5" />
+            Lesson library
           </div>
-        </div>
-      </header>
+          <h1 className="mt-4 text-3xl font-black tracking-tight">Course-linked sub-lessons</h1>
+          <p className="mt-3 max-w-3xl text-sm text-slate-200">
+            Every lesson here belongs to a course path. If you are enrolled in the linked course, you can open the exact sub-lesson from here. If not, we will take you to the course so you can register first.
+          </p>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Welcome Section */}
-        <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-2xl p-8 mb-8 border border-blue-100">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">Welcome to Interactive Learning!</h2>
-              <p className="text-gray-600">Start your journey to master web development with hands-on lessons</p>
-            </div>
-            <div className="flex items-center space-x-2">
-              <div className="px-4 py-2 bg-white rounded-lg border border-gray-200">
-                <div className="text-sm text-gray-500">Your Progress</div>
-                <div className="text-lg font-bold text-blue-600">
-                  {progress.completedLessons}/{progress.totalLessons} Lessons
-                </div>
-              </div>
-            </div>
+          <div className="mt-6 grid gap-4 md:grid-cols-3">
+            <StatCard label="Published lessons" value={String(stats.total)} />
+            <StatCard label="Open for you" value={String(stats.available)} />
+            <StatCard label="Locked by enrollment" value={String(stats.locked)} />
           </div>
-        </div>
+        </section>
 
-        {/* Progress Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12">
-          <div className="bg-white rounded-xl p-6 shadow-lg border border-gray-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-sm text-gray-500">Completion Rate</div>
-                <div className="text-2xl font-bold text-gray-900">{progress.score}%</div>
-              </div>
-              <div className="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center">
-                <TrendingUp className="w-6 h-6 text-blue-500" />
+        <section className="mt-8">
+          {loading ? (
+            <div className="flex min-h-[320px] items-center justify-center rounded-[28px] border border-slate-200 bg-white">
+              <div className="text-center">
+                <Loader2 className="mx-auto h-8 w-8 animate-spin text-blue-700" />
+                <p className="mt-3 text-sm text-slate-600">Loading lesson library...</p>
               </div>
             </div>
-            <div className="mt-4">
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
-                  className="bg-gradient-to-r from-blue-500 to-cyan-500 h-2 rounded-full"
-                  style={{ width: `${progress.score}%` }}
-                />
-              </div>
+          ) : error ? (
+            <div className="rounded-[28px] border border-rose-200 bg-rose-50 px-6 py-5 text-sm text-rose-700">{error}</div>
+          ) : lessons.length === 0 ? (
+            <div className="rounded-[28px] border border-slate-200 bg-white px-6 py-12 text-center shadow-lg shadow-slate-100">
+              <BookLock className="mx-auto h-12 w-12 text-slate-300" />
+              <h2 className="mt-4 text-xl font-bold text-slate-950">No sub-lessons published yet</h2>
+              <p className="mt-2 text-sm text-slate-600">Imported course lessons will appear here as soon as the instructor publishes them into the curriculum.</p>
             </div>
-          </div>
+          ) : (
+            <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+              {lessons.map((lesson) => {
+                const primaryCourse = lesson.courseRefs[0];
+                const isAvailable = lesson.accessStatus === 'available';
+                const actionLabel = isAvailable ? 'Open lesson' : primaryCourse ? 'View course' : 'Locked';
 
-          <div className="bg-white rounded-xl p-6 shadow-lg border border-gray-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-sm text-gray-500">Time Available</div>
-                <div className="text-2xl font-bold text-gray-900">Flexible</div>
-              </div>
-              <div className="w-12 h-12 bg-green-50 rounded-lg flex items-center justify-center">
-                <Clock className="w-6 h-6 text-green-500" />
-              </div>
-            </div>
-            <div className="mt-4 text-sm text-gray-500">
-              <div className="flex items-center">
-                <CheckCircle className="w-4 h-4 text-green-500 mr-2" />
-                <span>Learn at your own pace</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl p-6 shadow-lg border border-gray-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-sm text-gray-500">Skill Level</div>
-                <div className="text-2xl font-bold text-gray-900">Beginner</div>
-              </div>
-              <div className="w-12 h-12 bg-yellow-50 rounded-lg flex items-center justify-center">
-                <Award className="w-6 h-6 text-yellow-500" />
-              </div>
-            </div>
-            <div className="mt-4 text-sm text-gray-500">
-              <div className="flex items-center">
-                <Star className="w-4 h-4 text-yellow-500 mr-2" />
-                <span>Start from basics</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl p-6 shadow-lg border border-gray-200">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-sm text-gray-500">First Goal</div>
-                <div className="text-2xl font-bold text-gray-900">CSS Flexbox</div>
-              </div>
-              <div className="w-12 h-12 bg-purple-50 rounded-lg flex items-center justify-center">
-                <Target className="w-6 h-6 text-purple-500" />
-              </div>
-            </div>
-            <div className="mt-4 text-sm text-gray-500">
-              <div className="flex items-center">
-                <Shield className="w-4 h-4 text-purple-500 mr-2" />
-                <span>Complete 1 lesson</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Learning Path */}
-        <div className="mb-12">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold text-gray-900">Your Learning Path</h2>
-            <div className="text-sm text-gray-500">
-              Start with any lesson - designed for beginners
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {lessons.map((lesson, index) => (
-              <Link
-                key={lesson.id}
-                href={lesson.link}
-                className="group relative block"
-              >
-                <div className={`bg-gradient-to-br ${lesson.color} rounded-2xl p-6 text-white h-full transform transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl`}>
-                  <div className="absolute top-4 right-4">
-                    <div className="px-3 py-1 bg-white/20 backdrop-blur-sm rounded-full text-xs">
-                      {lesson.difficulty}
+                return (
+                  <article key={lesson.id} className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-lg shadow-slate-100">
+                    <div className="border-b border-slate-100 bg-slate-50 px-5 py-4">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{lesson.contentType}</div>
+                          <h2 className="mt-2 text-xl font-bold text-slate-950">{lesson.title}</h2>
+                        </div>
+                        <div
+                          className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${
+                            isAvailable ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                          }`}
+                        >
+                          {isAvailable ? <BookOpen className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
+                          {isAvailable ? 'Available' : 'Locked'}
+                        </div>
+                      </div>
+                      <p className="mt-3 text-sm text-slate-600">{lesson.summary}</p>
                     </div>
-                  </div>
 
-                  <div className="mb-4">
-                    <div className={`w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center mb-4`}>
-                      {lesson.icon}
+                    <div className="space-y-4 px-5 py-5">
+                      <div className="flex items-center gap-2 text-sm text-slate-500">
+                        <Clock3 className="h-4 w-4 text-blue-700" />
+                        {lesson.durationMinutes} minutes
+                      </div>
+
+                      {lesson.courseRefs.length > 0 ? (
+                        <div className="space-y-2">
+                          <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Included in</div>
+                          {lesson.courseRefs.slice(0, 2).map((courseRef) => (
+                            <div key={`${lesson.id}-${courseRef.courseSlug}-${courseRef.lessonSlug}`} className="rounded-2xl bg-slate-50 px-3 py-3 text-sm text-slate-700">
+                              <div className="font-semibold text-slate-900">{courseRef.courseTitle}</div>
+                              <div className="mt-1 text-xs text-slate-500">
+                                {courseRef.moduleTitle} • lesson route `{courseRef.lessonSlug}`
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+
+                      {lesson.learningFlow?.length ? (
+                        <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
+                          <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Learning flow</div>
+                          <p className="mt-2 text-sm text-slate-700">{lesson.learningFlow.slice(0, 2).join(' • ')}</p>
+                        </div>
+                      ) : null}
+
+                      <button
+                        onClick={() => {
+                          if (isAvailable && lesson.entryRoute) {
+                            router.push(lesson.entryRoute);
+                            return;
+                          }
+
+                          if (primaryCourse) {
+                            router.push(`/courses/${primaryCourse.courseSlug}`);
+                            return;
+                          }
+
+                          if (!user) {
+                            router.push('/login');
+                          }
+                        }}
+                        className={`inline-flex w-full items-center justify-center rounded-2xl px-4 py-3 text-sm font-semibold transition ${
+                          isAvailable
+                            ? 'bg-slate-950 text-white hover:bg-blue-700'
+                            : 'border border-slate-200 bg-white text-slate-700 hover:border-blue-300 hover:text-blue-700'
+                        }`}
+                      >
+                        {actionLabel}
+                      </button>
                     </div>
-                  </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </section>
 
-                  <h3 className="text-xl font-bold mb-2">{lesson.title}</h3>
-                  <p className="text-white/80 text-sm mb-4">{lesson.description}</p>
-
-                  <div className="flex items-center justify-between mt-6 pt-4 border-t border-white/20">
-                    <div className="flex items-center text-sm">
-                      <Clock className="w-4 h-4 mr-1" />
-                      {lesson.duration}
-                    </div>
-                    <div className="flex items-center text-sm font-medium">
-                      Start Lesson
-                      <ArrowRight className="w-4 h-4 ml-1 group-hover:translate-x-1 transition-transform" />
-                    </div>
-                  </div>
-
-                  {/* Connection line between cards */}
-                  {index < lessons.length - 1 && (
-                    <div className="hidden lg:block absolute -right-3 top-1/2 transform -translate-y-1/2">
-                      <div className="w-6 h-1 bg-gradient-to-r from-transparent via-white/30 to-transparent" />
-                    </div>
-                  )}
-                </div>
-              </Link>
-            ))}
+        {!user ? (
+          <div className="mt-8 rounded-[28px] border border-slate-200 bg-white px-6 py-5 text-sm text-slate-600 shadow-lg shadow-slate-100">
+            Sign in to see which sub-lessons are already unlocked by your course enrollments.
+            <Link href="/login" className="ml-2 font-semibold text-blue-700">
+              Go to login
+            </Link>
           </div>
-        </div>
-
-        {/* Quick Start */}
-        <div className="bg-gradient-to-r from-gray-900 to-black rounded-2xl p-8 text-white mb-8">
-          <div className="flex flex-col lg:flex-row items-center justify-between">
-            <div className="mb-6 lg:mb-0 lg:mr-8">
-              <h2 className="text-2xl font-bold mb-2">Ready to Start?</h2>
-              <p className="text-gray-300">Jump into interactive lessons with real code examples</p>
-            </div>
-            <div className="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4">
-              <Link
-                href="/lessons/flexbox"
-                className="px-6 py-3 bg-white text-gray-900 font-bold rounded-lg hover:bg-gray-100 transition-colors text-center"
-              >
-                Start Learning
-              </Link>
-              <Link
-                href="/quiz/api-knowledge"
-                className="px-6 py-3 bg-white/10 backdrop-blur-sm border border-white/30 rounded-lg font-medium hover:bg-white/20 transition-colors text-center"
-              >
-                Take a Quiz
-              </Link>
-            </div>
-          </div>
-        </div>
-
-        {/* Learning Tips */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
-            <div className="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center mb-4">
-              <BookOpen className="w-6 h-6 text-blue-500" />
-            </div>
-            <h3 className="font-bold text-lg mb-2">Interactive Lessons</h3>
-            <p className="text-gray-600 text-sm">
-              Learn with real code examples you can run and modify right in the browser.
-            </p>
-          </div>
-
-          <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
-            <div className="w-12 h-12 bg-green-50 rounded-lg flex items-center justify-center mb-4">
-              <Brain className="w-6 h-6 text-green-500" />
-            </div>
-            <h3 className="font-bold text-lg mb-2">Practice Quizzes</h3>
-            <p className="text-gray-600 text-sm">
-              Test your knowledge with interactive quizzes that adapt to your learning pace.
-            </p>
-          </div>
-
-          <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
-            <div className="w-12 h-12 bg-purple-50 rounded-lg flex items-center justify-center mb-4">
-              <Users className="w-6 h-6 text-purple-500" />
-            </div>
-            <h3 className="font-bold text-lg mb-2">Progress Tracking</h3>
-            <p className="text-gray-600 text-sm">
-              Track your progress, earn badges, and see how far you've come in your learning journey.
-            </p>
-          </div>
-        </div>
-
-        {/* Recent Activity */}
-        <div className="mt-12 bg-white rounded-2xl p-8 border border-gray-200">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6">Getting Started Guide</h2>
-          <div className="space-y-4">
-            <div className="flex items-center space-x-4 p-4 bg-blue-50 rounded-lg">
-              <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                <span className="font-bold text-blue-600">1</span>
-              </div>
-              <div>
-                <h4 className="font-semibold text-gray-900">Choose Your First Lesson</h4>
-                <p className="text-gray-600 text-sm">Start with CSS Flexbox for layout fundamentals</p>
-              </div>
-            </div>
-            <div className="flex items-center space-x-4 p-4 bg-green-50 rounded-lg">
-              <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                <span className="font-bold text-green-600">2</span>
-              </div>
-              <div>
-                <h4 className="font-semibold text-gray-900">Complete Interactive Exercises</h4>
-                <p className="text-gray-600 text-sm">Each lesson includes hands-on coding challenges</p>
-              </div>
-            </div>
-            <div className="flex items-center space-x-4 p-4 bg-purple-50 rounded-lg">
-              <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
-                <span className="font-bold text-purple-600">3</span>
-              </div>
-              <div>
-                <h4 className="font-semibold text-gray-900">Test Your Knowledge</h4>
-                <p className="text-gray-600 text-sm">Take quizzes to reinforce what you've learned</p>
-              </div>
-            </div>
-          </div>
-        </div>
+        ) : null}
       </div>
-
-      {/* Footer */}
-      <footer className="bg-gradient-to-r from-gray-50 to-white border-t border-gray-200 mt-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="flex flex-col md:flex-row items-center justify-between">
-            <div className="flex items-center space-x-3 mb-4 md:mb-0">
-              <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-                <GraduationCap className="w-5 h-5 text-white" />
-              </div>
-              <span className="font-semibold text-gray-900">Interactive Learning Platform</span>
-            </div>
-            
-            <div className="flex items-center space-x-6 text-sm text-gray-500">
-              <span>Web Development</span>
-              <span>•</span>
-              <span>Interactive Learning</span>
-              <span>•</span>
-              <span>Hands-on Practice</span>
-            </div>
-            
-            <div className="mt-4 md:mt-0 text-sm text-gray-500">
-              Start your learning journey today
-            </div>
-          </div>
-        </div>
-      </footer>
     </div>
   );
-};
+}
 
-export default LearningDashboard;
+function StatCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl bg-white/10 px-4 py-4 backdrop-blur-sm">
+      <div className="text-xs font-semibold uppercase tracking-[0.16em] text-cyan-100">{label}</div>
+      <div className="mt-2 text-3xl font-black">{value}</div>
+    </div>
+  );
+}

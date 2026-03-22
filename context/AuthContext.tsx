@@ -29,7 +29,7 @@
 
 //   useEffect(() => {
 //     // Check for stored user session
-//     const storedUser = localStorage.getItem('user');
+//     const storedUser = sessionStorage.getItem('user');
 //     if (storedUser) {
 //       try {
 //         setUser(JSON.parse(storedUser));
@@ -44,7 +44,7 @@
 //     try {
 //       const response = await authApi.login({ email, password });
 //       setUser(response.data.user);
-//       localStorage.setItem('user', JSON.stringify(response.data.user));
+//       sessionStorage.setItem('user', JSON.stringify(response.data.user));
 //     } catch (error) {
 //       console.error('Login failed:', error);
 //       throw error;
@@ -55,7 +55,7 @@
 //     try {
 //       const response = await authApi.register(userData);
 //       setUser(response.data.user);
-//       localStorage.setItem('user', JSON.stringify(response.data.user));
+//       sessionStorage.setItem('user', JSON.stringify(response.data.user));
 //     } catch (error) {
 //       console.error('Registration failed:', error);
 //       throw error;
@@ -64,7 +64,7 @@
 
 //   const logout = () => {
 //     setUser(null);
-//     localStorage.removeItem('user');
+//     sessionStorage.removeItem('user');
 //   };
 
 //   return (

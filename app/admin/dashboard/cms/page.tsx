@@ -1,194 +1,175 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Bot, Loader2, Plus, Save, Sparkles, Trash2, WandSparkles } from 'lucide-react';
+import { BookOpen, ChevronDown, FileUp, Loader2, Plus, Save, Sparkles, Trash2 } from 'lucide-react';
 
-import { useAuth } from '@/context/AuthContext';
+import { CourseModal } from '@/components/dashboard/courses';
+import RichContentRenderer from '@/components/lesson/RichContentRenderer';
 import { api } from '@/lib/api';
-import {
-  AgentArtifact,
-  AgentAssignment,
-  CourseCatalog,
-  CourseCurriculum,
-  CourseCurriculumLesson,
-  CourseCurriculumModule,
-  LessonPlaygroundCheck,
-  MilestoneProject,
-} from '@/lib/types';
+import { ContentGenerationSession, CourseCatalog, CourseCurriculum, CourseCurriculumLesson, CourseCurriculumModule, MilestoneProject } from '@/lib/types';
 
-const makeLesson = (moduleIndex: number, lessonIndex: number): CourseCurriculumLesson => ({
+const makeLesson = (courseSlug: string, moduleIndex: number, lessonIndex: number): CourseCurriculumLesson => ({
   title: `Lesson ${lessonIndex + 1}`,
-  slug: `module-${moduleIndex + 1}-lesson-${lessonIndex + 1}`,
+  slug: `${courseSlug || 'course'}-module-${moduleIndex + 1}-lesson-${lessonIndex + 1}`,
+  libraryLessonSlug: `${courseSlug || 'course'}-module-${moduleIndex + 1}-lesson-${lessonIndex + 1}`,
+  source: 'manual',
+  generationStatus: 'generated',
   summary: 'Add a short lesson summary.',
   durationMinutes: 20,
   contentType: 'lesson',
   quizId: '',
   quizTitle: '',
-  learningObjectives: ['Explain the lesson clearly.', 'Practice the concept once with support.'],
-  keyTakeaways: ['Know what the lesson is for.', 'Use the practice task before moving on.'],
+  learningObjectives: ['Explain the core idea clearly.', 'Guide one practical application.'],
+  keyTakeaways: ['State the main idea.', 'Use one practice activity before moving on.'],
+  learningFlow: ['Introduce the concept.', 'Show a worked example.', 'Give the learner one guided task.'],
   contentMarkdown: '# New lesson\n\n## What this lesson is about\nAdd the core explanation here.',
-  practicePrompt: 'Add a short practical task for learners.',
+  visualAidMarkdown: '## Visual aid\n`Concept` -> `Example` -> `Practice`',
+  practicePrompt: 'Add a short practical task.',
   instructorNotes: '',
   playground: null,
 });
 
-const makeModule = (moduleIndex: number): CourseCurriculumModule => ({
+const makeModule = (courseSlug: string, moduleIndex: number): CourseCurriculumModule => ({
   title: `Module ${moduleIndex + 1}`,
-  description: 'Describe what learners complete in this module.',
+  description: 'Describe what the learner completes in this module.',
   order: moduleIndex + 1,
-  lessons: [makeLesson(moduleIndex, 0)],
+  source: 'manual',
+  generationStatus: 'generated',
+  lessons: [makeLesson(courseSlug, moduleIndex, 0)],
   assessmentTitle: '',
   assessmentQuizId: '',
 });
 
-const makeProject = (projectIndex: number): MilestoneProject => ({
-  title: `Milestone Project ${projectIndex + 1}`,
-  description: 'Describe the project goal and acceptance criteria.',
-  milestoneOrder: projectIndex + 1,
-  estimatedHours: 6,
-  deliverables: ['Working codebase', 'README', 'Demo notes'],
+const makeProject = (index: number): MilestoneProject => ({
+  title: `Milestone ${index + 1}`,
+  description: 'Describe the applied project or deliverable.',
+  milestoneOrder: index + 1,
+  estimatedHours: 4,
+  deliverables: ['Working output', 'Short reflection'],
   completionThreshold: 70,
 });
 
-const makePlaygroundCheck = (): LessonPlaygroundCheck => ({
-  label: 'Add a meaningful check',
-  type: 'includes',
-  target: 'js',
-  value: '',
-});
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="mb-2 block text-sm font-semibold text-slate-700">{label}</label>
+      {children}
+    </div>
+  );
+}
+
+function Preview({ title, content }: { title: string; content: string }) {
+  return (
+    <div className="overflow-hidden rounded-[24px] border border-slate-200 bg-slate-50 p-4">
+      <div className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">{title}</div>
+      <div className="rounded-[20px] border border-slate-200 bg-white p-4">
+        <RichContentRenderer content={content} />
+      </div>
+    </div>
+  );
+}
 
 export default function CMSPage() {
   const searchParams = useSearchParams();
   const preferredCourseSlug = searchParams.get('course') || '';
-  const { user } = useAuth();
+  const preferredSessionId = searchParams.get('session') || '';
+
   const [courses, setCourses] = useState<CourseCatalog[]>([]);
-  const [selectedSlug, setSelectedSlug] = useState('');
+  const [selectedSlug, setSelectedSlug] = useState(preferredCourseSlug);
   const [curriculum, setCurriculum] = useState<CourseCurriculum | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loadingCourses, setLoadingCourses] = useState(true);
+  const [loadingCurriculum, setLoadingCurriculum] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [creatingCourse, setCreatingCourse] = useState(false);
+  const [importingCourse, setImportingCourse] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [sessionAction, setSessionAction] = useState('');
+  const [generationSession, setGenerationSession] = useState<ContentGenerationSession | null>(null);
+  const [sessionFile, setSessionFile] = useState<File | null>(null);
+  const [sessionInstructions, setSessionInstructions] = useState('');
+  const [showCreateModal, setShowCreateModal] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
-  const [agentAssignment, setAgentAssignment] = useState<AgentAssignment | null>(null);
-  const [suggestingLessonSlug, setSuggestingLessonSlug] = useState('');
-  const [lessonSuggestions, setLessonSuggestions] = useState<Record<string, AgentArtifact>>({});
+
+  const selectedCourse = useMemo(
+    () => courses.find((course) => course.slug === selectedSlug) || null,
+    [courses, selectedSlug]
+  );
+  const lessonCount = useMemo(
+    () => curriculum?.modules.reduce((total, module) => total + module.lessons.length, 0) || 0,
+    [curriculum]
+  );
+
+  const loadCourses = async () => {
+    try {
+      setLoadingCourses(true);
+      const response = await api.getCourseCatalog();
+      setCourses(response.data);
+      if (preferredCourseSlug && !selectedSlug) {
+        const match = response.data.find((course) => course.slug === preferredCourseSlug);
+        if (match) setSelectedSlug(match.slug);
+      }
+    } catch (loadError: any) {
+      setError(loadError.message || 'Unable to load courses.');
+    } finally {
+      setLoadingCourses(false);
+    }
+  };
+
+  const loadCurriculum = async (courseSlug: string) => {
+    try {
+      setLoadingCurriculum(true);
+      const response = await api.getCourseCurriculum(courseSlug);
+      setCurriculum(response.data);
+      return response.data;
+    } catch (loadError: any) {
+      setCurriculum(null);
+      setError(loadError.message || 'Unable to load this curriculum.');
+      return null;
+    } finally {
+      setLoadingCurriculum(false);
+    }
+  };
 
   useEffect(() => {
-    const loadCourses = async () => {
-      try {
-        setLoading(true);
-        const response = await api.getCourseCatalog();
-        setCourses(response.data);
-        const preferredCourse = response.data.find((course) => course.slug === preferredCourseSlug);
-        if (preferredCourse) {
-          setSelectedSlug(preferredCourse.slug);
-        } else if (response.data[0]) {
-          setSelectedSlug(response.data[0].slug);
-        }
-      } catch (loadError) {
-        console.error('Failed to load courses:', loadError);
-        setError('Unable to load courses for the curriculum studio.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
     loadCourses();
   }, [preferredCourseSlug]);
 
   useEffect(() => {
-    if (!preferredCourseSlug || courses.length === 0) {
-      return;
-    }
+    const loadGenerationSession = async () => {
+      if (!preferredSessionId || generationSession?.id === preferredSessionId) {
+        return;
+      }
 
-    const preferredCourse = courses.find((course) => course.slug === preferredCourseSlug);
-    if (preferredCourse && preferredCourse.slug !== selectedSlug) {
-      setSelectedSlug(preferredCourse.slug);
-    }
-  }, [courses, preferredCourseSlug, selectedSlug]);
+      try {
+        setScanning(true);
+        setError('');
+        const response = await api.getContentGenerationSession(preferredSessionId);
+        await applyGenerationSession(response.data);
+      } catch (sessionError: any) {
+        setError(sessionError.message || 'Unable to restore the generation session.');
+      } finally {
+        setScanning(false);
+      }
+    };
+
+    void loadGenerationSession();
+  }, [generationSession?.id, preferredSessionId]);
 
   useEffect(() => {
     if (!selectedSlug) {
+      setCurriculum(null);
       return;
     }
-
-    const loadCurriculum = async () => {
-      try {
-        setLoading(true);
-        setMessage('');
-        setError('');
-        const response = await api.getCourseCurriculum(selectedSlug);
-        setCurriculum(response.data);
-      } catch (loadError) {
-        console.error('Failed to load curriculum:', loadError);
-        setError('Unable to load curriculum.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadCurriculum();
+    if (generationSession && generationSession.courseSlug && generationSession.courseSlug !== selectedSlug) {
+      setGenerationSession(null);
+      setSessionFile(null);
+      setSessionInstructions('');
+    }
+    loadCurriculum(selectedSlug);
   }, [selectedSlug]);
-
-  useEffect(() => {
-    if (!selectedSlug || !user || user.role === 'Student') {
-      setAgentAssignment(null);
-      setLessonSuggestions({});
-      return;
-    }
-
-    const loadAgentSupport = async () => {
-      try {
-        const assignmentsRes = await api.getAgentAssignments();
-        const approvedAssignment =
-          assignmentsRes.data.find(
-            (assignment) =>
-              assignment.agentType === 'course_builder' &&
-              assignment.status === 'approved' &&
-              assignment.courseSlug === selectedSlug
-          ) ||
-          assignmentsRes.data.find(
-            (assignment) =>
-              assignment.agentType === 'course_builder' &&
-              assignment.status === 'approved' &&
-              !assignment.courseSlug
-          ) ||
-          null;
-
-        setAgentAssignment(approvedAssignment);
-
-        if (!approvedAssignment) {
-          setLessonSuggestions({});
-          return;
-        }
-
-        const artifactsRes = await api.getAgentArtifacts(approvedAssignment.id);
-        const suggestionMap = artifactsRes.data
-          .filter(
-            (artifact) =>
-              artifact.artifactType === 'lesson_content_suggestion' &&
-              artifact.payload?.courseSlug === selectedSlug &&
-              typeof artifact.payload?.lessonSlug === 'string'
-          )
-          .reduce<Record<string, AgentArtifact>>((accumulator, artifact) => {
-            accumulator[String(artifact.payload.lessonSlug)] = artifact;
-            return accumulator;
-          }, {});
-        setLessonSuggestions(suggestionMap);
-      } catch (loadError) {
-        console.error('Failed to load agent support:', loadError);
-        setAgentAssignment(null);
-        setLessonSuggestions({});
-      }
-    };
-
-    loadAgentSupport();
-  }, [selectedSlug, user]);
-
-  const totalLessons = useMemo(
-    () => curriculum?.modules.reduce((total, module) => total + module.lessons.length, 0) || 0,
-    [curriculum]
-  );
 
   const updateCurriculum = (updater: (current: CourseCurriculum) => CourseCurriculum) => {
     setCurriculum((current) => (current ? updater(current) : current));
@@ -201,32 +182,135 @@ export default function CMSPage() {
     }));
   };
 
-  const updateLesson = (
-    moduleIndex: number,
-    lessonIndex: number,
-    updater: (lesson: CourseCurriculumLesson) => CourseCurriculumLesson
-  ) => {
+  const updateLesson = (moduleIndex: number, lessonIndex: number, updater: (lesson: CourseCurriculumLesson) => CourseCurriculumLesson) => {
     updateModule(moduleIndex, (module) => ({
       ...module,
       lessons: module.lessons.map((lesson, index) => (index === lessonIndex ? updater(lesson) : lesson)),
     }));
   };
 
-  const saveCurriculum = async () => {
-    if (!curriculum) {
+  const handleCreateCourse = async (formData: Partial<CourseCatalog>) => {
+    try {
+      setCreatingCourse(true);
+      const response = await api.createCourseCatalog(formData);
+      setCourses((current) => [response.data, ...current.filter((course) => course.slug !== response.data.slug)]);
+      setSelectedSlug(response.data.slug);
+      setShowCreateModal(false);
+      setMessage('Course created. You can now import source material or edit the curriculum directly.');
+      await loadCurriculum(response.data.slug);
+    } catch (createError: any) {
+      setError(createError.message || 'Unable to create this course right now.');
+    } finally {
+      setCreatingCourse(false);
+    }
+  };
+
+  const handleModalImportStart = async (payload: { file: File; instructions: string; courseSlug?: string }) => {
+    try {
+      setImportingCourse(true);
+      setError('');
+      setMessage('');
+      const sessionResponse = await api.uploadContentGenerationSession({
+        file: payload.file,
+        courseSlug: payload.courseSlug,
+        instructions: payload.instructions,
+      });
+
+      let session = sessionResponse.data;
+      if (!payload.courseSlug) {
+        const shellResponse = await api.runContentGenerationAction(session.id, {
+          actionType: 'create_course_shell',
+          instructions: payload.instructions,
+        });
+        session = shellResponse.data;
+      }
+
+      await applyGenerationSession(session);
+      setShowCreateModal(false);
+      setMessage('Document import started. Continue the staged generation flow below.');
+    } finally {
+      setImportingCourse(false);
+    }
+  };
+
+  const applyGenerationSession = async (session: ContentGenerationSession) => {
+    setGenerationSession(session);
+    if (session.courseSlug) {
+      if (!courses.some((course) => course.slug === session.courseSlug)) {
+        await loadCourses();
+      }
+      setSelectedSlug(session.courseSlug);
+    }
+    if (session.curriculum) {
+      setCurriculum(session.curriculum);
+    } else if (session.courseSlug) {
+      await loadCurriculum(session.courseSlug);
+    }
+  };
+
+  const handleScanUpload = async () => {
+    if (!sessionFile) {
+      setError('Choose a source file first.');
       return;
     }
 
     try {
-      setSaving(true);
+      setScanning(true);
       setError('');
+      setMessage('');
+      const response = await api.uploadContentGenerationSession({
+        file: sessionFile,
+        courseSlug: selectedSlug || undefined,
+        instructions: sessionInstructions,
+      });
+      await applyGenerationSession(response.data);
+      setMessage('Scan complete. Review the plan below, then generate the course shell and modules step by step.');
+    } catch (scanError: any) {
+      setError(scanError.message || 'Unable to scan this source right now.');
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  const runGenerationAction = async (
+    actionType: 'create_course_shell' | 'generate_overview' | 'generate_module' | 'generate_questions',
+    options?: { moduleOrder?: number; questionCount?: number }
+  ) => {
+    if (!generationSession) {
+      return;
+    }
+    try {
+      setSessionAction(actionType + (options?.moduleOrder ? `-${options.moduleOrder}` : ''));
+      setError('');
+      const response = await api.runContentGenerationAction(generationSession.id, {
+        actionType,
+        moduleOrder: options?.moduleOrder,
+        questionCount: options?.questionCount,
+        instructions: sessionInstructions,
+      });
+      await applyGenerationSession(response.data);
+      setMessage(response.message);
+    } catch (actionError: any) {
+      setError(actionError.message || 'Unable to run this generation step right now.');
+    } finally {
+      setSessionAction('');
+    }
+  };
+
+  const saveCurriculum = async () => {
+    if (!curriculum) return;
+    try {
+      setSaving(true);
       const response = await api.updateCourseCurriculum(curriculum.courseSlug, {
         overview: curriculum.overview,
+        learningFlow: curriculum.learningFlow,
+        visualAidMarkdown: curriculum.visualAidMarkdown || '',
         modules: curriculum.modules,
         milestoneProjects: curriculum.milestoneProjects,
       });
       setCurriculum(response.data);
       setMessage('Curriculum saved successfully.');
+      setError('');
     } catch (saveError: any) {
       setError(saveError.message || 'Unable to save curriculum.');
     } finally {
@@ -234,83 +318,47 @@ export default function CMSPage() {
     }
   };
 
-  const requestLessonSuggestion = async (lessonSlug: string) => {
-    if (!agentAssignment) {
-      return;
-    }
-
-    try {
-      setSuggestingLessonSlug(lessonSlug);
-      setError('');
-      const response = await api.runAgentAction(agentAssignment.id, {
-        actionType: 'suggest_lesson_content',
-        courseSlug: selectedSlug,
-        lessonSlug,
-        instruction: 'Generate a richer lesson body, learning objectives, practice prompt, and playground suggestion for this lesson.',
-      });
-      setLessonSuggestions((current) => ({
-        ...current,
-        [lessonSlug]: response.data,
-      }));
-    } catch (suggestionError: any) {
-      setError(suggestionError.message || 'Unable to generate a lesson suggestion right now.');
-    } finally {
-      setSuggestingLessonSlug('');
-    }
-  };
-
-  const applyLessonSuggestion = (moduleIndex: number, lessonIndex: number, lessonSlug: string) => {
-    const artifact = lessonSuggestions[lessonSlug];
-    const suggestedLesson = artifact?.payload?.lesson as CourseCurriculumLesson | undefined;
-    if (!suggestedLesson) {
-      return;
-    }
-
-    updateLesson(moduleIndex, lessonIndex, () => suggestedLesson);
-    setLessonSuggestions((current) => {
-      const next = { ...current };
-      delete next[lessonSlug];
-      return next;
-    });
-    setMessage('Applied the latest agent lesson suggestion. Save curriculum to keep it.');
-  };
-
   return (
-    <div className="space-y-6">
-      <section className="rounded-[28px] border border-slate-200 bg-[linear-gradient(135deg,#0f172a_0%,#1d4ed8_60%,#38bdf8_100%)] p-8 text-white shadow-2xl shadow-slate-300">
+    <div className="mx-auto w-full max-w-[1240px] space-y-6 overflow-x-hidden pb-10">
+      <section className="rounded-[28px] border border-slate-200 bg-[linear-gradient(135deg,#0f172a_0%,#1d4ed8_60%,#38bdf8_100%)] p-6 text-white shadow-2xl shadow-slate-300 sm:p-8">
         <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-100">
           <Sparkles className="h-3.5 w-3.5" />
-          Instructor Studio
+          Instructor CMS
         </div>
-        <h1 className="mt-4 text-3xl font-black tracking-tight">Curriculum Builder</h1>
+        <h1 className="mt-4 text-3xl font-black tracking-tight">Curriculum workspace</h1>
         <p className="mt-3 max-w-3xl text-sm text-slate-200">
-          Build module structure, write full lesson documentation in markdown, add learning objectives, attach practice work, and configure a runnable code workspace where learners need hands-on practice.
+          Create or pick a course, import source material, review the generated structure, then save. Course import replaces the selected course curriculum. Lesson import appends a single lesson.
         </p>
       </section>
 
       <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-lg shadow-slate-100">
-        <div className="grid gap-4 xl:grid-cols-[1fr_auto]">
-          <div className="grid gap-4 md:grid-cols-[1fr_auto]">
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-slate-700">Course</label>
-              <select
-                value={selectedSlug}
-                onChange={(event) => setSelectedSlug(event.target.value)}
-                className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-              >
-                {courses.map((course) => (
-                  <option key={course.slug} value={course.slug}>
-                    {course.title}
-                  </option>
-                ))}
-              </select>
-            </div>
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_auto_auto] xl:items-end">
+          <Field label="Course">
+            <select
+              value={selectedSlug}
+              onChange={(event) => {
+                setSelectedSlug(event.target.value);
+                setMessage('');
+                setError('');
+              }}
+              className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+            >
+              <option value="">Select course</option>
+              {courses.map((course) => (
+                <option key={course.slug} value={course.slug}>
+                  {course.title}
+                </option>
+              ))}
+            </select>
+          </Field>
 
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-              <div className="font-semibold text-slate-900">{totalLessons} lessons</div>
-              <div className="mt-1">Live content authoring is enabled for this course.</div>
-            </div>
-          </div>
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700"
+          >
+            <Plus className="h-4 w-4" />
+            Create course
+          </button>
 
           <button
             onClick={saveCurriculum}
@@ -318,118 +366,342 @@ export default function CMSPage() {
             className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-60"
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            Save curriculum
+            {saving ? 'Saving...' : 'Save curriculum'}
           </button>
         </div>
 
-        <div className="mt-4 grid gap-4 xl:grid-cols-[1fr_auto]">
-          <div className="space-y-3">
-            {message ? <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{message}</div> : null}
-            {error ? <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div> : null}
+        <div className="mt-4 grid gap-4 sm:grid-cols-3">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+            <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Modules</div>
+            <div className="mt-2 text-2xl font-black text-slate-950">{curriculum?.modules.length || 0}</div>
           </div>
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+            <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Lessons</div>
+            <div className="mt-2 text-2xl font-black text-slate-950">{lessonCount}</div>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+            <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Status</div>
+            <div className="mt-2 text-lg font-black text-slate-950">{selectedCourse ? 'Active course' : 'No course selected'}</div>
+          </div>
+        </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
-            <div className="flex items-center gap-2 font-semibold text-slate-900">
-              <Bot className="h-4 w-4 text-blue-700" />
-              Agent support
+        {selectedCourse ? (
+          <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-slate-600">
+            <span>{selectedCourse.category}</span>
+            <span>/</span>
+            <span>{selectedCourse.difficulty}</span>
+            <span>/</span>
+            <Link href={`/courses/${selectedCourse.slug}`} className="font-semibold text-blue-700">
+              Open learner-facing course page
+            </Link>
+          </div>
+        ) : (
+          <p className="mt-4 text-sm text-slate-600">
+            No course is selected yet. Create one with the catalog modal, or upload a source in course mode to generate one from the document.
+          </p>
+        )}
+      </section>
+
+      <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-lg shadow-slate-100">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-blue-700">
+              <Sparkles className="h-3.5 w-3.5" />
+              Staged generation
             </div>
-            <p className="mt-2 text-slate-600">
-              {agentAssignment
-                ? `${agentAssignment.displayName || 'Course Builder'} is approved for this workspace.`
-                : 'Approve a Course Builder agent for this instructor to generate lesson suggestions while authoring.'}
+            <h2 className="mt-4 text-xl font-bold text-slate-950">Upload and scan source material</h2>
+            <p className="mt-2 max-w-3xl text-sm text-slate-600">
+              The file is stored and scanned first. After that, you decide when to create the course shell, generate each module, and generate module questions.
             </p>
           </div>
         </div>
+
+        <div className="mt-6 space-y-5">
+          <Field label="Source file">
+            <label className="flex cursor-pointer items-center justify-between gap-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-4 transition hover:border-blue-400 hover:bg-blue-50/60">
+              <div className="min-w-0">
+                <div className="truncate text-sm font-semibold text-slate-900">
+                  {sessionFile ? sessionFile.name : 'Upload pdf, docx, json, markdown, txt, csv, or html'}
+                </div>
+                <div className="mt-1 text-xs text-slate-500">
+                  The backend stores the extracted source and lets the generation agent work in explicit steps.
+                </div>
+              </div>
+              <div className="inline-flex shrink-0 items-center gap-2 rounded-2xl bg-slate-950 px-4 py-2 text-sm font-semibold text-white">
+                <FileUp className="h-4 w-4" />
+                Choose file
+              </div>
+              <input
+                type="file"
+                accept=".pdf,.docx,.json,.md,.markdown,.txt,.csv,.html,.htm,.yaml,.yml"
+                className="hidden"
+                onChange={(event) => setSessionFile(event.target.files?.[0] || null)}
+              />
+            </label>
+          </Field>
+
+          <Field label="Generation guidance">
+            <textarea
+              value={sessionInstructions}
+              onChange={(event) => setSessionInstructions(event.target.value)}
+              rows={4}
+              placeholder="Describe the learner level, desired module count, lesson density, project style, or any constraints the generation agent should follow."
+              className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+            />
+          </Field>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={handleScanUpload}
+              disabled={scanning}
+              className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-60"
+            >
+              {scanning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+              {scanning ? 'Scanning source...' : 'Scan document'}
+            </button>
+            {generationSession ? (
+              <span className="text-sm text-slate-600">
+                Active session: <span className="font-semibold text-slate-900">{generationSession.fileName}</span>
+              </span>
+            ) : null}
+          </div>
+
+          {generationSession ? (
+            <div className="space-y-4 rounded-[24px] border border-slate-200 bg-slate-50 p-4">
+              <div className="grid gap-4 md:grid-cols-3">
+                <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                  <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Status</div>
+                  <div className="mt-2 text-lg font-black text-slate-950">{generationSession.status.replace(/_/g, ' ')}</div>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                  <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Modules planned</div>
+                  <div className="mt-2 text-lg font-black text-slate-950">{generationSession.scan.modules.length}</div>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                  <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Questions generated</div>
+                  <div className="mt-2 text-lg font-black text-slate-950">{(generationSession.generation.generatedQuestionModules || []).length}</div>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                <div className="text-sm font-semibold text-slate-900">Scan summary</div>
+                <p className="mt-2 text-sm text-slate-700">{generationSession.summary}</p>
+                <div className="mt-4 text-sm text-slate-600">
+                  Recommended course: <span className="font-semibold text-slate-900">{generationSession.scan.recommendedCourse.title}</span>
+                  {' '} / {generationSession.scan.recommendedCourse.category} / {generationSession.scan.recommendedCourse.difficulty}
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-3">
+                <button
+                  onClick={() => runGenerationAction('create_course_shell')}
+                  disabled={Boolean(sessionAction)}
+                  className="inline-flex items-center gap-2 rounded-2xl bg-blue-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:opacity-60"
+                >
+                  {sessionAction === 'create_course_shell' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                  {generationSession.generation.shellCreated ? 'Refresh course shell' : 'Create course shell'}
+                </button>
+                <button
+                  onClick={() => runGenerationAction('generate_overview')}
+                  disabled={!generationSession.generation.shellCreated || Boolean(sessionAction)}
+                  className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700 disabled:opacity-50"
+                >
+                  {sessionAction === 'generate_overview' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  Refresh framing
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                {generationSession.scan.modules.map((module) => {
+                  const moduleGenerated = (generationSession.generation.generatedModules || []).includes(module.order);
+                  const questionsGenerated = (generationSession.generation.generatedQuestionModules || []).includes(module.order);
+                  return (
+                    <div key={`${module.order}-${module.title}`} className="rounded-2xl border border-slate-200 bg-white p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-4">
+                        <div className="min-w-0">
+                          <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Module {module.order}</div>
+                          <div className="mt-1 break-words text-lg font-bold text-slate-950">{module.title}</div>
+                          <p className="mt-2 text-sm text-slate-600">{module.description}</p>
+                          <div className="mt-3 text-sm text-slate-600">
+                            {module.lessonCount} lessons planned / {module.estimatedQuestionCount} questions suggested
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            onClick={() => runGenerationAction('generate_module', { moduleOrder: module.order })}
+                            disabled={!generationSession.generation.shellCreated || Boolean(sessionAction)}
+                            className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
+                          >
+                            {sessionAction === `generate_module-${module.order}` ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                            {moduleGenerated ? 'Regenerate module' : 'Generate module'}
+                          </button>
+                          <button
+                            onClick={() => runGenerationAction('generate_questions', { moduleOrder: module.order, questionCount: module.estimatedQuestionCount })}
+                            disabled={!moduleGenerated || Boolean(sessionAction)}
+                            className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700 disabled:opacity-50"
+                          >
+                            {sessionAction === `generate_questions-${module.order}` ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                            {questionsGenerated ? 'Regenerate questions' : 'Generate questions'}
+                          </button>
+                        </div>
+                      </div>
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {module.lessonTitles.map((lessonTitle) => (
+                          <span key={lessonTitle} className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
+                            {lessonTitle}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+        </div>
       </section>
 
-      {loading ? (
+      {message ? <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{message}</div> : null}
+      {error ? <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div> : null}
+
+      {(loadingCourses || loadingCurriculum) ? (
         <div className="flex h-64 items-center justify-center rounded-[28px] border border-slate-200 bg-white shadow-lg shadow-slate-100">
           <div className="text-center">
             <Loader2 className="mx-auto h-8 w-8 animate-spin text-blue-600" />
-            <p className="mt-3 text-sm text-slate-500">Loading curriculum...</p>
+            <p className="mt-3 text-sm text-slate-500">{loadingCourses ? 'Loading courses...' : 'Loading curriculum...'}</p>
           </div>
         </div>
       ) : curriculum ? (
-        <div className="grid gap-6 xl:grid-cols-[1.7fr_1fr]">
-          <section className="space-y-6 rounded-[28px] border border-slate-200 bg-white p-6 shadow-lg shadow-slate-100">
-            <div>
-              <label className="mb-2 block text-sm font-semibold text-slate-700">Course overview</label>
-              <textarea
-                value={curriculum.overview}
-                onChange={(event) => updateCurriculum((current) => ({ ...current, overview: event.target.value }))}
-                rows={5}
-                className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-              />
+        <div className="space-y-6">
+          <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-lg shadow-slate-100">
+            <h2 className="text-xl font-bold text-slate-950">Course framing</h2>
+            <p className="mt-1 text-sm text-slate-600">Set the explanation, learner flow, and roadmap learners will see.</p>
+            <div className="mt-6 space-y-5">
+              <Field label="Overview">
+                <textarea
+                  value={curriculum.overview}
+                  onChange={(event) => updateCurriculum((current) => ({ ...current, overview: event.target.value }))}
+                  rows={5}
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                />
+              </Field>
+              <Field label="Learning flow">
+                <textarea
+                  value={(curriculum.learningFlow || []).join('\n')}
+                  onChange={(event) => updateCurriculum((current) => ({ ...current, learningFlow: event.target.value.split('\n').map((item) => item.trim()).filter(Boolean) }))}
+                  rows={5}
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                />
+              </Field>
+              <Field label="Visual aid">
+                <textarea
+                  value={curriculum.visualAidMarkdown || ''}
+                  onChange={(event) => updateCurriculum((current) => ({ ...current, visualAidMarkdown: event.target.value }))}
+                  rows={6}
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                />
+              </Field>
+              <Preview title="Course roadmap preview" content={curriculum.visualAidMarkdown || '## Course roadmap\nAdd a simple visual roadmap here.'} />
+            </div>
+          </section>
+
+          <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-lg shadow-slate-100">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-bold text-slate-950">Modules and lessons</h2>
+                <p className="mt-1 text-sm text-slate-600">Everything stays stacked in one flow so the page fits the screen cleanly.</p>
+              </div>
+              <button
+                onClick={() =>
+                  updateCurriculum((current) => ({
+                    ...current,
+                    modules: [...current.modules, makeModule(current.courseSlug, current.modules.length)],
+                  }))
+                }
+                className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
+              >
+                <Plus className="h-4 w-4" />
+                Add module
+              </button>
             </div>
 
-            <div className="space-y-5">
+            <div className="mt-6 space-y-4">
               {curriculum.modules.map((module, moduleIndex) => (
-                <div key={`${module.title}-${moduleIndex}`} className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
-                  <div className="flex items-center justify-between gap-4">
-                    <input
-                      value={module.title}
-                      onChange={(event) => updateModule(moduleIndex, (currentModule) => ({ ...currentModule, title: event.target.value }))}
-                      className="w-full rounded-2xl border border-slate-200 px-4 py-3 font-semibold text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                    />
-                    <button
-                      onClick={() =>
-                        updateCurriculum((current) => ({
-                          ...current,
-                          modules: current.modules.filter((_, index) => index !== moduleIndex).map((item, index) => ({ ...item, order: index + 1 })),
-                        }))
-                      }
-                      className="inline-flex items-center gap-2 rounded-2xl border border-rose-200 px-4 py-3 text-sm font-semibold text-rose-700"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                      Remove
-                    </button>
-                  </div>
+                <details key={`${module.order}-${module.title}-${moduleIndex}`} className="overflow-hidden rounded-[24px] border border-slate-200 bg-slate-50" open={moduleIndex === 0}>
+                  <summary className="flex cursor-pointer items-center justify-between gap-4 px-5 py-4">
+                    <div className="min-w-0">
+                      <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Module {module.order}</div>
+                      <div className="mt-1 break-words text-lg font-bold text-slate-950">{module.title}</div>
+                      <div className="mt-1 text-sm text-slate-600">{module.lessons.length} lessons</div>
+                    </div>
+                    <ChevronDown className="h-5 w-5 shrink-0 text-slate-400" />
+                  </summary>
 
-                  <textarea
-                    value={module.description}
-                    onChange={(event) => updateModule(moduleIndex, (currentModule) => ({ ...currentModule, description: event.target.value }))}
-                    rows={3}
-                    className="mt-4 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                  />
+                  <div className="space-y-5 border-t border-slate-200 px-5 py-5">
+                    <div className="flex justify-end">
+                      <button
+                        onClick={() =>
+                          updateCurriculum((current) => ({
+                            ...current,
+                            modules: current.modules
+                              .filter((_, index) => index !== moduleIndex)
+                              .map((item, index) => ({ ...item, order: index + 1 })),
+                          }))
+                        }
+                        className="inline-flex items-center gap-2 text-sm font-semibold text-rose-600"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Remove module
+                      </button>
+                    </div>
 
-                  <div className="mt-4 grid gap-4 md:grid-cols-2">
-                    <SimpleField
-                      label="Assessment title"
-                      value={module.assessmentTitle || ''}
-                      onChange={(value) => updateModule(moduleIndex, (currentModule) => ({ ...currentModule, assessmentTitle: value }))}
-                    />
-                    <SimpleField
-                      label="Assessment quiz ID"
-                      value={module.assessmentQuizId || ''}
-                      onChange={(value) => updateModule(moduleIndex, (currentModule) => ({ ...currentModule, assessmentQuizId: value }))}
-                    />
-                  </div>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <Field label="Module title">
+                        <input
+                          value={module.title}
+                          onChange={(event) => updateModule(moduleIndex, (currentModule) => ({ ...currentModule, title: event.target.value }))}
+                          className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                        />
+                      </Field>
+                      <Field label="Assessment title">
+                        <input
+                          value={module.assessmentTitle || ''}
+                          onChange={(event) => updateModule(moduleIndex, (currentModule) => ({ ...currentModule, assessmentTitle: event.target.value }))}
+                          className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                        />
+                      </Field>
+                    </div>
 
-                  <div className="mt-5 space-y-4">
-                    {module.lessons.map((lesson, lessonIndex) => {
-                      const suggestion = lessonSuggestions[lesson.slug];
-                      const playground = lesson.playground;
-                      return (
-                        <div key={`${lesson.slug}-${lessonIndex}`} className="rounded-[24px] border border-slate-200 bg-white p-5">
-                          <div className="flex flex-wrap items-center justify-between gap-3">
-                            <p className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-500">
-                              Lesson {lessonIndex + 1}
-                            </p>
-                            <div className="flex flex-wrap gap-2">
-                              {agentAssignment ? (
-                                <button
-                                  onClick={() => requestLessonSuggestion(lesson.slug)}
-                                  disabled={suggestingLessonSlug === lesson.slug}
-                                  className="inline-flex items-center gap-2 rounded-2xl border border-blue-200 px-3 py-2 text-sm font-semibold text-blue-700 transition hover:border-blue-400 disabled:opacity-60"
-                                >
-                                  {suggestingLessonSlug === lesson.slug ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                  ) : (
-                                    <WandSparkles className="h-4 w-4" />
-                                  )}
-                                  Suggest with agent
-                                </button>
-                              ) : null}
+                    <Field label="Module description">
+                      <textarea
+                        value={module.description}
+                        onChange={(event) => updateModule(moduleIndex, (currentModule) => ({ ...currentModule, description: event.target.value }))}
+                        rows={3}
+                        className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                      />
+                    </Field>
+
+                    <Field label="Assessment quiz ID">
+                      <input
+                        value={module.assessmentQuizId || ''}
+                        onChange={(event) => updateModule(moduleIndex, (currentModule) => ({ ...currentModule, assessmentQuizId: event.target.value }))}
+                        className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                      />
+                    </Field>
+
+                    <div className="space-y-4">
+                      {module.lessons.map((lesson, lessonIndex) => (
+                        <details key={`${lesson.slug}-${lessonIndex}`} className="rounded-[22px] border border-slate-200 bg-white" open={lessonIndex === 0}>
+                          <summary className="flex cursor-pointer items-center justify-between gap-4 px-4 py-4">
+                            <div className="min-w-0">
+                              <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Lesson {lessonIndex + 1}</div>
+                              <div className="mt-1 break-words font-semibold text-slate-950">{lesson.title}</div>
+                            </div>
+                            <ChevronDown className="h-5 w-5 shrink-0 text-slate-400" />
+                          </summary>
+
+                          <div className="space-y-4 border-t border-slate-200 px-4 py-4">
+                            <div className="flex justify-end">
                               <button
                                 onClick={() =>
                                   updateModule(moduleIndex, (currentModule) => ({
@@ -437,396 +709,197 @@ export default function CMSPage() {
                                     lessons: currentModule.lessons.filter((_, index) => index !== lessonIndex),
                                   }))
                                 }
-                                className="text-sm font-semibold text-rose-600"
+                                className="inline-flex items-center gap-2 text-sm font-semibold text-rose-600"
                               >
-                                Remove
+                                <Trash2 className="h-4 w-4" />
+                                Remove lesson
                               </button>
                             </div>
-                          </div>
-                          {suggestion ? (
-                            <div className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-4">
-                              <div className="flex flex-wrap items-center justify-between gap-3">
-                                <div>
-                                  <div className="text-sm font-semibold text-blue-900">{suggestion.title}</div>
-                                  <p className="mt-1 text-sm text-blue-800">{suggestion.summary}</p>
-                                </div>
-                                <button
-                                  onClick={() => applyLessonSuggestion(moduleIndex, lessonIndex, lesson.slug)}
-                                  className="rounded-2xl bg-blue-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-800"
-                                >
-                                  Apply suggestion
-                                </button>
-                              </div>
-                            </div>
-                          ) : null}
 
-                          <div className="mt-4 grid gap-4 md:grid-cols-2">
-                            <SimpleField
-                              label="Title"
-                              value={lesson.title}
-                              onChange={(value) => updateLesson(moduleIndex, lessonIndex, (currentLesson) => ({ ...currentLesson, title: value }))}
-                            />
-                            <SimpleField
-                              label="Slug"
-                              value={lesson.slug}
-                              onChange={(value) => updateLesson(moduleIndex, lessonIndex, (currentLesson) => ({ ...currentLesson, slug: value }))}
-                            />
-                            <div className="md:col-span-2">
-                              <label className="mb-2 block text-sm font-semibold text-slate-700">Summary</label>
+                            <div className="grid gap-4 md:grid-cols-2">
+                              <Field label="Lesson title">
+                                <input
+                                  value={lesson.title}
+                                  onChange={(event) => updateLesson(moduleIndex, lessonIndex, (currentLesson) => ({ ...currentLesson, title: event.target.value }))}
+                                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                                />
+                              </Field>
+                              <Field label="Lesson slug">
+                                <input
+                                  value={lesson.slug}
+                                  onChange={(event) => updateLesson(moduleIndex, lessonIndex, (currentLesson) => ({ ...currentLesson, slug: event.target.value }))}
+                                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                                />
+                              </Field>
+                              <Field label="Library lesson slug">
+                                <input
+                                  value={lesson.libraryLessonSlug || ''}
+                                  onChange={(event) => updateLesson(moduleIndex, lessonIndex, (currentLesson) => ({ ...currentLesson, libraryLessonSlug: event.target.value }))}
+                                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                                />
+                              </Field>
+                              <Field label="Duration (minutes)">
+                                <input
+                                  type="number"
+                                  value={String(lesson.durationMinutes)}
+                                  onChange={(event) => updateLesson(moduleIndex, lessonIndex, (currentLesson) => ({ ...currentLesson, durationMinutes: Number(event.target.value) || 0 }))}
+                                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                                />
+                              </Field>
+                            </div>
+                            
+                            <div className="grid gap-4 md:grid-cols-2">
+                              <Field label="Content type">
+                                <select
+                                  value={lesson.contentType}
+                                  onChange={(event) => updateLesson(moduleIndex, lessonIndex, (currentLesson) => ({ ...currentLesson, contentType: event.target.value }))}
+                                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                                >
+                                  {['lesson', 'quiz', 'test', 'project', 'resource'].map((option) => (
+                                    <option key={option} value={option}>
+                                      {option}
+                                    </option>
+                                  ))}
+                                </select>
+                              </Field>
+                              <Field label="Quiz ID">
+                                <input
+                                  value={lesson.quizId || ''}
+                                  onChange={(event) => updateLesson(moduleIndex, lessonIndex, (currentLesson) => ({ ...currentLesson, quizId: event.target.value }))}
+                                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                                />
+                              </Field>
+                            </div>
+
+                            <Field label="Quiz title">
+                              <input
+                                value={lesson.quizTitle || ''}
+                                onChange={(event) => updateLesson(moduleIndex, lessonIndex, (currentLesson) => ({ ...currentLesson, quizTitle: event.target.value }))}
+                                className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                              />
+                            </Field>
+
+                            <Field label="Lesson summary">
                               <textarea
                                 value={lesson.summary}
                                 onChange={(event) => updateLesson(moduleIndex, lessonIndex, (currentLesson) => ({ ...currentLesson, summary: event.target.value }))}
                                 rows={3}
-                                className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                                className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
                               />
-                            </div>
-                            <SimpleField
-                              label="Duration (minutes)"
-                              type="number"
-                              value={String(lesson.durationMinutes)}
-                              onChange={(value) =>
-                                updateLesson(moduleIndex, lessonIndex, (currentLesson) => ({
-                                  ...currentLesson,
-                                  durationMinutes: Number(value) || 0,
-                                }))
-                              }
-                            />
-                            <SimpleField
-                              label="Content type"
-                              value={lesson.contentType}
-                              onChange={(value) => updateLesson(moduleIndex, lessonIndex, (currentLesson) => ({ ...currentLesson, contentType: value }))}
-                            />
-                            <SimpleField
-                              label="Quiz after lesson"
-                              value={lesson.quizId || ''}
-                              onChange={(value) => updateLesson(moduleIndex, lessonIndex, (currentLesson) => ({ ...currentLesson, quizId: value }))}
-                            />
-                            <SimpleField
-                              label="Quiz title"
-                              value={lesson.quizTitle || ''}
-                              onChange={(value) => updateLesson(moduleIndex, lessonIndex, (currentLesson) => ({ ...currentLesson, quizTitle: value }))}
-                            />
-                          </div>
+                            </Field>
 
-                          <div className="mt-5 grid gap-4 md:grid-cols-2">
-                            <MultiLineListField
-                              label="Learning objectives"
-                              values={lesson.learningObjectives || []}
-                              onChange={(values) => updateLesson(moduleIndex, lessonIndex, (currentLesson) => ({ ...currentLesson, learningObjectives: values }))}
-                            />
-                            <MultiLineListField
-                              label="Key takeaways"
-                              values={lesson.keyTakeaways || []}
-                              onChange={(values) => updateLesson(moduleIndex, lessonIndex, (currentLesson) => ({ ...currentLesson, keyTakeaways: values }))}
-                            />
-                          </div>
+                            <Field label="Learning objectives">
+                              <textarea
+                                value={(lesson.learningObjectives || []).join('\n')}
+                                onChange={(event) => updateLesson(moduleIndex, lessonIndex, (currentLesson) => ({ ...currentLesson, learningObjectives: event.target.value.split('\n').map((item) => item.trim()).filter(Boolean) }))}
+                                rows={4}
+                                className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                              />
+                            </Field>
 
-                          <div className="mt-5 space-y-4">
-                            <div>
-                              <label className="mb-2 block text-sm font-semibold text-slate-700">Lesson content markup</label>
+                            <Field label="Key takeaways">
+                              <textarea
+                                value={(lesson.keyTakeaways || []).join('\n')}
+                                onChange={(event) => updateLesson(moduleIndex, lessonIndex, (currentLesson) => ({ ...currentLesson, keyTakeaways: event.target.value.split('\n').map((item) => item.trim()).filter(Boolean) }))}
+                                rows={4}
+                                className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                              />
+                            </Field>
+
+                            <Field label="Lesson learning flow">
+                              <textarea
+                                value={(lesson.learningFlow || []).join('\n')}
+                                onChange={(event) => updateLesson(moduleIndex, lessonIndex, (currentLesson) => ({ ...currentLesson, learningFlow: event.target.value.split('\n').map((item) => item.trim()).filter(Boolean) }))}
+                                rows={4}
+                                className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                              />
+                            </Field>
+
+                            <Field label="Content markdown">
                               <textarea
                                 value={lesson.contentMarkdown || ''}
                                 onChange={(event) => updateLesson(moduleIndex, lessonIndex, (currentLesson) => ({ ...currentLesson, contentMarkdown: event.target.value }))}
-                                rows={14}
-                                className="w-full rounded-2xl border border-slate-200 px-4 py-3 font-mono text-sm text-slate-800 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                                rows={12}
+                                spellCheck={false}
+                                className="w-full rounded-2xl border border-slate-200 bg-slate-950 px-4 py-3 font-mono text-sm text-slate-100 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
                               />
-                            </div>
+                            </Field>
+                            <Preview title="Lesson content preview" content={lesson.contentMarkdown || '# Lesson preview\n\nAdd lesson markdown here.'} />
 
-                            <div className="grid gap-4 md:grid-cols-2">
-                              <div>
-                                <label className="mb-2 block text-sm font-semibold text-slate-700">Practice prompt</label>
-                                <textarea
-                                  value={lesson.practicePrompt || ''}
-                                  onChange={(event) => updateLesson(moduleIndex, lessonIndex, (currentLesson) => ({ ...currentLesson, practicePrompt: event.target.value }))}
-                                  rows={4}
-                                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                                />
-                              </div>
-                              <div>
-                                <label className="mb-2 block text-sm font-semibold text-slate-700">Instructor notes</label>
-                                <textarea
-                                  value={lesson.instructorNotes || ''}
-                                  onChange={(event) => updateLesson(moduleIndex, lessonIndex, (currentLesson) => ({ ...currentLesson, instructorNotes: event.target.value }))}
-                                  rows={4}
-                                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                                />
-                              </div>
-                            </div>
+                            <Field label="Visual aid">
+                              <textarea
+                                value={lesson.visualAidMarkdown || ''}
+                                onChange={(event) => updateLesson(moduleIndex, lessonIndex, (currentLesson) => ({ ...currentLesson, visualAidMarkdown: event.target.value }))}
+                                rows={6}
+                                className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                              />
+                            </Field>
+                            <Preview title="Lesson visual aid preview" content={lesson.visualAidMarkdown || '## Visual aid\n`Concept` -> `Example` -> `Practice`'} />
+
+                            <Field label="Practice prompt">
+                              <textarea
+                                value={lesson.practicePrompt || ''}
+                                onChange={(event) => updateLesson(moduleIndex, lessonIndex, (currentLesson) => ({ ...currentLesson, practicePrompt: event.target.value }))}
+                                rows={3}
+                                className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                              />
+                            </Field>
+
+                            <Field label="Instructor notes">
+                              <textarea
+                                value={lesson.instructorNotes || ''}
+                                onChange={(event) => updateLesson(moduleIndex, lessonIndex, (currentLesson) => ({ ...currentLesson, instructorNotes: event.target.value }))}
+                                rows={3}
+                                className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                              />
+                            </Field>
                           </div>
+                        </details>
+                      ))}
+                    </div>
 
-                          <div className="mt-5 rounded-[22px] border border-slate-200 bg-slate-50 p-4">
-                            <div className="flex items-center justify-between gap-3">
-                              <div>
-                                <div className="text-sm font-semibold text-slate-900">Hands-on code workspace</div>
-                                <p className="mt-1 text-sm text-slate-600">Enable this when learners should write and run code during the lesson or test.</p>
-                              </div>
-                              <button
-                                onClick={() =>
-                                  updateLesson(moduleIndex, lessonIndex, (currentLesson) => ({
-                                    ...currentLesson,
-                                    playground: currentLesson.playground
-                                      ? null
-                                      : {
-                                          mode: 'web',
-                                          instructions: 'Use the code workspace to complete the lesson task.',
-                                          starterHtml: '<div class="app">Start here</div>',
-                                          starterCss: '.app {\n  padding: 24px;\n}',
-                                          starterJs: 'console.log(\"Ready\");',
-                                          checks: [],
-                                        },
-                                  }))
-                                }
-                                className="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700"
-                              >
-                                {playground ? 'Disable workspace' : 'Enable workspace'}
-                              </button>
-                            </div>
-                            {playground ? (
-                              <div className="mt-4 space-y-4">
-                                <div className="grid gap-4 md:grid-cols-2">
-                                  <SimpleField
-                                    label="Mode"
-                                    value={playground.mode}
-                                    onChange={(value) =>
-                                      updateLesson(moduleIndex, lessonIndex, (currentLesson) => ({
-                                        ...currentLesson,
-                                        playground: currentLesson.playground
-                                          ? {
-                                              ...currentLesson.playground,
-                                              mode: value === 'javascript' ? 'javascript' : 'web',
-                                            }
-                                          : currentLesson.playground,
-                                      }))
-                                    }
-                                  />
-                                  <div>
-                                    <label className="mb-2 block text-sm font-semibold text-slate-700">Workspace instructions</label>
-                                    <textarea
-                                      value={playground.instructions}
-                                      onChange={(event) =>
-                                        updateLesson(moduleIndex, lessonIndex, (currentLesson) => ({
-                                          ...currentLesson,
-                                          playground: currentLesson.playground
-                                            ? { ...currentLesson.playground, instructions: event.target.value }
-                                            : currentLesson.playground,
-                                        }))
-                                      }
-                                      rows={3}
-                                      className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-                                    />
-                                  </div>
-                                </div>
-
-                                {playground.mode === 'web' ? (
-                                  <div className="grid gap-4 md:grid-cols-3">
-                                    <CodeArea
-                                      label="Starter HTML"
-                                      value={playground.starterHtml || ''}
-                                      onChange={(value) =>
-                                        updateLesson(moduleIndex, lessonIndex, (currentLesson) => ({
-                                          ...currentLesson,
-                                          playground: currentLesson.playground
-                                            ? { ...currentLesson.playground, starterHtml: value }
-                                            : currentLesson.playground,
-                                        }))
-                                      }
-                                    />
-                                    <CodeArea
-                                      label="Starter CSS"
-                                      value={playground.starterCss || ''}
-                                      onChange={(value) =>
-                                        updateLesson(moduleIndex, lessonIndex, (currentLesson) => ({
-                                          ...currentLesson,
-                                          playground: currentLesson.playground
-                                            ? { ...currentLesson.playground, starterCss: value }
-                                            : currentLesson.playground,
-                                        }))
-                                      }
-                                    />
-                                    <CodeArea
-                                      label="Starter JS"
-                                      value={playground.starterJs || ''}
-                                      onChange={(value) =>
-                                        updateLesson(moduleIndex, lessonIndex, (currentLesson) => ({
-                                          ...currentLesson,
-                                          playground: currentLesson.playground
-                                            ? { ...currentLesson.playground, starterJs: value }
-                                            : currentLesson.playground,
-                                        }))
-                                      }
-                                    />
-                                  </div>
-                                ) : (
-                                  <CodeArea
-                                    label="Starter JavaScript"
-                                    value={playground.starterJs || ''}
-                                    onChange={(value) =>
-                                      updateLesson(moduleIndex, lessonIndex, (currentLesson) => ({
-                                        ...currentLesson,
-                                        playground: currentLesson.playground
-                                          ? { ...currentLesson.playground, starterJs: value }
-                                          : currentLesson.playground,
-                                      }))
-                                    }
-                                  />
-                                )}
-
-                                <div className="space-y-3">
-                                  <div className="flex items-center justify-between">
-                                    <div className="text-sm font-semibold text-slate-900">Workspace checks</div>
-                                    <button
-                                      onClick={() =>
-                                        updateLesson(moduleIndex, lessonIndex, (currentLesson) => ({
-                                          ...currentLesson,
-                                          playground: currentLesson.playground
-                                            ? {
-                                                ...currentLesson.playground,
-                                                checks: [...currentLesson.playground.checks, makePlaygroundCheck()],
-                                              }
-                                            : currentLesson.playground,
-                                        }))
-                                      }
-                                      className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700"
-                                    >
-                                      <Plus className="h-4 w-4" />
-                                      Add check
-                                    </button>
-                                  </div>
-                                  {playground.checks.map((check, checkIndex) => (
-                                    <div key={`${check.label}-${checkIndex}`} className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 md:grid-cols-[1.2fr_0.8fr_0.8fr_1.2fr_auto]">
-                                      <SimpleField
-                                        label="Label"
-                                        value={check.label}
-                                        onChange={(value) =>
-                                          updateLesson(moduleIndex, lessonIndex, (currentLesson) => ({
-                                            ...currentLesson,
-                                            playground: currentLesson.playground
-                                              ? {
-                                                  ...currentLesson.playground,
-                                                  checks: currentLesson.playground.checks.map((currentCheck, index) =>
-                                                    index === checkIndex ? { ...currentCheck, label: value } : currentCheck
-                                                  ),
-                                                }
-                                              : currentLesson.playground,
-                                          }))
-                                        }
-                                      />
-                                      <SimpleField
-                                        label="Type"
-                                        value={check.type}
-                                        onChange={(value) =>
-                                          updateLesson(moduleIndex, lessonIndex, (currentLesson) => ({
-                                            ...currentLesson,
-                                            playground: currentLesson.playground
-                                              ? {
-                                                  ...currentLesson.playground,
-                                                  checks: currentLesson.playground.checks.map((currentCheck, index) =>
-                                                    index === checkIndex
-                                                      ? { ...currentCheck, type: value === 'output' ? 'output' : 'includes' }
-                                                      : currentCheck
-                                                  ),
-                                                }
-                                              : currentLesson.playground,
-                                          }))
-                                        }
-                                      />
-                                      <SimpleField
-                                        label="Target"
-                                        value={check.target}
-                                        onChange={(value) =>
-                                          updateLesson(moduleIndex, lessonIndex, (currentLesson) => ({
-                                            ...currentLesson,
-                                            playground: currentLesson.playground
-                                              ? {
-                                                  ...currentLesson.playground,
-                                                  checks: currentLesson.playground.checks.map((currentCheck, index) =>
-                                                    index === checkIndex
-                                                      ? {
-                                                          ...currentCheck,
-                                                          target: ['html', 'css', 'js', 'console'].includes(value) ? (value as LessonPlaygroundCheck['target']) : 'js',
-                                                        }
-                                                      : currentCheck
-                                                  ),
-                                                }
-                                              : currentLesson.playground,
-                                          }))
-                                        }
-                                      />
-                                      <SimpleField
-                                        label="Expected value"
-                                        value={check.value}
-                                        onChange={(value) =>
-                                          updateLesson(moduleIndex, lessonIndex, (currentLesson) => ({
-                                            ...currentLesson,
-                                            playground: currentLesson.playground
-                                              ? {
-                                                  ...currentLesson.playground,
-                                                  checks: currentLesson.playground.checks.map((currentCheck, index) =>
-                                                    index === checkIndex ? { ...currentCheck, value } : currentCheck
-                                                  ),
-                                                }
-                                              : currentLesson.playground,
-                                          }))
-                                        }
-                                      />
-                                      <button
-                                        onClick={() =>
-                                          updateLesson(moduleIndex, lessonIndex, (currentLesson) => ({
-                                            ...currentLesson,
-                                            playground: currentLesson.playground
-                                              ? {
-                                                  ...currentLesson.playground,
-                                                  checks: currentLesson.playground.checks.filter((_, index) => index !== checkIndex),
-                                                }
-                                              : currentLesson.playground,
-                                          }))
-                                        }
-                                        className="mt-7 text-sm font-semibold text-rose-600"
-                                      >
-                                        Remove
-                                      </button>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            ) : null}
-                          </div>
-                        </div>
-                      );
-                    })}
+                    <button
+                      onClick={() =>
+                        updateModule(moduleIndex, (currentModule) => ({
+                          ...currentModule,
+                          lessons: [...currentModule.lessons, makeLesson(curriculum.courseSlug, moduleIndex, currentModule.lessons.length)],
+                        }))
+                      }
+                      className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Add lesson
+                    </button>
                   </div>
-
-                  <button
-                    onClick={() => updateModule(moduleIndex, (currentModule) => ({ ...currentModule, lessons: [...currentModule.lessons, makeLesson(moduleIndex, currentModule.lessons.length)] }))}
-                    className="mt-4 inline-flex items-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700"
-                  >
-                    <Plus className="h-4 w-4" />
-                    Add lesson
-                  </button>
-                </div>
+                </details>
               ))}
             </div>
-
-            <button
-              onClick={() => updateCurriculum((current) => ({ ...current, modules: [...current.modules, makeModule(current.modules.length)] }))}
-              className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
-            >
-              <Plus className="h-4 w-4" />
-              Add module
-            </button>
           </section>
 
-          <section className="space-y-6 rounded-[28px] border border-slate-200 bg-white p-6 shadow-lg shadow-slate-100">
-            <div>
-              <h2 className="text-xl font-bold text-slate-950">Milestone projects</h2>
-              <p className="mt-1 text-sm text-slate-600">Add a project after each major checkpoint.</p>
+          <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-lg shadow-slate-100">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-bold text-slate-950">Milestone projects</h2>
+                <p className="mt-1 text-sm text-slate-600">Keep project expectations visible, but in the same vertical flow as the rest of the page.</p>
+              </div>
+              <button
+                onClick={() =>
+                  updateCurriculum((current) => ({
+                    ...current,
+                    milestoneProjects: [...current.milestoneProjects, makeProject(current.milestoneProjects.length)],
+                  }))
+                }
+                className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700"
+              >
+                <Plus className="h-4 w-4" />
+                Add milestone
+              </button>
             </div>
 
-            <div className="space-y-4">
+            <div className="mt-6 space-y-4">
               {curriculum.milestoneProjects.map((project, projectIndex) => (
-                <div key={`${project.title}-${projectIndex}`} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-semibold text-slate-500">Milestone {project.milestoneOrder}</p>
+                <div key={`${project.title}-${projectIndex}`} className="rounded-[22px] border border-slate-200 bg-slate-50 p-4">
+                  <div className="flex justify-end">
                     <button
                       onClick={() =>
                         updateCurriculum((current) => ({
@@ -836,176 +909,116 @@ export default function CMSPage() {
                             .map((item, index) => ({ ...item, milestoneOrder: index + 1 })),
                         }))
                       }
-                      className="text-sm font-semibold text-rose-600"
+                      className="inline-flex items-center gap-2 text-sm font-semibold text-rose-600"
                     >
+                      <Trash2 className="h-4 w-4" />
                       Remove
                     </button>
                   </div>
                   <div className="mt-4 space-y-4">
-                    <SimpleField
-                      label="Project title"
-                      value={project.title}
-                      onChange={(value) =>
-                        updateCurriculum((current) => ({
-                          ...current,
-                          milestoneProjects: current.milestoneProjects.map((item, index) =>
-                            index === projectIndex ? { ...item, title: value } : item
-                          ),
-                        }))
-                      }
-                    />
-                    <div>
-                      <label className="mb-2 block text-sm font-semibold text-slate-700">Description</label>
+                    <Field label="Project title">
+                      <input
+                        value={project.title}
+                        onChange={(event) =>
+                          updateCurriculum((current) => ({
+                            ...current,
+                            milestoneProjects: current.milestoneProjects.map((item, index) => (index === projectIndex ? { ...item, title: event.target.value } : item)),
+                          }))
+                        }
+                        className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                      />
+                    </Field>
+                    <Field label="Description">
                       <textarea
                         value={project.description}
                         onChange={(event) =>
                           updateCurriculum((current) => ({
                             ...current,
-                            milestoneProjects: current.milestoneProjects.map((item, index) =>
-                              index === projectIndex ? { ...item, description: event.target.value } : item
-                            ),
+                            milestoneProjects: current.milestoneProjects.map((item, index) => (index === projectIndex ? { ...item, description: event.target.value } : item)),
                           }))
                         }
                         rows={4}
-                        className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                        className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
                       />
-                    </div>
+                    </Field>
                     <div className="grid gap-4 md:grid-cols-2">
-                      <SimpleField
-                        label="Estimated hours"
-                        type="number"
-                        value={String(project.estimatedHours)}
-                        onChange={(value) =>
-                          updateCurriculum((current) => ({
-                            ...current,
-                            milestoneProjects: current.milestoneProjects.map((item, index) =>
-                              index === projectIndex ? { ...item, estimatedHours: Number(value) || 0 } : item
-                            ),
-                          }))
-                        }
-                      />
-                      <SimpleField
-                        label="Completion threshold"
-                        type="number"
-                        value={String(project.completionThreshold)}
-                        onChange={(value) =>
-                          updateCurriculum((current) => ({
-                            ...current,
-                            milestoneProjects: current.milestoneProjects.map((item, index) =>
-                              index === projectIndex ? { ...item, completionThreshold: Number(value) || 70 } : item
-                            ),
-                          }))
-                        }
-                      />
+                      <Field label="Estimated hours">
+                        <input
+                          type="number"
+                          value={String(project.estimatedHours)}
+                          onChange={(event) =>
+                            updateCurriculum((current) => ({
+                              ...current,
+                              milestoneProjects: current.milestoneProjects.map((item, index) => (index === projectIndex ? { ...item, estimatedHours: Number(event.target.value) || 0 } : item)),
+                            }))
+                          }
+                          className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                        />
+                      </Field>
+                      <Field label="Completion threshold">
+                        <input
+                          type="number"
+                          value={String(project.completionThreshold)}
+                          onChange={(event) =>
+                            updateCurriculum((current) => ({
+                              ...current,
+                              milestoneProjects: current.milestoneProjects.map((item, index) => (index === projectIndex ? { ...item, completionThreshold: Number(event.target.value) || 70 } : item)),
+                            }))
+                          }
+                          className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                        />
+                      </Field>
                     </div>
-                    <MultiLineListField
-                      label="Deliverables"
-                      values={project.deliverables}
-                      onChange={(values) =>
-                        updateCurriculum((current) => ({
-                          ...current,
-                          milestoneProjects: current.milestoneProjects.map((item, index) =>
-                            index === projectIndex ? { ...item, deliverables: values } : item
-                          ),
-                        }))
-                      }
-                    />
+                    <Field label="Deliverables">
+                      <textarea
+                        value={project.deliverables.join('\n')}
+                        onChange={(event) =>
+                          updateCurriculum((current) => ({
+                            ...current,
+                            milestoneProjects: current.milestoneProjects.map((item, index) => (index === projectIndex ? { ...item, deliverables: event.target.value.split('\n').map((entry) => entry.trim()).filter(Boolean) } : item)),
+                          }))
+                        }
+                        rows={4}
+                        className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                      />
+                    </Field>
                   </div>
                 </div>
               ))}
-            </div>
 
-            <button
-              onClick={() =>
-                updateCurriculum((current) => ({
-                  ...current,
-                  milestoneProjects: [...current.milestoneProjects, makeProject(current.milestoneProjects.length)],
-                }))
-              }
-              className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700"
-            >
-              <Plus className="h-4 w-4" />
-              Add milestone project
-            </button>
+              {curriculum.milestoneProjects.length === 0 ? (
+                <div className="rounded-[22px] border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+                  No milestone projects yet.
+                </div>
+              ) : null}
+            </div>
           </section>
         </div>
+      ) : (
+        <div className="rounded-[28px] border border-slate-200 bg-white px-6 py-12 text-center shadow-lg shadow-slate-100">
+          <BookOpen className="mx-auto h-12 w-12 text-slate-300" />
+          <h2 className="mt-4 text-xl font-bold text-slate-950">Create or choose a course</h2>
+          <p className="mt-2 text-sm text-slate-600">Start with the course modal if you want a manual shell, or upload a source document in course mode to let the agent build the curriculum from the file.</p>
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="mt-6 inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
+          >
+            <Plus className="h-4 w-4" />
+            Create course
+          </button>
+        </div>
+      )}
+
+      {showCreateModal ? (
+        <CourseModal
+          course={null}
+          onSubmit={(data) => handleCreateCourse(data)}
+          onStartImport={handleModalImportStart}
+          loading={creatingCourse}
+          importing={importingCourse}
+          onClose={() => setShowCreateModal(false)}
+        />
       ) : null}
-    </div>
-  );
-}
-
-function SimpleField({
-  label,
-  value,
-  onChange,
-  type = 'text',
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  type?: string;
-}) {
-  return (
-    <div>
-      <label className="mb-2 block text-sm font-semibold text-slate-700">{label}</label>
-      <input
-        type={type}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-      />
-    </div>
-  );
-}
-
-function MultiLineListField({
-  label,
-  values,
-  onChange,
-}: {
-  label: string;
-  values: string[];
-  onChange: (values: string[]) => void;
-}) {
-  return (
-    <div>
-      <label className="mb-2 block text-sm font-semibold text-slate-700">{label}</label>
-      <textarea
-        value={values.join('\n')}
-        onChange={(event) =>
-          onChange(
-            event.target.value
-              .split('\n')
-              .map((item) => item.trim())
-              .filter(Boolean)
-          )
-        }
-        rows={5}
-        className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-      />
-    </div>
-  );
-}
-
-function CodeArea({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <div>
-      <label className="mb-2 block text-sm font-semibold text-slate-700">{label}</label>
-      <textarea
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        rows={10}
-        spellCheck={false}
-        className="w-full rounded-2xl border border-slate-200 bg-slate-950 px-4 py-3 font-mono text-sm text-slate-100 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-      />
     </div>
   );
 }

@@ -1,10 +1,10 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Save, X } from 'lucide-react';
+import { Bot, Loader2, Save, WandSparkles, X } from 'lucide-react';
 
 import { api } from '@/lib/api';
-import { QuizQuestion } from '@/lib/types';
+import { AgentAssignment, GeneratedQuestionContentPayload, QuizQuestion } from '@/lib/types';
 
 interface Quiz {
   id: string;
@@ -41,6 +41,12 @@ const QuestionModal: React.FC<QuestionModalProps> = ({
     isActive: true,
   });
   const [submitting, setSubmitting] = useState(false);
+  const [agentAssignment, setAgentAssignment] = useState<AgentAssignment | null>(null);
+  const [agentPrompt, setAgentPrompt] = useState('');
+  const [drafting, setDrafting] = useState(false);
+  const [agentError, setAgentError] = useState('');
+  const [validationError, setValidationError] = useState('');
+  const [submitError, setSubmitError] = useState('');
 
   useEffect(() => {
     if (!initialData) {
@@ -72,6 +78,34 @@ const QuestionModal: React.FC<QuestionModalProps> = ({
       isActive: initialData.isActive ?? true,
     });
   }, [initialData]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setValidationError('');
+      setSubmitError('');
+      setAgentError('');
+      setAgentPrompt('');
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    const loadAssignment = async () => {
+      try {
+        const response = await api.getAgentAssignments();
+        const approvedAssignment = response.data.find(
+          (assignment) => assignment.agentType === 'course_builder' && assignment.status === 'approved'
+        ) || null;
+        setAgentAssignment(approvedAssignment);
+      } catch (error) {
+        console.error('Failed to load question agent assignment:', error);
+        setAgentAssignment(null);
+      }
+    };
+
+    if (isOpen) {
+      loadAssignment();
+    }
+  }, [isOpen]);
 
   const updateOption = (index: number, value: string) => {
     setFormData((current) => {
@@ -111,19 +145,21 @@ const QuestionModal: React.FC<QuestionModalProps> = ({
 
   const handleSubmit = async () => {
     const cleanedOptions = formData.options.map((option) => option.trim()).filter(Boolean);
+    setValidationError('');
+    setSubmitError('');
 
     if (!formData.quizId.trim() || !formData.question.trim()) {
-      alert('Quiz ID and question text are required.');
+      setValidationError('Quiz ID and question text are required.');
       return;
     }
 
     if (cleanedOptions.length < 2) {
-      alert('Add at least two answer options.');
+      setValidationError('Add at least two answer options.');
       return;
     }
 
     if (!formData.correctAnswer.trim() || !cleanedOptions.includes(formData.correctAnswer.trim())) {
-      alert('Select a valid correct answer from the options.');
+      setValidationError('Select a valid correct answer from the options.');
       return;
     }
 
@@ -146,9 +182,37 @@ const QuestionModal: React.FC<QuestionModalProps> = ({
       onClose();
     } catch (error) {
       console.error('Failed to save question:', error);
-      alert('Failed to save question.');
+      setSubmitError('Failed to save question.');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleDraftWithAgent = async () => {
+    if (!agentAssignment) {
+      return;
+    }
+
+    try {
+      setDrafting(true);
+      setAgentError('');
+      const response = await api.runAgentAction(agentAssignment.id, {
+        actionType: 'generate_question_content',
+        instruction:
+          agentPrompt.trim() ||
+          `Generate one complete question for quiz ${formData.quizId || 'this quiz'} using the current form context.`,
+        draftPayload: formData,
+      });
+      const generated = response.data.payload as unknown as GeneratedQuestionContentPayload;
+      setFormData((current) => ({
+        ...current,
+        ...generated,
+        options: generated.options?.length ? generated.options : current.options,
+      }));
+    } catch (error: any) {
+      setAgentError(error.message || 'Unable to generate a question draft right now.');
+    } finally {
+      setDrafting(false);
     }
   };
 
@@ -170,6 +234,39 @@ const QuestionModal: React.FC<QuestionModalProps> = ({
         </div>
 
         <div className="space-y-6 px-6 py-6">
+          {validationError ? <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">{validationError}</div> : null}
+          {submitError ? <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{submitError}</div> : null}
+          {agentAssignment ? (
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                <Bot className="h-4 w-4 text-blue-700" />
+                Agent autofill
+              </div>
+              <p className="mt-2 text-sm text-slate-600">
+                Ask the course builder to generate a complete question draft, then review and save it manually.
+              </p>
+              <div className="mt-3 flex flex-col gap-3 md:flex-row">
+                <textarea
+                  value={agentPrompt}
+                  onChange={(event) => setAgentPrompt(event.target.value)}
+                  rows={3}
+                  placeholder="Describe the concept to assess, the skill level, and any constraint for the question."
+                  className="flex-1 rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                />
+                <button
+                  type="button"
+                  onClick={handleDraftWithAgent}
+                  disabled={drafting}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-60"
+                >
+                  {drafting ? <Loader2 className="h-4 w-4 animate-spin" /> : <WandSparkles className="h-4 w-4" />}
+                  Draft question
+                </button>
+              </div>
+              {agentError ? <p className="mt-3 text-sm text-rose-600">{agentError}</p> : null}
+            </div>
+          ) : null}
+
           <div className="grid gap-4 md:grid-cols-2">
             <div>
               <label className="mb-2 block text-sm font-semibold text-slate-700">Quiz</label>

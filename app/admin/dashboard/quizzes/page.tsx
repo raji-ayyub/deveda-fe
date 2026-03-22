@@ -2,25 +2,25 @@
 
 import React, { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
-import { QuizQuestion } from '@/lib/types';
+import AgenticContentIntakePanel from '@/components/dashboard/AgenticContentIntakePanel';
+import { ContentIngestionResult, CourseCatalog, QuizQuestion, QuizWithDetails } from '@/lib/types';
 import QuestionModal from '@/components/dashboard/QuestionModal';
+import ConfirmationDialog from '@/components/ui/ConfirmationDialog';
 import { Copy, Edit, Plus, RefreshCw, Search, Trash2 } from 'lucide-react';
-
-// Define a simple Quiz type derived from questions
-interface Quiz {
-  id: string;
-  title: string;
-}
 
 const QuizzesManagementPage: React.FC = () => {
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [filteredQuestions, setFilteredQuestions] = useState<QuizQuestion[]>([]);
-  const [quizzes, setQuizzes] = useState<Quiz[]>([]);
+  const [quizzes, setQuizzes] = useState<QuizWithDetails[]>([]);
+  const [courses, setCourses] = useState<CourseCatalog[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedQuestions, setSelectedQuestions] = useState<string[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState<QuizQuestion | undefined>(undefined);
+  const [error, setError] = useState('');
+  const [pendingDeleteQuestionId, setPendingDeleteQuestionId] = useState<string | null>(null);
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -30,22 +30,23 @@ const QuizzesManagementPage: React.FC = () => {
     filterQuestions();
   }, [questions, searchTerm]);
 
-  // Load all questions and derive quizzes from quizId
   const loadData = async () => {
     try {
       setLoading(true);
-      const questionsRes = await api.getQuestionsWithDetails();
+      setError('');
+      const [questionsRes, quizzesRes, coursesRes] = await Promise.all([
+        api.getQuestionsWithDetails(),
+        api.getQuizzes().catch(() => ({ data: [] as QuizWithDetails[] })),
+        api.getCourseCatalog().catch(() => ({ data: [] as CourseCatalog[] })),
+      ]);
       const allQuestions = questionsRes.data;
 
       setQuestions(allQuestions);
-
-      // Derive unique quizzes from questions
-      const uniqueQuizzes = Array.from(
-        new Map(allQuestions.map(q => [q.quizId, { id: q.quizId, title: `Quiz ${q.quizId}` }])).values()
-      );
-      setQuizzes(uniqueQuizzes);
+      setQuizzes(quizzesRes.data || []);
+      setCourses(coursesRes.data || []);
     } catch (error) {
       console.error('Failed to load questions:', error);
+      setError('Unable to load quiz questions right now.');
     } finally {
       setLoading(false);
     }
@@ -67,12 +68,13 @@ const QuizzesManagementPage: React.FC = () => {
   };
 
   const handleDelete = async (questionId: string) => {
-    if (!confirm('Delete this question?')) return;
     try {
       await api.deleteQuestion(questionId);
       setQuestions(questions.filter(q => q.id !== questionId));
+      setPendingDeleteQuestionId(null);
     } catch (error) {
       console.error('Failed to delete question:', error);
+      setError('Unable to delete the selected question right now.');
     }
   };
 
@@ -84,6 +86,7 @@ const QuizzesManagementPage: React.FC = () => {
       setQuestions([created.data, ...questions]);
     } catch (error) {
       console.error('Failed to duplicate question:', error);
+      setError('Unable to duplicate the selected question right now.');
     }
   };
 
@@ -110,13 +113,14 @@ const QuizzesManagementPage: React.FC = () => {
   };
 
   const handleBulkDelete = async () => {
-    if (!confirm('Delete selected questions?')) return;
     try {
       await Promise.all(selectedQuestions.map(id => api.deleteQuestion(id)));
       setQuestions(questions.filter(q => !selectedQuestions.includes(q.id)));
       setSelectedQuestions([]);
+      setConfirmBulkDelete(false);
     } catch (error) {
       console.error('Failed to delete selected questions:', error);
+      setError('Unable to delete the selected questions right now.');
     }
   };
 
@@ -139,6 +143,12 @@ const QuizzesManagementPage: React.FC = () => {
     }
   };
 
+  const handleImportedQuestions = (result: ContentIngestionResult) => {
+    if (result.questions.length > 0) {
+      loadData();
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-96">
@@ -156,14 +166,14 @@ const QuizzesManagementPage: React.FC = () => {
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Quiz Management</h2>
-          <p className="text-gray-600">Manage quiz questions</p>
+          <p className="text-gray-600">Import quiz files first, then use manual editing only for exceptions.</p>
         </div>
         <div className="flex items-center space-x-3">
           <button
             onClick={() => { setEditingQuestion(undefined); setModalOpen(true); }}
             className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg text-sm font-medium hover:opacity-90"
           >
-            <Plus className="w-4 h-4 mr-2" /> Add Question
+            <Plus className="w-4 h-4 mr-2" /> Manual question
           </button>
           <button
             onClick={loadData}
@@ -173,6 +183,19 @@ const QuizzesManagementPage: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {error ? (
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>
+      ) : null}
+
+      <AgenticContentIntakePanel
+        title="Upload quiz or question-bank source"
+        description="Feed the backend a document or structured JSON and let the intake agent turn it into stored quiz questions. This keeps assessment creation aligned with the new upload-first workflow."
+        courses={courses}
+        allowedIntents={['quiz', 'question_bank']}
+        defaultIntent="quiz"
+        onImported={handleImportedQuestions}
+      />
 
       {/* Search */}
       <div className="bg-white rounded-xl shadow-lg p-4 border border-gray-200 flex items-center gap-4">
@@ -230,7 +253,7 @@ const QuizzesManagementPage: React.FC = () => {
                     <Copy className="w-4 h-4 text-gray-500 hover:text-blue-600" />
                   </button>
                   <button
-                    onClick={() => handleDelete(q.id)}
+                    onClick={() => setPendingDeleteQuestionId(q.id)}
                     className="p-1 hover:bg-gray-100 rounded"
                     title="Delete"
                   >
@@ -252,7 +275,7 @@ const QuizzesManagementPage: React.FC = () => {
         <div className="fixed bottom-6 right-6 bg-white rounded-xl shadow-lg p-4 border border-gray-200 flex items-center space-x-4">
           <span className="text-sm text-gray-600">{selectedQuestions.length} questions selected</span>
           <button onClick={handleBulkDuplicate} className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700">Duplicate Selected</button>
-          <button onClick={handleBulkDelete} className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700">Delete Selected</button>
+          <button onClick={() => setConfirmBulkDelete(true)} className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700">Delete Selected</button>
         </div>
       )}
 
@@ -262,6 +285,30 @@ const QuizzesManagementPage: React.FC = () => {
         onSave={handleSave}
         initialData={editingQuestion}
         quizzes={quizzes} // Pass available quizzes for dropdown inside modal
+      />
+
+      <ConfirmationDialog
+        isOpen={Boolean(pendingDeleteQuestionId)}
+        title="Delete question"
+        description="This will permanently remove the selected question from the quiz bank."
+        confirmLabel="Delete question"
+        onCancel={() => setPendingDeleteQuestionId(null)}
+        onConfirm={() => {
+          if (pendingDeleteQuestionId) {
+            void handleDelete(pendingDeleteQuestionId);
+          }
+        }}
+      />
+
+      <ConfirmationDialog
+        isOpen={confirmBulkDelete}
+        title="Delete selected questions"
+        description={`This will permanently remove ${selectedQuestions.length} selected question${selectedQuestions.length === 1 ? '' : 's'} from the quiz bank.`}
+        confirmLabel="Delete selected"
+        onCancel={() => setConfirmBulkDelete(false)}
+        onConfirm={() => {
+          void handleBulkDelete();
+        }}
       />
     </div>
   );

@@ -1,1073 +1,64 @@
-// // app/page.tsx
-// import FeatureCard from '@/components/FeatureCard';
-// // import TestimonialCard from '@/components/TestimonialCard';
-// import { features, testimonials, steps } from '@/lib/data';
-
-// export default function HomePage() {
-//   return (
-//     <>
-//       {/* Hero Section */}
-//       <section className="bg-gradient-to-br from-blue-50 to-emerald-50 py-20 md:py-32">
-//         <div className="container mx-auto px-4 text-center">
-//           <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-dark mb-6">
-//             Master Coding Through Interactive Learning
-//           </h1>
-//           <p className="text-xl text-gray-600 mb-8 max-w-3xl mx-auto">
-//             CodeCraft offers a comprehensive platform to learn, practice, and master programming
-//             skills through interactive challenges, quizzes, and real-world projects.
-//           </p>
-//           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-//             <button className="btn-primary btn-large">Get Started</button>
-//             <button className="btn-secondary btn-large">Explore Features</button>
-//           </div>
-//         </div>
-//       </section>
-
-//       {/* Features Section */}
-//       <section className="py-20 bg-white">
-//         <div className="container mx-auto px-4">
-//           <div className="text-center mb-16">
-//             <h2 className="text-4xl font-bold text-dark mb-4">What We Offer</h2>
-//             <p className="text-gray-600 max-w-2xl mx-auto">
-//               Our platform is designed to help developers of all levels improve their skills
-//               through practical, engaging content.
-//             </p>
-//           </div>
-//           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-//             {features.map((feature, index) => (
-//               <FeatureCard key={index} {...feature} />
-//             ))}
-//           </div>
-//         </div>
-//       </section>
-
-//       {/* How It Works */}
-//       <section className="py-20 bg-light">
-//         <div className="container mx-auto px-4">
-//           <div className="text-center mb-16">
-//             <h2 className="text-4xl font-bold text-dark mb-4">How It Works</h2>
-//             <p className="text-gray-600 max-w-2xl mx-auto">
-//               Start your coding journey in three simple steps
-//             </p>
-//           </div>
-//           <div className="flex flex-col md:flex-row justify-center gap-8">
-//             {steps.map((step, index) => (
-//               <div key={index} className="flex-1 text-center">
-//                 <div className="w-16 h-16 bg-primary rounded-full flex items-center justify-center text-white font-bold text-xl mx-auto mb-6">
-//                   {index + 1}
-//                 </div>
-//                 <h3 className="text-2xl font-bold text-dark mb-4">{step.title}</h3>
-//                 <p className="text-gray-600">{step.description}</p>
-//               </div>
-//             ))}
-//           </div>
-//         </div>
-//       </section>
-
-//       {/* Testimonials */}
-//       <section className="py-20 bg-white">
-//         <div className="container mx-auto px-4">
-//           <div className="text-center mb-16">
-//             <h2 className="text-4xl font-bold text-dark mb-4">What Our Users Say</h2>
-//             <p className="text-gray-600 max-w-2xl mx-auto">
-//               Join thousands of developers who have improved their skills with CodeCraft
-//             </p>
-//           </div>
-//           {/* <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-//             {testimonials.map((testimonial) => (
-//               <TestimonialCard key={testimonial.id} {...testimonial} />
-//             ))}
-//           </div> */}
-//         </div>
-//       </section>
-
-//       {/* Call to Action */}
-//       <section className="py-20 bg-gradient-to-r from-primary to-secondary text-white text-center">
-//         <div className="container mx-auto px-4">
-//           <h2 className="text-4xl font-bold mb-6">Start Your Coding Journey Today</h2>
-//           <p className="text-xl mb-8 max-w-2xl mx-auto">
-//             Join our community of developers and take your skills to the next level with our
-//             interactive learning platform.
-//           </p>
-//           <button className="bg-white text-primary font-bold hover:bg-gray-100 btn-large">
-//             Create Free Account
-//           </button>
-//         </div>
-//       </section>
-//     </>
-//   );
-// }
-
-
-
-
-
-// app/page.tsx
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { type ReactNode, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { ArrowRight, BookOpen, CheckCircle2, Clock3, Code2, Database, GraduationCap, LayoutGrid, Loader2, Server, Sparkles, Trophy, Users, Zap } from 'lucide-react';
+
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
-import { useRouter } from 'next/navigation';
-import {
-  Rocket, BookOpen, Users, Target, Award,
-  TrendingUp, ChevronRight, Star, Play,
-  Clock, Shield, Zap, Globe, Sparkles,
-  ThumbsUp, MessageSquare, ArrowRight,
-  BarChart3, CheckCircle, Timer, Trophy,
-  Heart, Brain, Code, Palette, Calculator,
-  Music, Globe as Earth, Briefcase, Camera,
-  Book, Gamepad2, Terminal, Database,
-  Server, Lock, Cloud, Wifi, Smartphone,
-  HeartHandshake, Lightbulb, GraduationCap,
-  Compass, Download, Share2, Eye,
-  Search, Filter, Grid, List
-} from 'lucide-react';
-import { CourseCatalog, UserCourse, QuizAttempt } from '@/lib/types';
 import { COURSE_CATEGORY_COLORS, COURSE_DIFFICULTY_COLORS } from '@/lib/course-content';
 import { getRoleLoginRedirect, getRoleProfilePath } from '@/lib/roleRoutes';
+import { CourseCatalog, QuizAttempt, UserCourse } from '@/lib/types';
 
-const HomePage: React.FC = () => {
-  const { user } = useAuth();
-  const router = useRouter();
-  
-  const [featuredCourses, setFeaturedCourses] = useState<CourseCatalog[]>([]);
-  const [popularCourses, setPopularCourses] = useState<CourseCatalog[]>([]);
-  const [newCourses, setNewCourses] = useState<CourseCatalog[]>([]);
-  const [userProgress, setUserProgress] = useState<any>(null);
-  const [recentActivity, setRecentActivity] = useState<any[]>([]);
-  const [stats, setStats] = useState({
-    totalCourses: 0,
-    totalStudents: 0,
-    totalEnrollments: 0,
-    totalHours: 0,
-  });
-  const [loading, setLoading] = useState(true);
-  const [activeCategory, setActiveCategory] = useState<string>('All');
-  const [loadError, setLoadError] = useState('');
-
-  const categories = [
-    { id: 'all', name: 'All', icon: Grid, color: 'bg-gradient-to-r from-blue-500 to-purple-500' },
-    { id: 'frontend development', name: 'Frontend Development', icon: Code, color: 'bg-gradient-to-r from-blue-500 to-cyan-500' },
-    { id: 'backend development', name: 'Backend Development', icon: Server, color: 'bg-gradient-to-r from-emerald-500 to-teal-500' },
-    { id: 'systems design', name: 'Systems Design', icon: Database, color: 'bg-gradient-to-r from-amber-500 to-orange-500' },
-  ];
-
-  useEffect(() => {
-    loadHomeData();
-  }, []);
-
-  const loadHomeData = async () => {
-    try {
-      setLoading(true);
-      setLoadError('');
-      
-      const [catalogRes, catalogStatsRes] = await Promise.all([
-        api.getCourseCatalog(),
-        api.getCourseCatalogStats(),
-      ]);
-
-      const allCourses = catalogRes.data;
-      const catalogStats = catalogStatsRes.data;
-      
-      // Set featured courses (first 6)
-      setFeaturedCourses(allCourses.slice(0, 6));
-      
-      // Set popular courses (next 6)
-      setPopularCourses(allCourses.slice(6, 12));
-      
-      // Set new courses (last 6)
-      setNewCourses(allCourses.slice(-6));
-      
-      // Calculate stats
-      setStats({
-        totalCourses: allCourses.length,
-        totalStudents: catalogStats.unique_enrolled_users || 0,
-        totalEnrollments: catalogStats.total_enrollments || 0,
-        totalHours: Math.round(allCourses.reduce((total, course) => total + (course.duration || 0), 0) / 60),
-      });
-
-      // If user is logged in, load their progress
-      if (user?.role === 'Student') {
-        try {
-          const [userCoursesRes, quizAttemptsRes] = await Promise.all([
-            api.getUserCourses(user.id),
-            api.getUserQuizAttempts(user.id),
-          ]);
-
-          const userCourses = userCoursesRes.data;
-          const quizAttempts = quizAttemptsRes.data;
-
-          // Calculate user progress
-          const totalCourses = userCourses.length;
-          const completedCourses = userCourses.filter(course => course.completed).length;
-          const totalProgress = userCourses.reduce((sum, course) => sum + course.progress, 0);
-          const avgProgress = totalCourses > 0 ? totalProgress / totalCourses : 0;
-          const totalQuizScore = quizAttempts.reduce((sum, attempt) => sum + attempt.score, 0);
-          const avgQuizScore = quizAttempts.length > 0 ? totalQuizScore / quizAttempts.length : 0;
-
-          const activityDates = [
-            ...userCourses.map((item) => item.lastAccessed).filter(Boolean),
-            ...quizAttempts.map((attempt) => attempt.attemptedAt),
-          ]
-            .filter((value): value is string => typeof value === 'string' && value.length > 0)
-            .map((value) => new Date(value))
-            .filter((date) => !Number.isNaN(date.getTime()))
-            .sort((left, right) => right.getTime() - left.getTime());
-          const streakDays = getRecentActivityStreak(activityDates);
-          const totalTimeSpent = Math.round(
-            userCourses.reduce((total, item) => {
-              const courseInfo = allCourses.find((course) => course.slug === item.courseSlug);
-              return total + (((courseInfo?.duration || 0) * item.progress) / 100);
-            }, 0) / 60
-          );
-
-          setUserProgress({
-            enrolledCourses: totalCourses,
-            completedCourses,
-            avgProgress,
-            avgQuizScore,
-            totalTimeSpent,
-            streakDays,
-          });
-
-          // Generate recent activity
-          const activity = [];
-          if (userCourses.length > 0) {
-            activity.push({
-              id: '1',
-              type: 'course',
-              action: 'started',
-              title: userCourses[0].courseSlug,
-              time: '2 hours ago',
-              icon: BookOpen,
-            });
-          }
-          if (quizAttempts.length > 0) {
-            activity.push({
-              id: '2',
-              type: 'quiz',
-              action: 'completed',
-              title: `Quiz: ${quizAttempts[0].quizId}`,
-              score: quizAttempts[0].score,
-              time: '1 day ago',
-              icon: Award,
-            });
-          }
-          setRecentActivity(activity);
-
-        } catch (error) {
-          console.error('Failed to load user data:', error);
-        }
-      }
-
-    } catch (error) {
-      console.error('Failed to load home data:', error);
-      setFeaturedCourses([]);
-      setPopularCourses([]);
-      setNewCourses([]);
-      setStats({
-        totalCourses: 0,
-        totalStudents: 0,
-        totalEnrollments: 0,
-        totalHours: 0,
-      });
-      setLoadError('We could not load the latest catalog data right now.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const getDifficultyColor = (difficulty: string) => {
-    return COURSE_DIFFICULTY_COLORS[difficulty] || 'bg-gray-100 text-gray-800';
-  };
-
-  const getCategoryColor = (category: string) => {
-    return COURSE_CATEGORY_COLORS[category] || 'bg-gray-100 text-gray-800';
-  };
-
-  const getFeaturedCourses = () => {
-    if (activeCategory === 'All') return featuredCourses;
-    return featuredCourses.filter(course => 
-      course.category.toLowerCase() === activeCategory.toLowerCase()
-    );
-  };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading learning platform...</p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen bg-gradient-to-b from-white to-gray-50">
-      {/* Hero Section */}
-      <div className="relative overflow-hidden bg-gradient-to-br from-blue-600 via-purple-600 to-pink-600 h-[100vh]">
-        <div className="absolute inset-0 bg-black/20" />
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24 lg:py-32">
-          <div className="text-center lg:text-left lg:flex lg:items-center lg:justify-between">
-            <div className="lg:w-1/2">
-              <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white leading-tight">
-                Build Frontend.
-                <span className="block text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 to-pink-300">
-                  Ship Backend.
-                </span>
-              </h1>
-              <p className="mt-6 text-xl text-white/90 max-w-2xl">
-                Follow structured coding paths in frontend development, backend development,
-                and systems design with projects, quizzes, and progressive skill tracks.
-              </p>
-              <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
-                {user ? (
-                  <>
-                    <button
-                      onClick={() => router.push(user.role === 'Student' ? '/courses' : getRoleLoginRedirect(user.role))}
-                      className="inline-flex items-center justify-center px-8 py-4 bg-white text-blue-600 font-bold rounded-xl hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1"
-                    >
-                      {user.role === 'Student' ? 'Continue Learning' : 'Open Workspace'}
-                      <ArrowRight className="w-5 h-5 ml-2" />
-                    </button>
-                    <button
-                      onClick={() => router.push(getRoleProfilePath(user.role))}
-                      className="inline-flex items-center justify-center px-8 py-4 bg-white/10 backdrop-blur-sm text-white font-medium rounded-xl border-2 border-white/30 hover:bg-white/20 transition-all"
-                    >
-                      {user.role === 'Student' ? 'View Progress' : 'View Profile'}
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <button
-                      onClick={() => router.push('/register')}
-                      className="inline-flex items-center justify-center px-8 py-4 bg-white text-blue-600 font-bold rounded-xl hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1"
-                    >
-                      Start Learning Free
-                      <Rocket className="w-5 h-5 ml-2" />
-                    </button>
-                    <button
-                      onClick={() => router.push('/courses')}
-                      className="inline-flex items-center justify-center px-8 py-4 bg-white/10 backdrop-blur-sm text-white font-medium rounded-xl border-2 border-white/30 hover:bg-white/20 transition-all"
-                    >
-                      Browse Courses
-                      <ChevronRight className="w-5 h-5 ml-2" />
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
-            <div className="lg:w-1/2 mt-12 lg:mt-0 lg:pl-12">
-              <div className="relative">
-                <div className="absolute -top-6 -left-6 w-24 h-24 bg-yellow-400 rounded-full animate-pulse" />
-                <div className="absolute -bottom-6 -right-6 w-32 h-32 bg-pink-400 rounded-full animate-pulse delay-1000" />
-                <div className="relative bg-white/10 backdrop-blur-lg rounded-2xl p-8 border border-white/20 shadow-2xl">
-                  <div className="grid grid-cols-2 gap-6">
-                    <div className="bg-white/20 p-6 rounded-xl backdrop-blur-sm">
-                      <Users className="w-8 h-8 text-white mb-3" />
-                      <div className="text-3xl font-bold text-white">12.5K+</div>
-                      <div className="text-white/80 text-sm">Active Learners</div>
-                    </div>
-                    <div className="bg-white/20 p-6 rounded-xl backdrop-blur-sm">
-                      <BookOpen className="w-8 h-8 text-white mb-3" />
-                      <div className="text-3xl font-bold text-white">{stats.totalCourses}+</div>
-                      <div className="text-white/80 text-sm">Courses</div>
-                    </div>
-                    <div className="bg-white/20 p-6 rounded-xl backdrop-blur-sm">
-                      <Target className="w-8 h-8 text-white mb-3" />
-                      <div className="text-3xl font-bold text-white">{stats.totalEnrollments}</div>
-                      <div className="text-white/80 text-sm">Enrollments</div>
-                    </div>
-                    <div className="bg-white/20 p-6 rounded-xl backdrop-blur-sm">
-                      <Clock className="w-8 h-8 text-white mb-3" />
-                      <div className="text-3xl font-bold text-white">{stats.totalHours}</div>
-                      <div className="text-white/80 text-sm">Guided Hours</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        {/* Animated background elements */}
-        <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
-          {[...Array(20)].map((_, i) => (
-            <div
-              key={i}
-              className="absolute rounded-full bg-white/10 animate-float"
-              style={{
-                width: `${Math.random() * 100 + 20}px`,
-                height: `${Math.random() * 100 + 20}px`,
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 100}%`,
-                animationDelay: `${Math.random() * 5}s`,
-                animationDuration: `${Math.random() * 10 + 10}s`,
-              }}
-            />
-          ))}
-        </div>
-      </div>
-
-      {loadError && (
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">
-            {loadError}
-          </div>
-        </div>
-      )}
-
-      {/* User Progress Dashboard */}
-      {user && userProgress && (
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-12 relative z-10">
-          <div className="bg-white rounded-2xl shadow-2xl p-8 border border-gray-200">
-            <div className="flex items-center justify-between mb-8">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900">Welcome back, {user?.firstName}!</h2>
-                <p className="text-gray-600">Continue your learning journey</p>
-              </div>
-              <div className="flex items-center space-x-3">
-                <div className="text-right">
-                  <div className="text-sm text-gray-500">Learning Streak</div>
-                  <div className="text-xl font-bold text-orange-600 flex items-center">
-                    <Zap className="w-5 h-5 mr-1" />
-                    {userProgress.streakDays} days
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <div className="bg-gradient-to-r from-blue-50 to-blue-100 p-6 rounded-xl">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-sm text-blue-600 font-medium">Enrolled Courses</div>
-                    <div className="text-3xl font-bold text-gray-900 mt-1">
-                      {userProgress.enrolledCourses}
-                    </div>
-                  </div>
-                  <BookOpen className="w-8 h-8 text-blue-400" />
-                </div>
-                <div className="mt-4">
-                  <div className="w-full bg-blue-200 rounded-full h-2">
-                    <div 
-                      className="bg-blue-600 h-2 rounded-full transition-all duration-500"
-                      style={{ width: `${(userProgress.completedCourses / userProgress.enrolledCourses) * 100 || 0}%` }}
-                    />
-                  </div>
-                  <div className="flex justify-between text-xs text-blue-600 mt-1">
-                    <span>{userProgress.completedCourses} completed</span>
-                    <span>{userProgress.enrolledCourses - userProgress.completedCourses} remaining</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-gradient-to-r from-green-50 to-green-100 p-6 rounded-xl">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-sm text-green-600 font-medium">Average Progress</div>
-                    <div className="text-3xl font-bold text-gray-900 mt-1">
-                      {userProgress.avgProgress.toFixed(1)}%
-                    </div>
-                  </div>
-                  <TrendingUp className="w-8 h-8 text-green-400" />
-                </div>
-                <div className="mt-4">
-                  <div className="text-sm text-green-600">
-                    {userProgress.avgProgress > 70 ? 'Excellent progress!' : 
-                     userProgress.avgProgress > 40 ? 'Good progress!' : 'Keep going!'}
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-gradient-to-r from-purple-50 to-purple-100 p-6 rounded-xl">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-sm text-purple-600 font-medium">Quiz Score</div>
-                    <div className="text-3xl font-bold text-gray-900 mt-1">
-                      {userProgress.avgQuizScore.toFixed(1)}%
-                    </div>
-                  </div>
-                  <Award className="w-8 h-8 text-purple-400" />
-                </div>
-                <div className="mt-4">
-                  <div className="flex items-center">
-                    {[...Array(5)].map((_, i) => (
-                      <Star
-                        key={i}
-                        className={`w-4 h-4 ${
-                          i < Math.floor(userProgress.avgQuizScore / 20)
-                            ? 'text-yellow-400 fill-yellow-400'
-                            : 'text-gray-300'
-                        }`}
-                      />
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-gradient-to-r from-orange-50 to-orange-100 p-6 rounded-xl">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-sm text-orange-600 font-medium">Time Invested</div>
-                    <div className="text-3xl font-bold text-gray-900 mt-1">
-                      {userProgress.totalTimeSpent}h
-                    </div>
-                  </div>
-                  <Timer className="w-8 h-8 text-orange-400" />
-                </div>
-                <div className="mt-4">
-                  <div className="text-sm text-orange-600">
-                    {userProgress.totalTimeSpent > 40 ? 'Consistent learner!' : 'Start building your habit!'}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {recentActivity.length > 0 && (
-              <div className="mt-8 pt-8 border-t border-gray-200">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Activity</h3>
-                <div className="space-y-3">
-                  {recentActivity.map((activity) => (
-                    <div key={activity.id} className="flex items-center p-3 bg-gray-50 rounded-lg">
-                      <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-500 rounded-lg flex items-center justify-center text-white mr-4">
-                        <activity.icon className="w-5 h-5" />
-                      </div>
-                      <div className="flex-1">
-                        <div className="font-medium text-gray-900">
-                          {activity.action === 'started' ? 'Started' : 'Completed'} {activity.title}
-                        </div>
-                        <div className="text-sm text-gray-500">{activity.time}</div>
-                      </div>
-                      {activity.score && (
-                        <div className={`px-3 py-1 rounded-full text-sm font-medium ${
-                          activity.score >= 80 
-                            ? 'bg-green-100 text-green-800'
-                            : activity.score >= 60
-                            ? 'bg-yellow-100 text-yellow-800'
-                            : 'bg-red-100 text-red-800'
-                        }`}>
-                          {activity.score}%
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Categories Section */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        <div className="text-center mb-12">
-          <h2 className="text-3xl font-bold text-gray-900">Explore by Category</h2>
-          <p className="text-gray-600 mt-4">Discover courses in your area of interest</p>
-        </div>
-        
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4 mb-8">
-          {categories.map((category) => {
-            const Icon = category.icon;
-            return (
-              <button
-                key={category.id}
-                onClick={() => setActiveCategory(category.name)}
-                className={`flex flex-col items-center justify-center p-4 rounded-xl transition-all duration-300 transform hover:-translate-y-1 ${
-                  activeCategory === category.name
-                    ? 'bg-white shadow-lg border-2 border-blue-500'
-                    : 'bg-gray-50 hover:bg-white hover:shadow-md'
-                }`}
-              >
-                <div className={`w-12 h-12 ${category.color} rounded-lg flex items-center justify-center mb-3`}>
-                  <Icon className="w-6 h-6 text-white" />
-                </div>
-                <span className="text-sm font-medium text-gray-700">{category.name}</span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Featured Courses */}
-      <div className="bg-gradient-to-b from-gray-50 to-white py-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between mb-12">
-            <div>
-              <h2 className="text-3xl font-bold text-gray-900">Featured Courses</h2>
-              <p className="text-gray-600 mt-2">Hand-picked courses to get you started</p>
-            </div>
-            <button
-              onClick={() => router.push('/courses')}
-              className="flex items-center text-blue-600 hover:text-blue-700 font-medium"
-            >
-              View all courses
-              <ArrowRight className="w-4 h-4 ml-2" />
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {getFeaturedCourses().map((course) => (
-              <div
-                key={course.id}
-                className="bg-white rounded-2xl shadow-xl overflow-hidden hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2"
-              >
-                <div className="relative">
-                  <div className="h-48 bg-gradient-to-r from-blue-500 to-purple-600 relative overflow-hidden">
-                    {course.thumbnail ? (
-                      <img 
-                        src={course.thumbnail} 
-                        alt={course.title}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <span className="text-white text-4xl font-bold">
-                          {course.title.charAt(0)}
-                        </span>
-                      </div>
-                    )}
-                    <div className="absolute top-4 left-4">
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${getCategoryColor(course.category)}`}>
-                        {course.category}
-                      </span>
-                    </div>
-                    <div className="absolute top-4 right-4">
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${getDifficultyColor(course.difficulty)}`}>
-                        {course.difficulty}
-                      </span>
-                    </div>
-                  </div>
-                  
-                  <div className="p-6">
-                    <h3 className="text-xl font-bold text-gray-900 mb-2 line-clamp-2">
-                      {course.title}
-                    </h3>
-                    <p className="text-gray-600 mb-4 line-clamp-2">
-                      {course.description}
-                    </p>
-                    
-                    <div className="flex items-center justify-between text-sm text-gray-500 mb-4">
-                      <div className="flex items-center">
-                        <Clock className="w-4 h-4 mr-1" />
-                        <span>{course.duration} min</span>
-                      </div>
-                      <div className="flex items-center">
-                        <BookOpen className="w-4 h-4 mr-1" />
-                        <span>{course.totalLessons} lessons</span>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center">
-                        <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white text-sm font-bold mr-2">
-                          {course.instructor?.charAt(0) || 'I'}
-                        </div>
-                        <span className="text-sm text-gray-700">
-                          {course.instructor || 'Instructor'}
-                        </span>
-                      </div>
-                      <button
-                        onClick={() => router.push(`/courses/${course.slug}`)}
-                        className="px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium hover:opacity-90 transition-opacity"
-                      >
-                        Enroll Now
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* How It Works */}
-      <div className="bg-white py-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl font-bold text-gray-900">How It Works</h2>
-            <p className="text-gray-600 mt-4">Start learning in just 4 simple steps</p>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-            <div className="text-center">
-              <div className="relative mx-auto w-20 h-20 mb-6">
-                <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-2xl rotate-45" />
-                <div className="relative w-full h-full flex items-center justify-center">
-                  <Search className="w-8 h-8 text-white" />
-                </div>
-                <div className="absolute -top-2 -right-2 w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold">
-                  1
-                </div>
-              </div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">Browse Courses</h3>
-              <p className="text-gray-600">
-                Explore our extensive catalog of courses across multiple categories
-              </p>
-            </div>
-
-            <div className="text-center">
-              <div className="relative mx-auto w-20 h-20 mb-6">
-                <div className="absolute inset-0 bg-gradient-to-r from-purple-500 to-pink-500 rounded-2xl rotate-45" />
-                <div className="relative w-full h-full flex items-center justify-center">
-                  <BookOpen className="w-8 h-8 text-white" />
-                </div>
-                <div className="absolute -top-2 -right-2 w-8 h-8 bg-purple-600 rounded-full flex items-center justify-center text-white font-bold">
-                  2
-                </div>
-              </div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">Enroll & Learn</h3>
-              <p className="text-gray-600">
-                Enroll in courses and access interactive lessons and resources
-              </p>
-            </div>
-
-            <div className="text-center">
-              <div className="relative mx-auto w-20 h-20 mb-6">
-                <div className="absolute inset-0 bg-gradient-to-r from-green-500 to-emerald-500 rounded-2xl rotate-45" />
-                <div className="relative w-full h-full flex items-center justify-center">
-                  <Target className="w-8 h-8 text-white" />
-                </div>
-                <div className="absolute -top-2 -right-2 w-8 h-8 bg-green-600 rounded-full flex items-center justify-center text-white font-bold">
-                  3
-                </div>
-              </div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">Practice & Apply</h3>
-              <p className="text-gray-600">
-                Complete exercises and projects to reinforce your learning
-              </p>
-            </div>
-
-            <div className="text-center">
-              <div className="relative mx-auto w-20 h-20 mb-6">
-                <div className="absolute inset-0 bg-gradient-to-r from-orange-500 to-red-500 rounded-2xl rotate-45" />
-                <div className="relative w-full h-full flex items-center justify-center">
-                  <Award className="w-8 h-8 text-white" />
-                </div>
-                <div className="absolute -top-2 -right-2 w-8 h-8 bg-orange-600 rounded-full flex items-center justify-center text-white font-bold">
-                  4
-                </div>
-              </div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">Get Certified</h3>
-              <p className="text-gray-600">
-                Earn certificates to showcase your skills and achievements
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Popular Courses */}
-      <div className="bg-gradient-to-b from-white to-gray-50 py-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between mb-12">
-            <div>
-              <h2 className="text-3xl font-bold text-gray-900">Most Popular Courses</h2>
-              <p className="text-gray-600 mt-2">Join thousands of learners in these trending courses</p>
-            </div>
-            <div className="flex items-center space-x-4">
-              <button className="p-2 hover:bg-gray-100 rounded-lg">
-                <ChevronRight className="w-5 h-5 text-gray-600 rotate-180" />
-              </button>
-              <button className="p-2 hover:bg-gray-100 rounded-lg">
-                <ChevronRight className="w-5 h-5 text-gray-600" />
-              </button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {popularCourses.map((course) => (
-              <div
-                key={course.id}
-                className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-all duration-300"
-              >
-                <div className="h-40 bg-gradient-to-r from-blue-400 to-purple-500 relative">
-                  {course.thumbnail && (
-                    <img 
-                      src={course.thumbnail} 
-                      alt={course.title}
-                      className="w-full h-full object-cover"
-                    />
-                  )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                  <div className="absolute bottom-4 left-4">
-                    <span className={`px-2 py-1 text-xs font-medium rounded ${getDifficultyColor(course.difficulty)}`}>
-                      {course.difficulty}
-                    </span>
-                  </div>
-                </div>
-                
-                <div className="p-4">
-                  <h3 className="font-semibold text-gray-900 line-clamp-2">{course.title}</h3>
-                  <div className="flex items-center justify-between mt-3">
-                    <div className="flex items-center text-sm text-gray-600">
-                      <BookOpen className="w-4 h-4 mr-1" />
-                      {course.totalLessons} lessons
-                    </div>
-                    <div className="flex items-center">
-                      <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />
-                      <span className="text-sm font-medium ml-1">4.8</span>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => router.push(`/courses/${course.slug}`)}
-                    className="w-full mt-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition-colors"
-                  >
-                    Explore Course
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Testimonials */}
-      <div className="bg-gradient-to-r from-blue-600 to-purple-600 py-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-white">What Our Students Say</h2>
-            <p className="text-white/80 mt-4">Join our community of successful learners</p>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {[1, 2, 3].map((testimonial) => (
-              <div key={testimonial} className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 border border-white/20">
-                <div className="flex items-center mb-4">
-                  <div className="w-12 h-12 bg-gradient-to-r from-yellow-400 to-orange-400 rounded-full flex items-center justify-center text-white font-bold mr-4">
-                    S{testimonial}
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-white">Sarah Johnson</h4>
-                    <p className="text-white/70 text-sm">Software Developer</p>
-                  </div>
-                </div>
-                <p className="text-white/90 italic mb-4">
-                  "This platform transformed my career. The courses are well-structured and the projects helped me build a portfolio that landed me my dream job."
-                </p>
-                <div className="flex items-center">
-                  {[...Array(5)].map((_, i) => (
-                    <Star key={i} className="w-4 h-4 text-yellow-300 fill-yellow-300" />
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* New Courses */}
-      <div className="bg-white py-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between mb-12">
-            <div>
-              <h2 className="text-3xl font-bold text-gray-900">New & Noteworthy</h2>
-              <p className="text-gray-600 mt-2">Fresh courses added recently</p>
-            </div>
-            <button
-              onClick={() => router.push('/courses')}
-              className="flex items-center text-blue-600 hover:text-blue-700 font-medium"
-            >
-              See all new courses
-              <ArrowRight className="w-4 h-4 ml-2" />
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {newCourses.map((course) => (
-              <div
-                key={course.id}
-                className="group relative bg-gradient-to-br from-white to-gray-50 rounded-xl border border-gray-200 p-6 hover:border-blue-300 transition-all duration-300"
-              >
-                <div className="absolute top-4 right-4">
-                  <span className="px-3 py-1 bg-gradient-to-r from-green-500 to-emerald-500 text-white text-xs font-medium rounded-full">
-                    New
-                  </span>
-                </div>
-                
-                <div className="flex items-start">
-                  <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-500 rounded-lg flex items-center justify-center text-white font-bold text-xl mr-4">
-                    {course.title.charAt(0)}
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
-                      {course.title}
-                    </h3>
-                    <p className="text-sm text-gray-600 mt-1 line-clamp-2">
-                      {course.description}
-                    </p>
-                    <div className="flex items-center mt-3">
-                      <span className={`text-xs px-2 py-1 rounded mr-2 ${getCategoryColor(course.category)}`}>
-                        {course.category}
-                      </span>
-                      <span className="text-xs text-gray-500">
-                        {course.duration} min
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                
-                <button
-                  onClick={() => router.push(`/courses/${course.slug}`)}
-                  className="w-full mt-4 py-2.5 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gradient-to-r hover:from-blue-600 hover:to-purple-600 hover:text-white transition-all duration-300"
-                >
-                  Check it out
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* CTA Section */}
-      <div className="bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 py-20">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-4xl font-bold text-white mb-6">
-            Ready to Build Real Coding Skills?
-          </h2>
-          <p className="text-xl text-white/90 mb-10">
-            Start with HTML, CSS, JavaScript, Python, FastAPI, React, Next.js, and systems design.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            {user ? (
-              <>
-                <button
-                  onClick={() => router.push(user.role === 'Student' ? '/courses' : getRoleLoginRedirect(user.role))}
-                  className="px-8 py-4 bg-white text-blue-600 font-bold rounded-xl hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1"
-                >
-                  {user.role === 'Student' ? 'Browse Courses' : 'Open Workspace'}
-                </button>
-                <button
-                  onClick={() => router.push(getRoleProfilePath(user.role))}
-                  className="px-8 py-4 bg-white/20 backdrop-blur-sm text-white font-medium rounded-xl border-2 border-white/30 hover:bg-white/30 transition-all"
-                >
-                  {user.role === 'Student' ? 'View Your Dashboard' : 'View Instructor Profile'}
-                </button>
-              </>
-            ) : (
-              <>
-                <button
-                  onClick={() => router.push('/register')}
-                  className="px-8 py-4 bg-white text-blue-600 font-bold rounded-xl hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1"
-                >
-                  Get Started for Free
-                </button>
-                <button
-                  onClick={() => router.push('/courses')}
-                  className="px-8 py-4 bg-white/20 backdrop-blur-sm text-white font-medium rounded-xl border-2 border-white/30 hover:bg-white/30 transition-all"
-                >
-                  Browse Courses
-                </button>
-              </>
-            )}
-          </div>
-          <p className="text-white/70 mt-6 text-sm">
-            Curriculum focused entirely on software development tracks
-          </p>
-        </div>
-      </div>
-
-      {/* Footer */}
-      <footer className="bg-gray-900 text-white py-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-            <div>
-              <div className="flex items-center mb-4">
-                <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-500 rounded-lg flex items-center justify-center mr-3">
-                  <GraduationCap className="w-6 h-6" />
-                </div>
-                <span className="text-xl font-bold">Deveda</span>
-              </div>
-              <p className="text-gray-400">
-                Frontend, backend, and systems design learning paths for developers who want a focused roadmap.
-              </p>
-            </div>
-            
-            <div>
-              <h4 className="font-semibold mb-4">Platform</h4>
-              <ul className="space-y-2">
-                <li><a href="/courses" className="text-gray-400 hover:text-white">Courses</a></li>
-                <li><a href="/courses" className="text-gray-400 hover:text-white">Frontend Track</a></li>
-                <li><a href="/about" className="text-gray-400 hover:text-white">About Us</a></li>
-                <li><a href="/courses" className="text-gray-400 hover:text-white">Backend Track</a></li>
-              </ul>
-            </div>
-            
-            <div>
-              <h4 className="font-semibold mb-4">Resources</h4>
-              <ul className="space-y-2">
-                <li><a href="/lessons" className="text-gray-400 hover:text-white">Lessons</a></li>
-                <li><a href="/quiz" className="text-gray-400 hover:text-white">Quiz Practice</a></li>
-                <li><a href="/courses" className="text-gray-400 hover:text-white">Systems Design</a></li>
-                <li><a href="/about" className="text-gray-400 hover:text-white">Contact</a></li>
-              </ul>
-            </div>
-            
-            <div>
-              <h4 className="font-semibold mb-4">Connect</h4>
-              <div className="flex space-x-4">
-                <a href="#" className="w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center hover:bg-gray-700">
-                  <span className="sr-only">Twitter</span>
-                  <div className="w-5 h-5 bg-current" />
-                </a>
-                <a href="#" className="w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center hover:bg-gray-700">
-                  <span className="sr-only">LinkedIn</span>
-                  <div className="w-5 h-5 bg-current" />
-                </a>
-                <a href="#" className="w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center hover:bg-gray-700">
-                  <span className="sr-only">GitHub</span>
-                  <div className="w-5 h-5 bg-current" />
-                </a>
-                <a href="#" className="w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center hover:bg-gray-700">
-                  <span className="sr-only">YouTube</span>
-                  <div className="w-5 h-5 bg-current" />
-                </a>
-              </div>
-            </div>
-          </div>
-          
-          <div className="border-t border-gray-800 mt-8 pt-8 text-center text-gray-400 text-sm">
-            <p>© {new Date().getFullYear()} Deveda. All rights reserved.</p>
-          </div>
-        </div>
-      </footer>
-
-      {/* Add custom animations */}
-      <style jsx>{`
-        @keyframes float {
-          0%, 100% { transform: translateY(0) rotate(0deg); }
-          50% { transform: translateY(-20px) rotate(180deg); }
-        }
-        .animate-float {
-          animation: float infinite linear;
-        }
-      `}</style>
-    </div>
-  );
+type CatalogStats = {
+  total_courses: number;
+  total_enrollments: number;
+  unique_enrolled_users: number;
+  popular_courses: Array<{ _id: string; count: number }>;
 };
 
-const getRecentActivityStreak = (dates: Date[]) => {
-  if (dates.length === 0) {
-    return 0;
-  }
+type LearnerSnapshot = {
+  enrolledCourses: number;
+  completedCourses: number;
+  averageProgress: number;
+  averageQuizScore: number;
+  totalHours: number;
+  streakDays: number;
+};
 
-  const uniqueDays = Array.from(
-    new Set(
-      dates.map((date) =>
-        new Date(date.getFullYear(), date.getMonth(), date.getDate()).toISOString()
-      )
-    )
-  )
+const categoryOptions = [
+  { name: 'All', icon: LayoutGrid },
+  { name: 'Frontend Development', icon: Code2 },
+  { name: 'Backend Development', icon: Server },
+  { name: 'Systems Design', icon: Database },
+];
+
+const heroParticles = [
+  { size: 70, left: '6%', top: '14%', duration: '11s', delay: '0s' },
+  { size: 112, left: '22%', top: '72%', duration: '15s', delay: '1.4s' },
+  { size: 78, left: '40%', top: '18%', duration: '12.8s', delay: '0.9s' },
+  { size: 92, left: '61%', top: '20%', duration: '14.2s', delay: '1.8s' },
+  { size: 66, left: '74%', top: '62%', duration: '10.6s', delay: '0.4s' },
+  { size: 124, left: '88%', top: '28%', duration: '16s', delay: '2.1s' },
+];
+
+function badgeColor(category: string) {
+  return COURSE_CATEGORY_COLORS[category] || 'bg-slate-100 text-slate-700';
+}
+
+function levelColor(difficulty: string) {
+  return COURSE_DIFFICULTY_COLORS[difficulty] || 'bg-slate-100 text-slate-700';
+}
+
+function recentActivityStreak(dates: Date[]) {
+  if (!dates.length) return 0;
+  const uniqueDays = Array.from(new Set(dates.map((date) => new Date(date.getFullYear(), date.getMonth(), date.getDate()).toISOString())))
     .map((value) => new Date(value))
     .sort((left, right) => right.getTime() - left.getTime());
-
   let streak = 0;
   let expected = new Date();
   expected = new Date(expected.getFullYear(), expected.getMonth(), expected.getDate());
-
   for (const day of uniqueDays) {
     const current = new Date(day.getFullYear(), day.getMonth(), day.getDate());
     const difference = Math.round((expected.getTime() - current.getTime()) / 86400000);
@@ -1083,8 +74,348 @@ const getRecentActivityStreak = (dates: Date[]) => {
     }
     break;
   }
-
   return streak;
-};
+}
 
-export default HomePage;
+export default function HomePage() {
+  const router = useRouter();
+  const { user } = useAuth();
+  const isLearner = user?.role === 'Student';
+
+  const [courses, setCourses] = useState<CourseCatalog[]>([]);
+  const [stats, setStats] = useState<CatalogStats>({ total_courses: 0, total_enrollments: 0, unique_enrolled_users: 0, popular_courses: [] });
+  const [snapshot, setSnapshot] = useState<LearnerSnapshot | null>(null);
+  const [recentCourses, setRecentCourses] = useState<UserCourse[]>([]);
+  const [recentAttempts, setRecentAttempts] = useState<QuizAttempt[]>([]);
+  const [activeCategory, setActiveCategory] = useState('All');
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        setLoading(true);
+        setLoadError('');
+        const [catalogRes, statsRes] = await Promise.all([api.getCourseCatalog(), api.getCourseCatalogStats()]);
+        const nextCourses = catalogRes.data || [];
+        const nextStats = (statsRes.data || {}) as CatalogStats;
+        setCourses(nextCourses);
+        setStats({
+          total_courses: nextStats.total_courses || nextCourses.length,
+          total_enrollments: nextStats.total_enrollments || 0,
+          unique_enrolled_users: nextStats.unique_enrolled_users || 0,
+          popular_courses: nextStats.popular_courses || [],
+        });
+
+        if (user?.id && isLearner) {
+          const [userCoursesRes, attemptsRes] = await Promise.all([api.getUserCourses(user.id), api.getUserQuizAttempts(user.id)]);
+          const learnerCourses = userCoursesRes.data || [];
+          const learnerAttempts = attemptsRes.data || [];
+          setRecentCourses(learnerCourses.slice(0, 3));
+          setRecentAttempts(learnerAttempts.slice(0, 3));
+          const activityDates = [
+            ...learnerCourses.map((item) => item.lastAccessed).filter(Boolean),
+            ...learnerAttempts.map((attempt) => attempt.attemptedAt),
+          ]
+            .filter((value): value is string => typeof value === 'string' && value.length > 0)
+            .map((value) => new Date(value))
+            .filter((date) => !Number.isNaN(date.getTime()));
+          const totalProgress = learnerCourses.reduce((total, item) => total + (item.progress || 0), 0);
+          const totalQuizScore = learnerAttempts.reduce((total, item) => total + (item.score || 0), 0);
+          const totalMinutes = learnerCourses.reduce((total, item) => {
+            const matchedCourse = nextCourses.find((course) => course.slug === item.courseSlug);
+            return total + Math.round(((matchedCourse?.duration || 0) * (item.progress || 0)) / 100);
+          }, 0);
+          setSnapshot({
+            enrolledCourses: learnerCourses.length,
+            completedCourses: learnerCourses.filter((item) => item.completed).length,
+            averageProgress: learnerCourses.length ? Math.round(totalProgress / learnerCourses.length) : 0,
+            averageQuizScore: learnerAttempts.length ? Math.round(totalQuizScore / learnerAttempts.length) : 0,
+            totalHours: Math.round(totalMinutes / 60),
+            streakDays: recentActivityStreak(activityDates),
+          });
+        } else {
+          setSnapshot(null);
+          setRecentCourses([]);
+          setRecentAttempts([]);
+        }
+      } catch (error: any) {
+        setCourses([]);
+        setStats({ total_courses: 0, total_enrollments: 0, unique_enrolled_users: 0, popular_courses: [] });
+        setSnapshot(null);
+        setRecentCourses([]);
+        setRecentAttempts([]);
+        setLoadError(error.message || 'Unable to load the latest platform content right now.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    void loadData();
+  }, [isLearner, user?.id]);
+
+  const totalGuidedHours = useMemo(() => Math.round(courses.reduce((total, course) => total + (course.duration || 0), 0) / 60), [courses]);
+  const courseBySlug = useMemo(() => new Map(courses.map((course) => [course.slug, course])), [courses]);
+  const popularCourses = useMemo(() => stats.popular_courses.map((entry) => courseBySlug.get(entry._id)).filter((course): course is CourseCatalog => Boolean(course)).slice(0, 4), [courseBySlug, stats.popular_courses]);
+  const visibleCourses = useMemo(() => {
+    const filtered = activeCategory === 'All' ? courses : courses.filter((course) => course.category === activeCategory);
+    return [...filtered].sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()).slice(0, 6);
+  }, [activeCategory, courses]);
+
+  const primaryAction = () => {
+    if (!user) return router.push('/register');
+    return router.push(user.role === 'Student' ? '/courses' : getRoleLoginRedirect(user.role));
+  };
+
+  if (loading) {
+    return (
+      <div className="flex min-h-[70vh] items-center justify-center bg-slate-50">
+        <div className="text-center">
+          <Loader2 className="mx-auto h-10 w-10 animate-spin text-blue-700" />
+          <p className="mt-3 text-sm text-slate-600">Loading Deveda...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-[linear-gradient(180deg,#f8fafc_0%,#ffffff_45%,#eef2ff_100%)]">
+      <section className="relative overflow-hidden border-b border-slate-200 bg-[radial-gradient(circle_at_top_left,#38bdf833_0%,transparent_30%),linear-gradient(135deg,#0f172a_0%,#1d4ed8_46%,#7c3aed_100%)]">
+        <div className="absolute -left-20 top-10 h-56 w-56 rounded-full bg-cyan-300/10 blur-3xl pulse-slow" />
+        <div className="absolute -right-12 bottom-8 h-72 w-72 rounded-full bg-fuchsia-300/10 blur-3xl pulse-slow [animation-delay:1s]" />
+        <div className="pointer-events-none absolute inset-0">
+          {heroParticles.map((particle, index) => (
+            <div key={index} className="absolute rounded-full bg-white/10 float-drift" style={{ width: `${particle.size}px`, height: `${particle.size}px`, left: particle.left, top: particle.top, animationDuration: particle.duration, animationDelay: particle.delay }} />
+          ))}
+        </div>
+
+        <div className="relative mx-auto grid max-w-7xl gap-12 px-4 py-16 text-white sm:px-6 lg:grid-cols-[1.1fr_0.9fr] lg:px-8 lg:py-24">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-100 backdrop-blur-sm">
+              <Sparkles className="h-3.5 w-3.5" />
+              Guided coding paths
+            </div>
+            <h1 className="mt-6 max-w-4xl text-4xl font-black leading-tight tracking-tight sm:text-5xl lg:text-6xl">
+              Clear learning paths for frontend, backend, and systems design.
+            </h1>
+            <p className="mt-6 max-w-3xl text-lg text-slate-100/90">
+              Choose a published course, move through guided lessons and checkpoints, and build momentum with progress that reflects the work you actually complete.
+            </p>
+            <div className="mt-6 flex flex-wrap gap-3 text-sm">
+              <span className="rounded-full border border-white/15 bg-white/10 px-3 py-2 backdrop-blur-sm">Published courses</span>
+              <span className="rounded-full border border-white/15 bg-white/10 px-3 py-2 backdrop-blur-sm">Hands-on lessons</span>
+              <span className="rounded-full border border-white/15 bg-white/10 px-3 py-2 backdrop-blur-sm">Quiz checkpoints</span>
+              <span className="rounded-full border border-white/15 bg-white/10 px-3 py-2 backdrop-blur-sm">Role-based workspaces</span>
+            </div>
+            <div className="mt-10 flex flex-wrap gap-4">
+              <button onClick={primaryAction} className="inline-flex items-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-slate-950 transition hover:-translate-y-0.5 hover:shadow-2xl">
+                {user ? (user.role === 'Student' ? 'Continue learning' : 'Open workspace') : 'Start learning'}
+                <ArrowRight className="h-4 w-4" />
+              </button>
+              <button onClick={() => router.push(user ? getRoleProfilePath(user.role) : '/courses')} className="inline-flex items-center gap-2 rounded-2xl border border-white/20 bg-white/10 px-5 py-3 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-white/15">
+                {user ? 'View account' : 'Browse catalog'}
+              </button>
+            </div>
+          </div>
+
+          <div className="relative">
+            <div className="absolute -left-4 top-12 hidden rounded-2xl border border-white/15 bg-white/10 px-4 py-3 text-sm backdrop-blur-sm lg:block float-soft">
+              <div className="font-semibold text-white">Quiz checkpoints</div>
+              <div className="mt-1 text-slate-200">Keep each module measurable.</div>
+            </div>
+            <div className="absolute right-1 top-0 hidden rounded-2xl border border-white/15 bg-slate-950/35 px-4 py-3 text-sm backdrop-blur-sm lg:block float-soft [animation-delay:1.2s]">
+              <div className="font-semibold text-white">Saved progress</div>
+              <div className="mt-1 text-slate-200">Resume lessons with less friction.</div>
+            </div>
+
+            <div className="rounded-[32px] border border-white/15 bg-white/10 p-6 shadow-2xl backdrop-blur-xl">
+              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-100">Platform snapshot</div>
+              <h2 className="mt-3 text-2xl font-black tracking-tight text-white">Live catalog activity</h2>
+              <div className="mt-6 grid gap-4 sm:grid-cols-2">
+                <HeroMetric label="Courses" value={stats.total_courses} icon={<BookOpen className="h-5 w-5" />} />
+                <HeroMetric label="Learners" value={stats.unique_enrolled_users} icon={<Users className="h-5 w-5" />} />
+                <HeroMetric label="Enrollments" value={stats.total_enrollments} icon={<GraduationCap className="h-5 w-5" />} />
+                <HeroMetric label="Guided hours" value={totalGuidedHours} icon={<Clock3 className="h-5 w-5" />} />
+              </div>
+              <div className="mt-6 rounded-[24px] border border-white/10 bg-slate-950/25 p-5 text-sm text-slate-200">
+                <div className="flex items-start gap-3"><CheckCircle2 className="mt-0.5 h-4 w-4 text-cyan-300" /><span>Browse published courses immediately.</span></div>
+                <div className="mt-3 flex items-start gap-3"><CheckCircle2 className="mt-0.5 h-4 w-4 text-cyan-300" /><span>Track real lesson and quiz progress.</span></div>
+                <div className="mt-3 flex items-start gap-3"><CheckCircle2 className="mt-0.5 h-4 w-4 text-cyan-300" /><span>Use a workspace that matches your role.</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {loadError ? <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8"><div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{loadError}</div></div> : null}
+
+      {user && snapshot ? (
+        <section className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+          <div className="rounded-[32px] border border-slate-200 bg-white p-8 shadow-xl shadow-slate-200">
+            <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-700">Your momentum</div>
+                <h2 className="mt-3 text-2xl font-black tracking-tight text-slate-950">Welcome back, {user.firstName}.</h2>
+                <p className="mt-2 max-w-2xl text-sm text-slate-600">Pick up where you left off, keep your streak visible, and jump back into the courses or quizzes that need your attention next.</p>
+              </div>
+              <Link href="/profile" className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700">Open profile<ArrowRight className="h-4 w-4" /></Link>
+            </div>
+            <div className="mt-6 grid gap-4 md:grid-cols-3 xl:grid-cols-6">
+              <SnapshotCard label="Enrolled" value={snapshot.enrolledCourses} />
+              <SnapshotCard label="Completed" value={snapshot.completedCourses} />
+              <SnapshotCard label="Avg. progress" value={`${snapshot.averageProgress}%`} />
+              <SnapshotCard label="Quiz score" value={`${snapshot.averageQuizScore}%`} />
+              <SnapshotCard label="Hours" value={snapshot.totalHours} />
+              <SnapshotCard label="Streak" value={`${snapshot.streakDays}d`} accent />
+            </div>
+            {(recentCourses.length > 0 || recentAttempts.length > 0) ? (
+              <div className="mt-8 grid gap-6 lg:grid-cols-2">
+                <Panel title="Recent courses" items={recentCourses.map((course) => ({ label: courseBySlug.get(course.courseSlug)?.title || course.courseSlug, detail: `${course.progress}% progress${course.completed ? ' - completed' : ''}` }))} />
+                <Panel title="Recent quiz attempts" items={recentAttempts.map((attempt) => ({ label: attempt.quizId, detail: `${attempt.score}%${attempt.passed ? ' - passed' : ' - retry recommended'}` }))} />
+              </div>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
+
+      <section className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <div className="rounded-[32px] border border-slate-200 bg-white p-8 shadow-xl shadow-slate-200">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-700">Choose your next track</div>
+              <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950">Start from a path that matches your goal</h2>
+              <p className="mt-2 max-w-3xl text-sm text-slate-600">Browse the newest published courses and filter by the area you want to grow in next.</p>
+            </div>
+            <Link href="/courses" className="inline-flex items-center gap-2 text-sm font-semibold text-blue-700 transition hover:text-blue-800">Open full catalog<ArrowRight className="h-4 w-4" /></Link>
+          </div>
+          <div className="mt-6 flex flex-wrap gap-3">
+            {categoryOptions.map((category) => {
+              const Icon = category.icon;
+              const active = activeCategory === category.name;
+              return <button key={category.name} onClick={() => setActiveCategory(category.name)} className={`inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold transition ${active ? 'bg-slate-950 text-white' : 'border border-slate-200 bg-white text-slate-700 hover:border-blue-300 hover:text-blue-700'}`}><Icon className="h-4 w-4" />{category.name}</button>;
+            })}
+          </div>
+          {visibleCourses.length > 0 ? (
+            <div className="mt-8 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+              {visibleCourses.map((course) => (
+                <article key={course.slug} className="group overflow-hidden rounded-[28px] border border-slate-200 bg-slate-50 shadow-sm transition hover:-translate-y-1 hover:shadow-xl">
+                  <div className="relative h-44 overflow-hidden bg-[linear-gradient(135deg,#0f172a_0%,#2563eb_60%,#8b5cf6_100%)]">
+                    {course.thumbnail ? <img src={course.thumbnail} alt={course.title} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" /> : <div className="flex h-full items-center justify-center text-4xl font-black text-white">{course.title.charAt(0)}</div>}
+                  </div>
+                  <div className="space-y-4 p-6">
+                    <div className="flex flex-wrap gap-2">
+                      <span className={`rounded-full px-3 py-1 text-xs font-semibold ${badgeColor(course.category)}`}>{course.category}</span>
+                      <span className={`rounded-full px-3 py-1 text-xs font-semibold ${levelColor(course.difficulty)}`}>{course.difficulty}</span>
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold text-slate-950">{course.title}</h3>
+                      <p className="mt-2 text-sm text-slate-600 line-clamp-3">{course.description}</p>
+                    </div>
+                    <div className="flex flex-wrap gap-4 text-sm text-slate-600">
+                      <span className="inline-flex items-center gap-2"><Clock3 className="h-4 w-4 text-blue-700" />{course.duration} minutes</span>
+                      <span className="inline-flex items-center gap-2"><BookOpen className="h-4 w-4 text-blue-700" />{course.totalLessons} lessons</span>
+                    </div>
+                    <button onClick={() => router.push(`/courses/${course.slug}`)} className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700">View course<ArrowRight className="h-4 w-4" /></button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-8 rounded-[28px] border border-dashed border-slate-300 bg-slate-50 px-6 py-12 text-center">
+              <h3 className="text-xl font-bold text-slate-950">No published courses in this category yet</h3>
+              <p className="mt-2 text-sm text-slate-600">{user?.role === 'Instructor' || user?.role === 'Admin' ? 'Publish the first course from your workspace and it will appear here.' : 'Try another category, or check back when the next course goes live.'}</p>
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-4 py-2 pb-8 sm:px-6 lg:px-8">
+        <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
+          <div className="rounded-[32px] border border-slate-200 bg-white p-8 shadow-xl shadow-slate-200">
+            <div className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-700">Why it feels clear</div>
+            <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950">Built to keep momentum visible</h2>
+            <div className="mt-6 space-y-4">
+              <ReasonRow icon={<BookOpen className="h-4 w-4" />} title="Start from a real path" description="Each published course is organized into lessons, checkpoints, and milestones that make the next step obvious." />
+              <ReasonRow icon={<Sparkles className="h-4 w-4" />} title="Learn with guided practice" description="Concepts, examples, and practice prompts stay close together so learners can apply new ideas before they drift." />
+              <ReasonRow icon={<Trophy className="h-4 w-4" />} title="See progress clearly" description="Course completion, quiz attempts, and active streaks stay connected to real lesson activity instead of estimates." />
+            </div>
+          </div>
+
+          <div className="rounded-[32px] border border-slate-200 bg-slate-950 p-8 text-white shadow-xl shadow-slate-300">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-300">Popular right now</div>
+                <h2 className="mt-3 text-3xl font-black tracking-tight">What learners are opening most</h2>
+              </div>
+              <Zap className="h-5 w-5 text-cyan-300" />
+            </div>
+            {popularCourses.length > 0 ? (
+              <div className="mt-6 space-y-4">
+                {popularCourses.map((course) => {
+                  const count = stats.popular_courses.find((item) => item._id === course.slug)?.count || 0;
+                  return <button key={course.slug} onClick={() => router.push(`/courses/${course.slug}`)} className="flex w-full items-start justify-between rounded-[24px] border border-white/10 bg-white/5 p-5 text-left transition hover:bg-white/10"><div><div className="text-lg font-bold text-white">{course.title}</div><div className="mt-2 text-sm text-slate-300">{course.category}</div></div><div className="rounded-2xl bg-cyan-400/10 px-3 py-2 text-right"><div className="text-sm font-semibold text-cyan-200">{count}</div><div className="text-xs text-slate-400">enrollments</div></div></button>;
+                })}
+              </div>
+            ) : (
+              <div className="mt-6 rounded-[24px] border border-dashed border-white/15 bg-white/5 px-5 py-10 text-center">
+                <h3 className="text-lg font-bold text-white">The first trend starts with the first enrollments</h3>
+                <p className="mt-2 text-sm text-slate-300">Once learners begin enrolling in published courses, this space updates automatically.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <div className="overflow-hidden rounded-[32px] border border-slate-200 bg-[linear-gradient(135deg,#0f172a_0%,#1e40af_58%,#7c3aed_100%)] p-8 text-white shadow-2xl shadow-slate-300">
+          <div className="grid gap-10 lg:grid-cols-[1fr_0.9fr]">
+            <div>
+              <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-100"><Sparkles className="h-3.5 w-3.5" />Keep moving</div>
+              <h2 className="mt-4 text-3xl font-black tracking-tight sm:text-4xl">Ready to turn your next topic into a finished skill?</h2>
+              <p className="mt-4 max-w-2xl text-sm text-slate-100/90">Browse the live catalog, continue an active course, or open the workspace that matches your role and keep building from there.</p>
+              <div className="mt-8 flex flex-wrap gap-4">
+                <button onClick={primaryAction} className="inline-flex items-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-slate-950 transition hover:-translate-y-0.5">{user ? (user.role === 'Student' ? 'Resume learning' : 'Open workspace') : 'Create account'}<ArrowRight className="h-4 w-4" /></button>
+                <Link href="/courses" className="inline-flex items-center gap-2 rounded-2xl border border-white/20 bg-white/10 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/15">Browse courses</Link>
+              </div>
+            </div>
+            <div className="grid gap-6 sm:grid-cols-3">
+              <FooterGroup title="Learn" links={[['Browse courses', '/courses'], ['Practice quizzes', '/quiz'], ['Lesson library', '/lessons']]} />
+              <FooterGroup title="Explore" links={[['Frontend paths', '/courses'], ['Backend paths', '/courses'], ['Systems design', '/courses']]} />
+              <FooterGroup title="Platform" links={[['About Deveda', '/about'], ['Account settings', '/settings'], ['AI assistant', '/agents']]} />
+            </div>
+          </div>
+          <div className="mt-10 border-t border-white/10 pt-6 text-sm text-slate-300">© {new Date().getFullYear()} Deveda. Coding-focused learning paths for frontend, backend, and systems design.</div>
+        </div>
+      </section>
+
+      <style jsx>{`
+        @keyframes floatDrift { 0%,100% { transform: translateY(0px) rotate(0deg); } 50% { transform: translateY(-18px) rotate(8deg); } }
+        @keyframes floatSoft { 0%,100% { transform: translateY(0px); } 50% { transform: translateY(-10px); } }
+        @keyframes pulseSlow { 0%,100% { opacity: 0.55; transform: scale(1); } 50% { opacity: 0.9; transform: scale(1.08); } }
+        .float-drift { animation-name: floatDrift; animation-timing-function: ease-in-out; animation-iteration-count: infinite; }
+        .float-soft { animation: floatSoft 5.5s ease-in-out infinite; }
+        .pulse-slow { animation: pulseSlow 8s ease-in-out infinite; }
+      `}</style>
+    </div>
+  );
+}
+
+function HeroMetric({ label, value, icon }: { label: string; value: number; icon: ReactNode }) {
+  return <div className="rounded-[28px] border border-white/15 bg-white/10 p-5 backdrop-blur-sm transition hover:bg-white/15"><div className="flex items-center justify-between text-cyan-100"><span className="text-sm font-semibold">{label}</span>{icon}</div><div className="mt-4 text-3xl font-black text-white">{value}</div></div>;
+}
+
+function SnapshotCard({ label, value, accent = false }: { label: string; value: string | number; accent?: boolean }) {
+  return <div className={`rounded-[24px] border p-5 ${accent ? 'border-amber-200 bg-amber-50' : 'border-slate-200 bg-slate-50'}`}><div className={`text-xs font-semibold uppercase tracking-[0.18em] ${accent ? 'text-amber-700' : 'text-slate-500'}`}>{label}</div><div className={`mt-3 text-2xl font-black ${accent ? 'text-amber-900' : 'text-slate-950'}`}>{value}</div></div>;
+}
+
+function Panel({ title, items }: { title: string; items: Array<{ label: string; detail: string }> }) {
+  return <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5"><h3 className="text-lg font-bold text-slate-950">{title}</h3><div className="mt-4 space-y-3">{items.map((item) => <div key={`${title}-${item.label}`} className="rounded-2xl border border-slate-200 bg-white px-4 py-3"><div className="font-semibold text-slate-950">{item.label}</div><div className="mt-1 text-sm text-slate-600">{item.detail}</div></div>)}</div></div>;
+}
+
+function ReasonRow({ icon, title, description }: { icon: ReactNode; title: string; description: string }) {
+  return <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5"><div className="flex items-center gap-3"><div className="rounded-2xl bg-blue-50 p-3 text-blue-700">{icon}</div><div className="text-lg font-bold text-slate-950">{title}</div></div><p className="mt-3 text-sm text-slate-600">{description}</p></div>;
+}
+
+function FooterGroup({ title, links }: { title: string; links: Array<[string, string]> }) {
+  return <div><h3 className="text-sm font-semibold uppercase tracking-[0.16em] text-cyan-200">{title}</h3><div className="mt-4 space-y-3">{links.map(([label, href]) => <Link key={label} href={href} className="block text-sm text-slate-100 transition hover:text-white">{label}</Link>)}</div></div>;
+}

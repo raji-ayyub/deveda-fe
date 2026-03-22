@@ -1,19 +1,22 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Loader2, X } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Bot, FileUp, Loader2, WandSparkles, X } from 'lucide-react';
 import CloudinaryUploadField from '@/components/CloudinaryUploadField';
-import { CourseCatalog } from '@/lib/types';
+import { api } from '@/lib/api';
+import { AgentAssignment, CourseCatalog, CourseCatalogDraftPayload } from '@/lib/types';
 import { COURSE_CATEGORIES, COURSE_DIFFICULTIES } from '@/lib/course-content';
 
 interface CourseModalProps {
   course: CourseCatalog | null;
   onSubmit: (data: any, options?: { openCurriculum?: boolean }) => void;
+  onStartImport?: (payload: { file: File; instructions: string; courseSlug?: string }) => Promise<void>;
   loading: boolean;
+  importing?: boolean;
   onClose: () => void;
 }
 
-const CourseModal: React.FC<CourseModalProps> = ({ course, onSubmit, loading, onClose }) => {
+const CourseModal: React.FC<CourseModalProps> = ({ course, onSubmit, onStartImport, loading, importing = false, onClose }) => {
   const [formData, setFormData] = useState({
     slug: course?.slug || '',
     title: course?.title || '',
@@ -32,10 +35,59 @@ const CourseModal: React.FC<CourseModalProps> = ({ course, onSubmit, loading, on
 
   const [newTag, setNewTag] = useState('');
   const [newPrerequisite, setNewPrerequisite] = useState('');
+  const [agentAssignment, setAgentAssignment] = useState<AgentAssignment | null>(null);
+  const [draftPrompt, setDraftPrompt] = useState('');
+  const [drafting, setDrafting] = useState(false);
+  const [agentError, setAgentError] = useState('');
+  const [mode, setMode] = useState<'manual' | 'import'>(course ? 'manual' : 'manual');
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importInstructions, setImportInstructions] = useState('');
+  const [importError, setImportError] = useState('');
+
+  useEffect(() => {
+    const loadAssignment = async () => {
+      try {
+        const response = await api.getAgentAssignments();
+        const approvedAssignment =
+          response.data.find(
+            (assignment) => assignment.agentType === 'course_builder' && assignment.status === 'approved' && !assignment.courseSlug
+          ) ||
+          response.data.find((assignment) => assignment.agentType === 'course_builder' && assignment.status === 'approved') ||
+          null;
+        setAgentAssignment(approvedAssignment);
+      } catch (error) {
+        console.error('Failed to load course builder assignment:', error);
+        setAgentAssignment(null);
+      }
+    };
+
+    loadAssignment();
+  }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSubmit(formData, { openCurriculum: true });
+  };
+
+  const handleStartImport = async () => {
+    if (!onStartImport) {
+      return;
+    }
+    if (!importFile) {
+      setImportError('Choose a source file first.');
+      return;
+    }
+
+    try {
+      setImportError('');
+      await onStartImport({
+        file: importFile,
+        instructions: importInstructions,
+        courseSlug: course?.slug,
+      });
+    } catch (error: any) {
+      setImportError(error.message || 'Unable to start the document import right now.');
+    }
   };
 
   const submitWithOptions = (options?: { openCurriculum?: boolean }) => {
@@ -72,6 +124,40 @@ const CourseModal: React.FC<CourseModalProps> = ({ course, onSubmit, loading, on
     });
   };
 
+  const applyDraftToForm = (draft: CourseCatalogDraftPayload) => {
+    setFormData((current) => ({
+      ...current,
+      ...draft,
+      prerequisites: draft.prerequisites || [],
+      tags: draft.tags || [],
+      thumbnail: current.thumbnail,
+      thumbnailPublicId: current.thumbnailPublicId,
+    }));
+  };
+
+  const handleDraftWithAgent = async () => {
+    if (!agentAssignment) {
+      return;
+    }
+
+    try {
+      setDrafting(true);
+      setAgentError('');
+      const response = await api.runAgentAction(agentAssignment.id, {
+        actionType: 'draft_course_catalog',
+        instruction:
+          draftPrompt.trim() ||
+          `Draft a complete course metadata form for ${formData.title || 'a new course'} based on the current inputs.`,
+        draftPayload: formData,
+      });
+      applyDraftToForm(response.data.payload as unknown as CourseCatalogDraftPayload);
+    } catch (error: any) {
+      setAgentError(error.message || 'Unable to draft course details right now.');
+    } finally {
+      setDrafting(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
       <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
@@ -91,7 +177,118 @@ const CourseModal: React.FC<CourseModalProps> = ({ course, onSubmit, loading, on
               </button>
             </div>
 
+            {onStartImport ? (
+              <div className="mb-6 grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1">
+                <button
+                  type="button"
+                  onClick={() => setMode('manual')}
+                  className={`rounded-lg px-4 py-3 text-sm font-semibold transition ${mode === 'manual' ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+                >
+                  Manual setup
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMode('import')}
+                  className={`rounded-lg px-4 py-3 text-sm font-semibold transition ${mode === 'import' ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+                >
+                  Import document
+                </button>
+              </div>
+            ) : null}
+
+            {mode === 'import' && onStartImport ? (
+              <div className="space-y-6">
+                <div className="rounded-xl border border-blue-100 bg-blue-50 p-4">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-blue-950">
+                    <FileUp className="h-4 w-4 text-blue-700" />
+                    Upload-first course flow
+                  </div>
+                  <p className="mt-2 text-sm text-blue-900">
+                    This starts the same staged agent flow used in the curriculum studio: scan the source, review the proposed structure, then generate modules and questions step by step.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-gray-700">Source file</label>
+                  <label className="flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-4 transition hover:border-blue-400 hover:bg-blue-50/60">
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-semibold text-slate-900">
+                        {importFile ? importFile.name : 'Upload pdf, docx, json, markdown, txt, csv, or html'}
+                      </div>
+                      <div className="mt-1 text-xs text-slate-500">
+                        {course
+                          ? 'We will attach the scan to this course and open the curriculum studio for staged generation.'
+                          : 'We will scan the document, create the course shell, and open the curriculum studio for staged generation.'}
+                      </div>
+                    </div>
+                    <div className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-slate-950 px-4 py-2 text-sm font-semibold text-white">
+                      <FileUp className="h-4 w-4" />
+                      Choose file
+                    </div>
+                    <input
+                      type="file"
+                      accept=".pdf,.docx,.json,.md,.markdown,.txt,.csv,.html,.htm,.yaml,.yml"
+                      className="hidden"
+                      onChange={(event) => setImportFile(event.target.files?.[0] || null)}
+                    />
+                  </label>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-gray-700">Generation guidance</label>
+                  <textarea
+                    value={importInstructions}
+                    onChange={(event) => setImportInstructions(event.target.value)}
+                    rows={5}
+                    placeholder="Describe the learner level, desired module depth, lesson density, project style, or any constraints the generation agent should follow."
+                    className="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-4">
+                  <h4 className="text-sm font-semibold text-slate-900">What happens next</h4>
+                  <div className="mt-2 space-y-2 text-sm text-slate-600">
+                    <div>1. The backend parses and stores the uploaded source.</div>
+                    <div>2. The agent proposes the course framing, modules, and lesson plan.</div>
+                    <div>3. You continue in Curriculum Studio and explicitly generate modules and questions.</div>
+                  </div>
+                </div>
+
+                {importError ? <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{importError}</div> : null}
+              </div>
+            ) : (
             <form onSubmit={handleSubmit} className="space-y-6">
+              {agentAssignment ? (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                    <Bot className="h-4 w-4 text-blue-700" />
+                    Agent autofill
+                  </div>
+                  <p className="mt-2 text-sm text-slate-600">
+                    Ask the course builder to draft the form in the background, then review and submit manually.
+                  </p>
+                  <div className="mt-3 flex flex-col gap-3 md:flex-row">
+                    <textarea
+                      value={draftPrompt}
+                      onChange={(event) => setDraftPrompt(event.target.value)}
+                      rows={3}
+                      placeholder="Describe the course you want, the audience, the outcome, and any stack or project constraints."
+                      className="flex-1 rounded-lg border border-gray-300 px-4 py-3 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleDraftWithAgent}
+                      disabled={drafting}
+                      className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+                    >
+                      {drafting ? <Loader2 className="h-4 w-4 animate-spin" /> : <WandSparkles className="h-4 w-4" />}
+                      Draft form
+                    </button>
+                  </div>
+                  {agentError ? <p className="mt-3 text-sm text-rose-600">{agentError}</p> : null}
+                </div>
+              ) : null}
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Course Slug *</label>
@@ -287,40 +484,61 @@ const CourseModal: React.FC<CourseModalProps> = ({ course, onSubmit, loading, on
               <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-4">
                 <h4 className="text-sm font-semibold text-blue-950">After saving this course</h4>
                 <p className="mt-2 text-sm text-blue-900">
-                  Open the curriculum studio to write lesson markup, add learning objectives, configure hands-on code workspaces, and use approved course-builder agent suggestions during lesson authoring.
+                  Open the curriculum studio to write lesson markup, add learning objectives, configure hands-on code workspaces, and use approved course-builder agent drafts to autofill module and lesson content before submitting.
                 </p>
               </div>
             </form>
+            )}
           </div>
 
           <div className="bg-gray-50 px-6 py-4 sm:px-8 sm:flex sm:flex-row-reverse border-t border-gray-200">
-            <button
-              type="button"
-              onClick={() => submitWithOptions({ openCurriculum: true })}
-              disabled={loading}
-              className="w-full sm:w-auto inline-flex justify-center items-center rounded-lg border border-transparent shadow-sm px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-base font-medium text-white hover:opacity-90 focus:outline-none disabled:opacity-75"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  {course ? 'Saving...' : 'Creating...'}
-                </>
-              ) : (
-                <>{course ? 'Save + Open Studio' : 'Create + Open Studio'}</>
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={() => submitWithOptions({ openCurriculum: false })}
-              disabled={loading}
-              className="mt-3 sm:mt-0 sm:mr-3 w-full sm:w-auto inline-flex justify-center rounded-lg border border-gray-300 shadow-sm px-6 py-3 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none disabled:opacity-75"
-            >
-              {course ? 'Save Only' : 'Create Only'}
-            </button>
+            {mode === 'import' && onStartImport ? (
+              <button
+                type="button"
+                onClick={handleStartImport}
+                disabled={importing}
+                className="w-full sm:w-auto inline-flex justify-center items-center rounded-lg border border-transparent shadow-sm px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-base font-medium text-white hover:opacity-90 focus:outline-none disabled:opacity-75"
+              >
+                {importing ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    {course ? 'Starting import...' : 'Creating import session...'}
+                  </>
+                ) : (
+                  <>{course ? 'Import into Studio' : 'Create from Document'}</>
+                )}
+              </button>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => submitWithOptions({ openCurriculum: true })}
+                  disabled={loading}
+                  className="w-full sm:w-auto inline-flex justify-center items-center rounded-lg border border-transparent shadow-sm px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-base font-medium text-white hover:opacity-90 focus:outline-none disabled:opacity-75"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      {course ? 'Saving...' : 'Creating...'}
+                    </>
+                  ) : (
+                    <>{course ? 'Save + Open Studio' : 'Create + Open Studio'}</>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => submitWithOptions({ openCurriculum: false })}
+                  disabled={loading}
+                  className="mt-3 sm:mt-0 sm:mr-3 w-full sm:w-auto inline-flex justify-center rounded-lg border border-gray-300 shadow-sm px-6 py-3 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none disabled:opacity-75"
+                >
+                  {course ? 'Save Only' : 'Create Only'}
+                </button>
+              </>
+            )}
             <button
               type="button"
               onClick={onClose}
-              disabled={loading}
+              disabled={loading || importing}
               className="mt-3 sm:mt-0 sm:ml-3 w-full sm:w-auto inline-flex justify-center rounded-lg border border-gray-300 shadow-sm px-6 py-3 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none disabled:opacity-75"
             >
               Cancel
