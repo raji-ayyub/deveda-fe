@@ -42,7 +42,6 @@ import {
 } from './types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://deveda-be.onrender.com';
-// const API_BASE_URL = 'http://localhost:8000';
 
 
 
@@ -505,6 +504,14 @@ class ApiService {
       headers: this.getHeaders(),
     });
     return this.handleResponse<QuizAttempt[]>(response);
+  }
+
+  async deleteUserQuizAttempt(userId: string, attemptId: string): Promise<ApiResponse<boolean>> {
+    const response = await fetch(`${API_BASE_URL}/users/${userId}/quizzes/${attemptId}`, {
+      method: 'DELETE',
+      headers: this.getHeaders(),
+    });
+    return this.handleResponse<boolean>(response);
   }
 
   async getAdminStats(): Promise<ApiResponse<AdminStats>> {

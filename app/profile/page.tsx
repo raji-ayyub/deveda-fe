@@ -2,18 +2,20 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Award, BookOpen, Bot, Calendar, CheckCircle2, ChevronRight, Mail, Settings, Trophy } from 'lucide-react';
+import { Award, BookOpen, Bot, Calendar, CheckCircle2, ChevronRight, Mail, Settings, Trash2, Trophy } from 'lucide-react';
 
 import { AchievementShowcase } from '@/components/achievements/AchievementShowcase';
+import ConfirmationDialog from '@/components/ui/ConfirmationDialog';
 import InstructorProfileView from '@/components/profile/InstructorProfileView';
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
-import { CourseCatalog, QuizAttempt, UserAchievement, UserCourse } from '@/lib/types';
+import { CourseCatalog, QuizAttempt, QuizWithDetails, UserAchievement, UserCourse } from '@/lib/types';
 
 const ProfilePage: React.FC = () => {
   const { user, updateUser, loading: authLoading } = useAuth();
   const [userCourses, setUserCourses] = useState<UserCourse[]>([]);
   const [quizAttempts, setQuizAttempts] = useState<QuizAttempt[]>([]);
+  const [quizzes, setQuizzes] = useState<QuizWithDetails[]>([]);
   const [courseCatalog, setCourseCatalog] = useState<CourseCatalog[]>([]);
   const [achievements, setAchievements] = useState<UserAchievement[]>([]);
   const [loading, setLoading] = useState(true);
@@ -21,6 +23,10 @@ const ProfilePage: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [recordError, setRecordError] = useState('');
+  const [recordSuccess, setRecordSuccess] = useState('');
+  const [pendingDeleteAttemptId, setPendingDeleteAttemptId] = useState<string | null>(null);
+  const [deletingAttempt, setDeletingAttempt] = useState(false);
   const [editData, setEditData] = useState({
     firstName: '',
     lastName: '',
@@ -36,6 +42,7 @@ const ProfilePage: React.FC = () => {
     if (user.role !== 'Student') {
       setUserCourses([]);
       setQuizAttempts([]);
+      setQuizzes([]);
       setCourseCatalog([]);
       setAchievements([]);
       setLoading(false);
@@ -51,17 +58,19 @@ const ProfilePage: React.FC = () => {
     const loadUserData = async () => {
       try {
         setLoading(true);
-        const [coursesRes, quizzesRes, catalogRes, achievementsRes] = await Promise.all([
+        const [coursesRes, quizAttemptsRes, catalogRes, achievementsRes, quizzesRes] = await Promise.all([
           api.getUserCourses(user.id),
           api.getUserQuizAttempts(user.id),
           api.getCourseCatalog(),
           api.getUserAchievements(user.id),
+          api.getQuizzes(),
         ]);
 
         setUserCourses(coursesRes.data);
-        setQuizAttempts(quizzesRes.data);
+        setQuizAttempts(quizAttemptsRes.data);
         setCourseCatalog(catalogRes.data);
         setAchievements(achievementsRes.data);
+        setQuizzes(quizzesRes.data);
       } catch (loadError) {
         console.error('Failed to load profile data:', loadError);
         setError('We could not load your latest learning data.');
@@ -90,8 +99,30 @@ const ProfilePage: React.FC = () => {
   }, [quizAttempts, userCourses]);
 
   const recentCourses = userCourses.slice(0, 3);
-  const recentAttempts = quizAttempts.slice(0, 4);
+  const quizRecords = quizAttempts;
   const certificateCount = achievements.filter((achievement) => achievement.kind === 'course_completion').length;
+
+  const getQuizTitle = (quizId: string) => quizzes.find((quiz) => quiz.id === quizId)?.title || quizId;
+
+  const handleDeleteQuizAttempt = async () => {
+    if (!user || !pendingDeleteAttemptId) {
+      return;
+    }
+
+    try {
+      setDeletingAttempt(true);
+      setRecordError('');
+      setRecordSuccess('');
+      await api.deleteUserQuizAttempt(user.id, pendingDeleteAttemptId);
+      setQuizAttempts((current) => current.filter((attempt) => attempt.id !== pendingDeleteAttemptId));
+      setRecordSuccess('Quiz record deleted.');
+      setPendingDeleteAttemptId(null);
+    } catch (deleteError: any) {
+      setRecordError(deleteError.message || 'Could not delete that quiz record right now.');
+    } finally {
+      setDeletingAttempt(false);
+    }
+  };
 
   const handleSave = async () => {
     if (!user) {
@@ -174,6 +205,18 @@ const ProfilePage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#f8fafc_0%,#ffffff_40%,#eef2ff_100%)] px-4 py-8 sm:px-6 lg:px-8">
+      <ConfirmationDialog
+        isOpen={Boolean(pendingDeleteAttemptId)}
+        title="Delete quiz record?"
+        description="This removes the selected quiz attempt from your record list and recalculates the visible stats on this page."
+        confirmLabel="Delete record"
+        tone="danger"
+        busy={deletingAttempt}
+        onCancel={() => setPendingDeleteAttemptId(null)}
+        onConfirm={() => {
+          void handleDeleteQuizAttempt();
+        }}
+      />
       <div className="mx-auto max-w-7xl space-y-8">
         <div className="flex flex-col gap-4 rounded-[32px] border border-slate-200 bg-white/90 px-8 py-8 shadow-2xl shadow-slate-200 backdrop-blur lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-5">
@@ -393,27 +436,44 @@ const ProfilePage: React.FC = () => {
             <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-lg shadow-slate-100">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-xl font-bold text-slate-950">Recent quiz activity</h2>
-                  <p className="mt-1 text-sm text-slate-600">Your latest checkpoint results.</p>
+                  <h2 className="text-xl font-bold text-slate-950">Quiz records</h2>
+                  <p className="mt-1 text-sm text-slate-600">Keep or delete individual attempt records from your learner history.</p>
                 </div>
               </div>
+
+              {recordError ? <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{recordError}</div> : null}
+              {recordSuccess ? <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{recordSuccess}</div> : null}
 
               <div className="mt-6 space-y-3">
                 {loading ? (
                   <p className="text-sm text-slate-500">Loading attempts...</p>
-                ) : recentAttempts.length > 0 ? (
-                  recentAttempts.map((attempt) => (
-                    <div key={attempt.id} className="flex items-center justify-between rounded-2xl border border-slate-200 px-4 py-3">
+                ) : quizRecords.length > 0 ? (
+                  quizRecords.map((attempt) => {
+                    const courseInfo = attempt.courseSlug ? courseCatalog.find((course) => course.slug === attempt.courseSlug) : null;
+                    return (
+                    <div key={attempt.id} className="flex flex-col gap-4 rounded-2xl border border-slate-200 px-4 py-4 md:flex-row md:items-center md:justify-between">
                       <div>
-                        <p className="font-semibold text-slate-900">{attempt.quizId}</p>
-                        <p className="text-sm text-slate-500">{new Date(attempt.attemptedAt).toLocaleDateString()}</p>
+                        <p className="font-semibold text-slate-900">{getQuizTitle(attempt.quizId)}</p>
+                        <p className="mt-1 text-sm text-slate-500">
+                          {courseInfo?.title || attempt.courseSlug || 'Standalone quiz'} · {new Date(attempt.attemptedAt).toLocaleString()}
+                        </p>
                       </div>
-                      <div className="text-right">
+                      <div className="flex items-center justify-between gap-4 md:justify-end">
+                        <div className="text-right">
                         <p className={`font-semibold ${attempt.passed ? 'text-emerald-600' : 'text-rose-600'}`}>{attempt.score}%</p>
                         <p className="text-xs text-slate-500">{attempt.passed ? 'Passed' : 'Retry needed'}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setPendingDeleteAttemptId(attempt.id)}
+                          className="inline-flex items-center gap-2 rounded-2xl border border-rose-200 px-3 py-2 text-sm font-semibold text-rose-700 transition hover:bg-rose-50"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          Delete
+                        </button>
                       </div>
                     </div>
-                  ))
+                  )})
                 ) : (
                   <div className="rounded-2xl border border-dashed border-slate-300 px-6 py-10 text-center text-sm text-slate-500">
                     No quiz attempts yet. Your results will appear here after your first assessment.
