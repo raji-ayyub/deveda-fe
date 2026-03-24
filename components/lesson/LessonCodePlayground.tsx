@@ -79,9 +79,20 @@ export default function LessonCodePlayground({ playground }: LessonCodePlaygroun
   const [cssCode, setCssCode] = useState(playground.starterCss || '');
   const [jsCode, setJsCode] = useState(playground.starterJs || '');
   const [previewDoc, setPreviewDoc] = useState('');
+  const [previewChannelId, setPreviewChannelId] = useState('');
   const [consoleOutput, setConsoleOutput] = useState<string[]>([]);
   const [running, setRunning] = useState(false);
   const [runtimeError, setRuntimeError] = useState('');
+  const previewInstanceIdRef = useRef(`lesson-preview-${Math.random().toString(36).slice(2)}`);
+
+  const loadWebPreview = (nextHtml: string, nextCss: string, nextJs: string, options?: { markRunning?: boolean }) => {
+    const nextChannelId = `${previewInstanceIdRef.current}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    setPreviewChannelId(nextChannelId);
+    setPreviewDoc(buildPreview(nextHtml, nextCss, nextJs, nextChannelId));
+    setConsoleOutput([]);
+    setRuntimeError('');
+    setRunning(options?.markRunning ?? true);
+  };
 
   useEffect(() => {
     setActiveTab('html');
@@ -91,9 +102,51 @@ export default function LessonCodePlayground({ playground }: LessonCodePlaygroun
     setConsoleOutput([]);
     setRuntimeError('');
     if (playground.mode === 'web') {
-      setPreviewDoc(buildPreview(playground.starterHtml || '', playground.starterCss || '', playground.starterJs || ''));
+      loadWebPreview(playground.starterHtml || '', playground.starterCss || '', playground.starterJs || '', { markRunning: false });
+    } else {
+      setPreviewDoc('');
+      setPreviewChannelId('');
     }
   }, [playground]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !previewChannelId) {
+      return;
+    }
+
+    const handlePreviewMessage = (event: MessageEvent) => {
+      const payload = event.data as
+        | {
+            source?: string;
+            channelId?: string;
+            type?: string;
+            payload?: { message?: string };
+          }
+        | undefined;
+
+      if (!payload || payload.source !== 'deveda-playground' || payload.channelId !== previewChannelId) {
+        return;
+      }
+
+      if (payload.type === 'console') {
+        setConsoleOutput((current) => [...current, payload.payload?.message || '']);
+        return;
+      }
+
+      if (payload.type === 'error') {
+        setRuntimeError(payload.payload?.message || 'The code could not run.');
+        setRunning(false);
+        return;
+      }
+
+      if (payload.type === 'done') {
+        setRunning(false);
+      }
+    };
+
+    window.addEventListener('message', handlePreviewMessage);
+    return () => window.removeEventListener('message', handlePreviewMessage);
+  }, [previewChannelId]);
 
   const checks = useMemo(() => {
     return playground.checks.map((check) => {
@@ -110,11 +163,11 @@ export default function LessonCodePlayground({ playground }: LessonCodePlaygroun
   const runPlayground = () => {
     setRunning(true);
     setRuntimeError('');
+    setConsoleOutput([]);
 
     try {
       if (playground.mode === 'web') {
-        setPreviewDoc(buildPreview(htmlCode, cssCode, jsCode));
-        setConsoleOutput([]);
+        loadWebPreview(htmlCode, cssCode, jsCode);
       } else {
         const logs: string[] = [];
         const consoleStub = {
@@ -141,7 +194,7 @@ export default function LessonCodePlayground({ playground }: LessonCodePlaygroun
     setConsoleOutput([]);
     setRuntimeError('');
     if (playground.mode === 'web') {
-      setPreviewDoc(buildPreview(playground.starterHtml || '', playground.starterCss || '', playground.starterJs || ''));
+      loadWebPreview(playground.starterHtml || '', playground.starterCss || '', playground.starterJs || '', { markRunning: false });
     }
   };
 
@@ -225,14 +278,23 @@ export default function LessonCodePlayground({ playground }: LessonCodePlaygroun
             />
           </div>
 
-          <OutputPanel title="Preview" subtitle="Live web output">
-            <iframe
-              title="Lesson playground preview"
-              sandbox="allow-scripts"
-              srcDoc={previewDoc}
-              className="h-[420px] w-full rounded-[20px] border border-slate-800 bg-white"
-            />
-          </OutputPanel>
+          <div className="space-y-6">
+            <OutputPanel title="Preview" subtitle="Live web output">
+              <iframe
+                key={previewChannelId || 'lesson-playground-preview'}
+                title="Lesson playground preview"
+                sandbox="allow-scripts"
+                srcDoc={previewDoc}
+                className="h-[420px] w-full rounded-[20px] border border-slate-800 bg-white"
+              />
+            </OutputPanel>
+
+            <OutputPanel title="Console output" subtitle="Browser logs and runtime notes">
+              <div className="h-[180px] overflow-auto rounded-[20px] border border-slate-800 bg-[#050b16] p-4 font-mono text-sm text-cyan-100">
+                {consoleOutput.length > 0 ? consoleOutput.map((line, index) => <div key={`${line}-${index}`}>{line}</div>) : 'Run the code to inspect logs and runtime feedback.'}
+              </div>
+            </OutputPanel>
+          </div>
         </div>
       ) : (
         <div className="grid gap-6 p-5 xl:grid-cols-[1.18fr_0.92fr]">
@@ -701,7 +763,9 @@ function escapeHtml(source: string) {
     .replace(/>/g, '&gt;');
 }
 
-function buildPreview(html: string, css: string, js: string) {
+function buildPreview(html: string, css: string, js: string, channelId: string) {
+  const safeChannelId = JSON.stringify(channelId);
+  const safeJs = escapeInlineScript(js);
   return `<!doctype html>
 <html>
   <head>
@@ -710,11 +774,58 @@ function buildPreview(html: string, css: string, js: string) {
   <body>
     ${html}
     <script>
-      try {
-        ${js}
-      } catch (error) {
-        document.body.insertAdjacentHTML('beforeend', '<pre style="color:#b91c1c;font-family:monospace;">' + error.message + '</pre>');
-      }
+      (function () {
+        const channelId = ${safeChannelId};
+        const postToParent = (type, payload) => {
+          window.parent.postMessage({ source: 'deveda-playground', channelId, type, payload }, '*');
+        };
+
+        const formatValue = (value) => {
+          if (typeof value === 'string') {
+            return value;
+          }
+
+          try {
+            return JSON.stringify(value);
+          } catch {
+            return String(value);
+          }
+        };
+
+        const nativeConsole = window.console;
+        window.console = {
+          ...nativeConsole,
+          log: (...args) => {
+            postToParent('console', { message: args.map(formatValue).join(' ') });
+            nativeConsole.log(...args);
+          },
+          warn: (...args) => {
+            postToParent('console', { message: args.map(formatValue).join(' ') });
+            nativeConsole.warn(...args);
+          },
+          error: (...args) => {
+            postToParent('console', { message: args.map(formatValue).join(' ') });
+            nativeConsole.error(...args);
+          },
+        };
+
+        window.addEventListener('error', (event) => {
+          postToParent('error', { message: event.error?.message || event.message || 'The code could not run.' });
+        });
+
+        window.addEventListener('unhandledrejection', (event) => {
+          const reason = event.reason;
+          postToParent('error', { message: reason?.message || String(reason) });
+        });
+
+        try {
+          ${safeJs}
+        } catch (error) {
+          postToParent('error', { message: error?.message || String(error) });
+        } finally {
+          postToParent('done', {});
+        }
+      }());
     </script>
   </body>
 </html>`;
@@ -743,4 +854,8 @@ function stringifyOutput(value: unknown) {
   } catch {
     return String(value);
   }
+}
+
+function escapeInlineScript(source: string) {
+  return source.replace(/<\/script/gi, '<\\/script');
 }
