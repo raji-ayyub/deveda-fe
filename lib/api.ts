@@ -26,6 +26,7 @@ import {
   LoginCredentials,
   LessonLibraryItem,
   PasswordChangePayload,
+  PaginatedApiResponse,
   PrivateAdminRegistration,
   QuestionWithDetails,
   QuizAttempt,
@@ -41,21 +42,11 @@ import {
   QuizAttemptSubmission,
 } from './types';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://deveda-be.onrender.com';
-
-
-
-const TOKEN_STORAGE_KEY = 'deveda_token';
-const USER_STORAGE_KEY = 'deveda_user';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 class ApiService {
   private token: string | null = null;
-
-  constructor() {
-    if (typeof window !== 'undefined') {
-      this.token = sessionStorage.getItem(TOKEN_STORAGE_KEY);
-    }
-  }
+  private currentUser: User | null = null;
 
   private getHeaders(): HeadersInit {
     const headers: HeadersInit = {
@@ -77,6 +68,13 @@ class ApiService {
     return headers;
   }
 
+  private apiFetch(input: string, init: RequestInit = {}): Promise<Response> {
+    return fetch(input, {
+      credentials: 'include',
+      ...init,
+    });
+  }
+
   private isUserPayload(payload: unknown): payload is User {
     if (!payload || typeof payload !== 'object') {
       return false;
@@ -89,25 +87,6 @@ class ApiService {
       typeof candidate.firstName === 'string' &&
       typeof candidate.lastName === 'string'
     );
-  }
-
-  private readStoredUser(): User | null {
-    if (typeof window === 'undefined') {
-      return null;
-    }
-
-    const stored = sessionStorage.getItem(USER_STORAGE_KEY);
-    if (!stored) {
-      return null;
-    }
-
-    try {
-      const parsed = JSON.parse(stored);
-      return this.isUserPayload(parsed) ? parsed : null;
-    } catch {
-      this.clearSession();
-      return null;
-    }
   }
 
   private normalizeAuthSession(payload: unknown): AuthSession {
@@ -133,22 +112,12 @@ class ApiService {
 
   private persistSession(session: AuthSession) {
     this.token = session.accessToken || null;
-    if (typeof window !== 'undefined') {
-      if (session.accessToken) {
-        sessionStorage.setItem(TOKEN_STORAGE_KEY, session.accessToken);
-      } else {
-        sessionStorage.removeItem(TOKEN_STORAGE_KEY);
-      }
-      sessionStorage.setItem(USER_STORAGE_KEY, JSON.stringify(session.user));
-    }
+    this.currentUser = session.user;
   }
 
   private clearSession() {
     this.token = null;
-    if (typeof window !== 'undefined') {
-      sessionStorage.removeItem(TOKEN_STORAGE_KEY);
-      sessionStorage.removeItem(USER_STORAGE_KEY);
-    }
+    this.currentUser = null;
   }
 
   private async handleResponse<T>(response: Response): Promise<ApiResponse<T>> {
@@ -177,18 +146,18 @@ class ApiService {
     return payload;
   }
 
-  private toQueryString(params?: Record<string, string | undefined>): string {
+  private toQueryString(params?: Record<string, string | number | boolean | undefined | null>): string {
     const query = new URLSearchParams();
     Object.entries(params || {}).forEach(([key, value]) => {
-      if (value) {
-        query.set(key, value);
+      if (value !== undefined && value !== null && value !== '') {
+        query.set(key, String(value));
       }
     });
     return query.toString();
   }
 
   async login(credentials: LoginCredentials): Promise<ApiResponse<AuthSession>> {
-    const response = await fetch(`${API_BASE_URL}/login`, {
+    const response = await this.apiFetch(`${API_BASE_URL}/login`, {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify(credentials),
@@ -205,7 +174,7 @@ class ApiService {
 
   async register(credentials: RegisterCredentials): Promise<ApiResponse<AuthSession>> {
     const payload = { ...credentials, role: credentials.role || 'Student' };
-    const response = await fetch(`${API_BASE_URL}/register`, {
+    const response = await this.apiFetch(`${API_BASE_URL}/register`, {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify(payload),
@@ -221,7 +190,7 @@ class ApiService {
   }
 
   async registerPrivateAdmin(credentials: PrivateAdminRegistration): Promise<ApiResponse<AuthSession>> {
-    const response = await fetch(`${API_BASE_URL}/auth/private-admin/register`, {
+    const response = await this.apiFetch(`${API_BASE_URL}/auth/private-admin/register`, {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify(credentials),
@@ -237,28 +206,36 @@ class ApiService {
   }
 
   async logout(): Promise<void> {
-    this.clearSession();
+    try {
+      await this.apiFetch(`${API_BASE_URL}/auth/logout`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+      });
+    } finally {
+      this.clearSession();
+    }
   }
 
   async getCurrentUser(): Promise<User | null> {
-    if (!this.token) {
-      return this.readStoredUser();
-    }
-
-    const response = await fetch(`${API_BASE_URL}/auth/me`, {
+    const response = await this.apiFetch(`${API_BASE_URL}/auth/me`, {
       headers: this.getHeaders(),
     });
+
+    if (response.status === 401) {
+      this.clearSession();
+      return null;
+    }
 
     const result = await this.handleResponse<User>(response);
     this.persistSession({
       user: result.data,
-      accessToken: this.token,
+      accessToken: this.token || '',
     });
     return result.data;
   }
 
   async changePassword(payload: PasswordChangePayload): Promise<ApiResponse<boolean>> {
-    const response = await fetch(`${API_BASE_URL}/auth/change-password`, {
+    const response = await this.apiFetch(`${API_BASE_URL}/auth/change-password`, {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify(payload),
@@ -270,7 +247,7 @@ class ApiService {
     assetType: 'profile' | 'course',
     publicId?: string
   ): Promise<ApiResponse<CloudinaryUploadSignature>> {
-    const response = await fetch(`${API_BASE_URL}/media/uploads/signature`, {
+    const response = await this.apiFetch(`${API_BASE_URL}/media/uploads/signature`, {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify({ assetType, publicId }),
@@ -279,14 +256,14 @@ class ApiService {
   }
 
   async getUserProfile(userId: string): Promise<ApiResponse<any>> {
-    const response = await fetch(`${API_BASE_URL}/users/${userId}`, {
+    const response = await this.apiFetch(`${API_BASE_URL}/users/${userId}`, {
       headers: this.getHeaders(),
     });
     return this.handleResponse<any>(response);
   }
 
   async createUser(data: RegisterCredentials): Promise<ApiResponse<User>> {
-    const response = await fetch(`${API_BASE_URL}/users`, {
+    const response = await this.apiFetch(`${API_BASE_URL}/users`, {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify(data),
@@ -295,22 +272,20 @@ class ApiService {
   }
 
   async updateUser(userId: string, data: Partial<User>): Promise<ApiResponse<User>> {
-    const response = await fetch(`${API_BASE_URL}/users/${userId}`, {
+    const response = await this.apiFetch(`${API_BASE_URL}/users/${userId}`, {
       method: 'PATCH',
       headers: this.getHeaders(),
       body: JSON.stringify(data),
     });
     const result = await this.handleResponse<User>(response);
-
-    if (typeof window !== 'undefined') {
-      sessionStorage.setItem(USER_STORAGE_KEY, JSON.stringify(result.data));
+    if (this.currentUser?.id === result.data.id) {
+      this.currentUser = result.data;
     }
-
     return result;
   }
 
   async updateUserStatus(userId: string, isActive: boolean): Promise<ApiResponse<User>> {
-    const response = await fetch(`${API_BASE_URL}/users/${userId}/status`, {
+    const response = await this.apiFetch(`${API_BASE_URL}/users/${userId}/status`, {
       method: 'PATCH',
       headers: this.getHeaders(),
       body: JSON.stringify({ isActive }),
@@ -319,7 +294,7 @@ class ApiService {
   }
 
   async deleteUser(userId: string): Promise<ApiResponse<boolean>> {
-    const response = await fetch(`${API_BASE_URL}/users/${userId}`, {
+    const response = await this.apiFetch(`${API_BASE_URL}/users/${userId}`, {
       method: 'DELETE',
       headers: this.getHeaders(),
     });
@@ -330,22 +305,25 @@ class ApiService {
     category?: string;
     difficulty?: string;
     search?: string;
-  }): Promise<ApiResponse<CourseCatalog[]>> {
+    sortBy?: string;
+    page?: number;
+    pageSize?: number;
+  }): Promise<PaginatedApiResponse<CourseCatalog>> {
     const queryParams = this.toQueryString(params);
     const url = `${API_BASE_URL}/courses/catalog${queryParams ? `?${queryParams}` : ''}`;
-    const response = await fetch(url, { headers: this.getHeaders() });
-    return this.handleResponse<CourseCatalog[]>(response);
+    const response = await this.apiFetch(url, { headers: this.getHeaders() });
+    return this.handleResponse<CourseCatalog[]>(response) as Promise<PaginatedApiResponse<CourseCatalog>>;
   }
 
   async getCourseBySlug(slug: string): Promise<ApiResponse<CourseCatalog>> {
-    const response = await fetch(`${API_BASE_URL}/courses/catalog/${slug}`, {
+    const response = await this.apiFetch(`${API_BASE_URL}/courses/catalog/${slug}`, {
       headers: this.getHeaders(),
     });
     return this.handleResponse<CourseCatalog>(response);
   }
 
   async createCourseCatalog(payload: Partial<CourseCatalog>): Promise<ApiResponse<CourseCatalog>> {
-    const response = await fetch(`${API_BASE_URL}/courses/catalog`, {
+    const response = await this.apiFetch(`${API_BASE_URL}/courses/catalog`, {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify(payload),
@@ -354,7 +332,7 @@ class ApiService {
   }
 
   async updateCourseCatalog(slug: string, payload: Partial<CourseCatalog>): Promise<ApiResponse<CourseCatalog>> {
-    const response = await fetch(`${API_BASE_URL}/courses/catalog/${slug}`, {
+    const response = await this.apiFetch(`${API_BASE_URL}/courses/catalog/${slug}`, {
       method: 'PUT',
       headers: this.getHeaders(),
       body: JSON.stringify(payload),
@@ -363,7 +341,7 @@ class ApiService {
   }
 
   async deleteCourseCatalog(slug: string): Promise<ApiResponse<boolean>> {
-    const response = await fetch(`${API_BASE_URL}/courses/catalog/${slug}`, {
+    const response = await this.apiFetch(`${API_BASE_URL}/courses/catalog/${slug}`, {
       method: 'DELETE',
       headers: this.getHeaders(),
     });
@@ -371,31 +349,38 @@ class ApiService {
   }
 
   async getCourseCatalogStats(): Promise<ApiResponse<any>> {
-    const response = await fetch(`${API_BASE_URL}/courses/catalog/stats`, {
+    const response = await this.apiFetch(`${API_BASE_URL}/courses/catalog/stats`, {
       headers: this.getHeaders(),
     });
     return this.handleResponse<any>(response);
   }
 
   async getCourseCurriculum(slug: string): Promise<ApiResponse<CourseCurriculum>> {
-    const response = await fetch(`${API_BASE_URL}/courses/catalog/${slug}/curriculum`, {
+    const response = await this.apiFetch(`${API_BASE_URL}/courses/catalog/${slug}/curriculum`, {
       headers: this.getHeaders(),
     });
     return this.handleResponse<CourseCurriculum>(response);
   }
 
-  async getLessonLibrary(): Promise<ApiResponse<LessonLibraryItem[]>> {
-    const response = await fetch(`${API_BASE_URL}/lessons/library`, {
+  async getLessonLibrary(params?: {
+    search?: string;
+    accessStatus?: string;
+    courseSlug?: string;
+    page?: number;
+    pageSize?: number;
+  }): Promise<PaginatedApiResponse<LessonLibraryItem>> {
+    const queryParams = this.toQueryString(params);
+    const response = await this.apiFetch(`${API_BASE_URL}/lessons/library${queryParams ? `?${queryParams}` : ''}`, {
       headers: this.getUploadHeaders(),
     });
-    return this.handleResponse<LessonLibraryItem[]>(response);
+    return this.handleResponse<LessonLibraryItem[]>(response) as Promise<PaginatedApiResponse<LessonLibraryItem>>;
   }
 
   async updateCourseCurriculum(
     slug: string,
     payload: Pick<CourseCurriculum, 'overview' | 'learningFlow' | 'visualAidMarkdown' | 'modules' | 'milestoneProjects'>
   ): Promise<ApiResponse<CourseCurriculum>> {
-    const response = await fetch(`${API_BASE_URL}/courses/catalog/${slug}/curriculum`, {
+    const response = await this.apiFetch(`${API_BASE_URL}/courses/catalog/${slug}/curriculum`, {
       method: 'PUT',
       headers: this.getHeaders(),
       body: JSON.stringify(payload),
@@ -404,7 +389,7 @@ class ApiService {
   }
 
   async enrollCourse(userId: string, enrollment: CourseEnrollment): Promise<ApiResponse<UserCourse>> {
-    const response = await fetch(`${API_BASE_URL}/users/${userId}/courses`, {
+    const response = await this.apiFetch(`${API_BASE_URL}/users/${userId}/courses`, {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify(enrollment),
@@ -413,7 +398,7 @@ class ApiService {
   }
 
   async getUserCourses(userId: string): Promise<ApiResponse<UserCourse[]>> {
-    const response = await fetch(`${API_BASE_URL}/users/${userId}/courses`, {
+    const response = await this.apiFetch(`${API_BASE_URL}/users/${userId}/courses`, {
       headers: this.getHeaders(),
     });
     return this.handleResponse<UserCourse[]>(response);
@@ -429,7 +414,7 @@ class ApiService {
       currentLessonSlug?: string | null;
     }
   ): Promise<ApiResponse<CourseProgressResponse>> {
-    const response = await fetch(`${API_BASE_URL}/users/${userId}/courses/${courseSlug}/progress`, {
+    const response = await this.apiFetch(`${API_BASE_URL}/users/${userId}/courses/${courseSlug}/progress`, {
       method: 'PATCH',
       headers: this.getHeaders(),
       body: JSON.stringify({
@@ -444,35 +429,41 @@ class ApiService {
 
   async getUserAchievements(userId: string, courseSlug?: string): Promise<ApiResponse<UserAchievement[]>> {
     const query = courseSlug ? `?courseSlug=${encodeURIComponent(courseSlug)}` : '';
-    const response = await fetch(`${API_BASE_URL}/users/${userId}/achievements${query}`, {
+    const response = await this.apiFetch(`${API_BASE_URL}/users/${userId}/achievements${query}`, {
       headers: this.getHeaders(),
     });
     return this.handleResponse<UserAchievement[]>(response);
   }
 
   async getCourseEnrollments(courseSlug: string, limit = 10): Promise<ApiResponse<any>> {
-    const response = await fetch(`${API_BASE_URL}/courses/${courseSlug}/enrollments?limit=${limit}`, {
+    const response = await this.apiFetch(`${API_BASE_URL}/courses/${courseSlug}/enrollments?limit=${limit}`, {
       headers: this.getHeaders(),
     });
     return this.handleResponse<any>(response);
   }
 
   async getQuizQuestions(quizId: string): Promise<ApiResponse<QuizQuestion[]>> {
-    const response = await fetch(`${API_BASE_URL}/quizzes/${quizId}/questions`, {
+    const response = await this.apiFetch(`${API_BASE_URL}/quizzes/${quizId}/questions`, {
       headers: this.getHeaders(),
     });
     return this.handleResponse<QuizQuestion[]>(response);
   }
 
-  async getQuizzes(): Promise<ApiResponse<QuizWithDetails[]>> {
-    const response = await fetch(`${API_BASE_URL}/quizzes`, {
+  async getQuizzes(params?: {
+    search?: string;
+    courseSlug?: string;
+    page?: number;
+    pageSize?: number;
+  }): Promise<PaginatedApiResponse<QuizWithDetails>> {
+    const queryParams = this.toQueryString(params);
+    const response = await this.apiFetch(`${API_BASE_URL}/quizzes${queryParams ? `?${queryParams}` : ''}`, {
       headers: this.getHeaders(),
     });
-    return this.handleResponse<QuizWithDetails[]>(response);
+    return this.handleResponse<QuizWithDetails[]>(response) as Promise<PaginatedApiResponse<QuizWithDetails>>;
   }
 
   async getAllQuizQuestions(): Promise<ApiResponse<QuizQuestion[]>> {
-    const response = await fetch(`${API_BASE_URL}/quizzes/questions/all`, {
+    const response = await this.apiFetch(`${API_BASE_URL}/quizzes/questions/all`, {
       headers: this.getHeaders(),
     });
     return this.handleResponse<QuizQuestion[]>(response);
@@ -491,7 +482,7 @@ class ApiService {
   }
 
   async submitQuizAttempt(userId: string, submission: QuizSubmission): Promise<ApiResponse<QuizAttemptSubmission>> {
-    const response = await fetch(`${API_BASE_URL}/users/${userId}/quizzes/attempt`, {
+    const response = await this.apiFetch(`${API_BASE_URL}/users/${userId}/quizzes/attempt`, {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify(submission),
@@ -500,14 +491,14 @@ class ApiService {
   }
 
   async getUserQuizAttempts(userId: string): Promise<ApiResponse<QuizAttempt[]>> {
-    const response = await fetch(`${API_BASE_URL}/users/${userId}/quizzes`, {
+    const response = await this.apiFetch(`${API_BASE_URL}/users/${userId}/quizzes`, {
       headers: this.getHeaders(),
     });
     return this.handleResponse<QuizAttempt[]>(response);
   }
 
   async deleteUserQuizAttempt(userId: string, attemptId: string): Promise<ApiResponse<boolean>> {
-    const response = await fetch(`${API_BASE_URL}/users/${userId}/quizzes/${attemptId}`, {
+    const response = await this.apiFetch(`${API_BASE_URL}/users/${userId}/quizzes/${attemptId}`, {
       method: 'DELETE',
       headers: this.getHeaders(),
     });
@@ -515,28 +506,30 @@ class ApiService {
   }
 
   async getAdminStats(): Promise<ApiResponse<AdminStats>> {
-    const response = await fetch(`${API_BASE_URL}/stats`, {
+    const response = await this.apiFetch(`${API_BASE_URL}/stats`, {
       headers: this.getHeaders(),
     });
     return this.handleResponse<AdminStats>(response);
   }
 
-  async getUsersWithDetails(filters?: AdminFilters): Promise<ApiResponse<UserWithDetails[]>> {
-    const queryParams = this.toQueryString(filters as Record<string, string | undefined>);
+  async getUsersWithDetails(filters?: AdminFilters & { page?: number; pageSize?: number }): Promise<PaginatedApiResponse<UserWithDetails>> {
+    const queryParams = this.toQueryString(filters as Record<string, string | number | undefined>);
     const url = `${API_BASE_URL}/users${queryParams ? `?${queryParams}` : ''}`;
-    const response = await fetch(url, { headers: this.getHeaders() });
-    return this.handleResponse<UserWithDetails[]>(response);
+    const response = await this.apiFetch(url, { headers: this.getHeaders() });
+    return this.handleResponse<UserWithDetails[]>(response) as Promise<PaginatedApiResponse<UserWithDetails>>;
   }
 
-  async getQuestionsWithDetails(filters?: AdminFilters): Promise<ApiResponse<QuestionWithDetails[]>> {
-    const queryParams = this.toQueryString(filters as Record<string, string | undefined>);
+  async getQuestionsWithDetails(
+    filters?: AdminFilters & { quizId?: string; activeStatus?: string; page?: number; pageSize?: number }
+  ): Promise<PaginatedApiResponse<QuestionWithDetails>> {
+    const queryParams = this.toQueryString(filters as Record<string, string | number | undefined>);
     const url = `${API_BASE_URL}/questions${queryParams ? `?${queryParams}` : ''}`;
-    const response = await fetch(url, { headers: this.getHeaders() });
-    return this.handleResponse<QuestionWithDetails[]>(response);
+    const response = await this.apiFetch(url, { headers: this.getHeaders() });
+    return this.handleResponse<QuestionWithDetails[]>(response) as Promise<PaginatedApiResponse<QuestionWithDetails>>;
   }
 
   async createQuestion(payload: Partial<QuestionWithDetails>): Promise<ApiResponse<QuestionWithDetails>> {
-    const response = await fetch(`${API_BASE_URL}/questions`, {
+    const response = await this.apiFetch(`${API_BASE_URL}/questions`, {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify(payload),
@@ -545,7 +538,7 @@ class ApiService {
   }
 
   async updateQuestion(questionId: string, payload: Partial<QuestionWithDetails>): Promise<ApiResponse<QuestionWithDetails>> {
-    const response = await fetch(`${API_BASE_URL}/questions/${questionId}`, {
+    const response = await this.apiFetch(`${API_BASE_URL}/questions/${questionId}`, {
       method: 'PUT',
       headers: this.getHeaders(),
       body: JSON.stringify(payload),
@@ -554,7 +547,7 @@ class ApiService {
   }
 
   async deleteQuestion(questionId: string): Promise<ApiResponse<boolean>> {
-    const response = await fetch(`${API_BASE_URL}/questions/${questionId}`, {
+    const response = await this.apiFetch(`${API_BASE_URL}/questions/${questionId}`, {
       method: 'DELETE',
       headers: this.getHeaders(),
     });
@@ -564,7 +557,7 @@ class ApiService {
   async getCoursesWithDetails(filters?: AdminFilters): Promise<ApiResponse<CourseWithDetails[]>> {
     const queryParams = this.toQueryString(filters as Record<string, string | undefined>);
     const url = `${API_BASE_URL}/courses/catalog${queryParams ? `?${queryParams}` : ''}`;
-    const response = await fetch(url, { headers: this.getHeaders() });
+    const response = await this.apiFetch(url, { headers: this.getHeaders() });
     return this.handleResponse<CourseWithDetails[]>(response);
   }
 
@@ -577,28 +570,28 @@ class ApiService {
   }
 
   async getRecentActivity(): Promise<ApiResponse<RecentActivity[]>> {
-    const response = await fetch(`${API_BASE_URL}/activity`, {
+    const response = await this.apiFetch(`${API_BASE_URL}/activity`, {
       headers: this.getHeaders(),
     });
     return this.handleResponse<RecentActivity[]>(response);
   }
 
   async getChartData(period = '7d'): Promise<ApiResponse<ChartData>> {
-    const response = await fetch(`${API_BASE_URL}/charts?period=${period}`, {
+    const response = await this.apiFetch(`${API_BASE_URL}/charts?period=${period}`, {
       headers: this.getHeaders(),
     });
     return this.handleResponse<ChartData>(response);
   }
 
   async getAgentCatalog(): Promise<ApiResponse<AgentTemplate[]>> {
-    const response = await fetch(`${API_BASE_URL}/agents/catalog`, {
+    const response = await this.apiFetch(`${API_BASE_URL}/agents/catalog`, {
       headers: this.getHeaders(),
     });
     return this.handleResponse<AgentTemplate[]>(response);
   }
 
   async requestAgent(payload: AgentRequestPayload): Promise<ApiResponse<AgentAssignment>> {
-    const response = await fetch(`${API_BASE_URL}/agents/requests`, {
+    const response = await this.apiFetch(`${API_BASE_URL}/agents/requests`, {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify(payload),
@@ -608,14 +601,14 @@ class ApiService {
 
   async getAgentAssignments(status?: string): Promise<ApiResponse<AgentAssignment[]>> {
     const query = status ? `?status=${encodeURIComponent(status)}` : '';
-    const response = await fetch(`${API_BASE_URL}/agents/assignments${query}`, {
+    const response = await this.apiFetch(`${API_BASE_URL}/agents/assignments${query}`, {
       headers: this.getHeaders(),
     });
     return this.handleResponse<AgentAssignment[]>(response);
   }
 
   async updateAgentRequest(assignmentId: string, payload: AgentApprovalPayload): Promise<ApiResponse<AgentAssignment>> {
-    const response = await fetch(`${API_BASE_URL}/agents/requests/${assignmentId}`, {
+    const response = await this.apiFetch(`${API_BASE_URL}/agents/requests/${assignmentId}`, {
       method: 'PATCH',
       headers: this.getHeaders(),
       body: JSON.stringify(payload),
@@ -624,7 +617,7 @@ class ApiService {
   }
 
   async createAgentThread(payload: AgentThreadPayload): Promise<ApiResponse<AgentThread>> {
-    const response = await fetch(`${API_BASE_URL}/agents/threads`, {
+    const response = await this.apiFetch(`${API_BASE_URL}/agents/threads`, {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify(payload),
@@ -634,14 +627,14 @@ class ApiService {
 
   async getAgentThreads(assignmentId?: string): Promise<ApiResponse<AgentThread[]>> {
     const query = assignmentId ? `?assignmentId=${encodeURIComponent(assignmentId)}` : '';
-    const response = await fetch(`${API_BASE_URL}/agents/threads${query}`, {
+    const response = await this.apiFetch(`${API_BASE_URL}/agents/threads${query}`, {
       headers: this.getHeaders(),
     });
     return this.handleResponse<AgentThread[]>(response);
   }
 
   async getAgentThread(threadId: string): Promise<ApiResponse<AgentThreadDetail>> {
-    const response = await fetch(`${API_BASE_URL}/agents/threads/${threadId}`, {
+    const response = await this.apiFetch(`${API_BASE_URL}/agents/threads/${threadId}`, {
       headers: this.getHeaders(),
     });
     return this.handleResponse<AgentThreadDetail>(response);
@@ -651,7 +644,7 @@ class ApiService {
     userMessage: AgentMessage;
     assistantMessage: AgentMessage;
   }>> {
-    const response = await fetch(`${API_BASE_URL}/agents/threads/${threadId}/messages`, {
+    const response = await this.apiFetch(`${API_BASE_URL}/agents/threads/${threadId}/messages`, {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify(payload),
@@ -664,14 +657,14 @@ class ApiService {
 
   async getAgentArtifacts(assignmentId?: string): Promise<ApiResponse<AgentArtifact[]>> {
     const query = assignmentId ? `?assignmentId=${encodeURIComponent(assignmentId)}` : '';
-    const response = await fetch(`${API_BASE_URL}/agents/artifacts${query}`, {
+    const response = await this.apiFetch(`${API_BASE_URL}/agents/artifacts${query}`, {
       headers: this.getHeaders(),
     });
     return this.handleResponse<AgentArtifact[]>(response);
   }
 
   async runAgentAction(assignmentId: string, payload: AgentActionPayload): Promise<ApiResponse<AgentArtifact>> {
-    const response = await fetch(`${API_BASE_URL}/agents/assignments/${assignmentId}/actions`, {
+    const response = await this.apiFetch(`${API_BASE_URL}/agents/assignments/${assignmentId}/actions`, {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify(payload),
@@ -695,7 +688,7 @@ class ApiService {
       body.append('instructions', payload.instructions);
     }
 
-    const response = await fetch(`${API_BASE_URL}/content/intake`, {
+    const response = await this.apiFetch(`${API_BASE_URL}/content/intake`, {
       method: 'POST',
       headers: this.getUploadHeaders(),
       body,
@@ -717,7 +710,7 @@ class ApiService {
       body.append('instructions', payload.instructions);
     }
 
-    const response = await fetch(`${API_BASE_URL}/content/intake/sessions/upload`, {
+    const response = await this.apiFetch(`${API_BASE_URL}/content/intake/sessions/upload`, {
       method: 'POST',
       headers: this.getUploadHeaders(),
       body,
@@ -726,7 +719,7 @@ class ApiService {
   }
 
   async getContentGenerationSession(sessionId: string): Promise<ApiResponse<ContentGenerationSession>> {
-    const response = await fetch(`${API_BASE_URL}/content/intake/sessions/${sessionId}`, {
+    const response = await this.apiFetch(`${API_BASE_URL}/content/intake/sessions/${sessionId}`, {
       headers: this.getHeaders(),
     });
     return this.handleResponse<ContentGenerationSession>(response);
@@ -741,7 +734,7 @@ class ApiService {
       instructions?: string;
     }
   ): Promise<ApiResponse<ContentGenerationSession>> {
-    const response = await fetch(`${API_BASE_URL}/content/intake/sessions/${sessionId}/actions`, {
+    const response = await this.apiFetch(`${API_BASE_URL}/content/intake/sessions/${sessionId}/actions`, {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify(payload),
@@ -751,3 +744,4 @@ class ApiService {
 }
 
 export const api = new ApiService();
+

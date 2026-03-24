@@ -1,35 +1,30 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
-import { CourseCatalog } from '@/lib/types';
-import { COURSE_CATEGORY_COLORS, COURSE_DIFFICULTY_COLORS } from '@/lib/course-content';
-import {
-  Plus,
-  RefreshCw,
-  BookOpen,
-  Clock,
-  CheckCircle,
-  BarChart3,
-  LibraryBig,
-  Loader2
-} from 'lucide-react';
-import { CourseModal } from '@/components/dashboard/courses';
-import {CourseRow} from '@/components/dashboard/courses';
-import {Filters} from '@/components/dashboard/courses';
-import {StatsCard} from '@/components/dashboard/courses';
+import { CourseCatalog, PaginationMeta } from '@/lib/types';
+import { COURSE_CATEGORY_COLORS, COURSE_CATEGORIES, COURSE_DIFFICULTIES, COURSE_DIFFICULTY_COLORS } from '@/lib/course-content';
+import { BarChart3, BookOpen, CheckCircle, Clock, LibraryBig, Plus, RefreshCw } from 'lucide-react';
+
 import ConfirmationDialog from '@/components/ui/ConfirmationDialog';
+import PaginationControls from '@/components/ui/PaginationControls';
+import { CourseModal, CourseRow, Filters, StatsCard } from '@/components/dashboard/courses';
+import { useDebouncedValue } from '@/lib/useDebouncedValue';
+
+const PAGE_SIZE = 10;
 
 const CoursesManagementPage: React.FC = () => {
   const router = useRouter();
   const pathname = usePathname();
   const [courses, setCourses] = useState<CourseCatalog[]>([]);
-  const [filteredCourses, setFilteredCourses] = useState<CourseCatalog[]>([]);
+  const [pagination, setPagination] = useState<PaginationMeta | undefined>(undefined);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [difficultyFilter, setDifficultyFilter] = useState('all');
+  const [currentPage, setCurrentPage] = useState(1);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingCourse, setEditingCourse] = useState<CourseCatalog | null>(null);
@@ -43,73 +38,63 @@ const CoursesManagementPage: React.FC = () => {
     totalQuizzes: 0,
   });
 
-  // Get unique categories and difficulties from courses
-  const categories = ['all', ...Array.from(new Set(courses.map(c => c.category))).filter(Boolean)];
-  const difficulties = ['all', ...Array.from(new Set(courses.map(c => c.difficulty))).filter(Boolean)];
+  const debouncedSearchTerm = useDebouncedValue(searchTerm);
+  const categories = ['all', ...COURSE_CATEGORIES];
+  const difficulties = ['all', ...COURSE_DIFFICULTIES];
+  const cmsRouteBase = pathname.startsWith('/instructor') ? '/instructor/dashboard/cms' : '/admin/dashboard/cms';
 
   useEffect(() => {
-    loadCourses();
+    setCurrentPage(1);
+  }, [categoryFilter, debouncedSearchTerm, difficultyFilter]);
+
+  useEffect(() => {
+    void loadStats();
   }, []);
 
   useEffect(() => {
-    loadStats();
-  }, [courses]);
+    void loadCourses();
+  }, [categoryFilter, currentPage, debouncedSearchTerm, difficultyFilter]);
 
-  useEffect(() => {
-    filterCourses();
-  }, [courses, searchTerm, categoryFilter, difficultyFilter]);
-
-  const loadCourses = async () => {
+  const loadCourses = async (options?: { silent?: boolean }) => {
     try {
-      setLoading(true);
+      if (options?.silent) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
       setError('');
-      const response = await api.getCourseCatalog();
+      const response = await api.getCourseCatalog({
+        search: debouncedSearchTerm || undefined,
+        category: categoryFilter === 'all' ? undefined : categoryFilter,
+        difficulty: difficultyFilter === 'all' ? undefined : difficultyFilter,
+        sortBy: 'newest',
+        page: currentPage,
+        pageSize: PAGE_SIZE,
+      });
       setCourses(response.data);
+      setPagination(response.pagination);
     } catch (loadError: any) {
       console.error('Failed to load courses:', loadError);
       setCourses([]);
       setError(loadError.message || 'Unable to load course management data.');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
   const loadStats = async () => {
-    const totalCourses = courses.length;
-    const totalDuration = courses.reduce((sum, course) => sum + course.duration, 0);
-    const averageDuration = totalCourses > 0 ? Math.round(totalDuration / totalCourses) : 0;
-    const totalLessons = courses.reduce((sum, course) => sum + course.totalLessons, 0);
-    const totalQuizzes = courses.reduce((sum, course) => sum + course.totalQuizzes, 0);
-    
-    setStats({
-      totalCourses,
-      averageDuration,
-      totalLessons,
-      totalQuizzes,
-    });
-  };
-
-  const filterCourses = () => {
-    let filtered = [...courses];
-
-    if (searchTerm) {
-      filtered = filtered.filter(course =>
-        course.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        course.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        course.slug.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        course.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))
-      );
+    try {
+      const response = await api.getCourseCatalogStats();
+      setStats({
+        totalCourses: response.data.total_courses || 0,
+        averageDuration: response.data.average_duration || 0,
+        totalLessons: response.data.total_lessons || 0,
+        totalQuizzes: response.data.total_quizzes || 0,
+      });
+    } catch (statsError) {
+      console.error('Failed to load course stats:', statsError);
     }
-
-    if (categoryFilter !== 'all') {
-      filtered = filtered.filter(course => course.category === categoryFilter);
-    }
-
-    if (difficultyFilter !== 'all') {
-      filtered = filtered.filter(course => course.difficulty === difficultyFilter);
-    }
-
-    setFilteredCourses(filtered);
   };
 
   const handleCreateCourse = async (formData: any, options?: { openCurriculum?: boolean }) => {
@@ -117,13 +102,14 @@ const CoursesManagementPage: React.FC = () => {
       setActionLoading('create');
       setError('');
       const response = await api.createCourseCatalog(formData);
-      setCourses([response.data, ...courses]);
       setShowCreateModal(false);
+      setCurrentPage(1);
+      await Promise.all([loadCourses({ silent: true }), loadStats()]);
       if (options?.openCurriculum) {
         openCurriculumStudio(response.data.slug);
       }
-    } catch (error) {
-      console.error('Failed to create course:', error);
+    } catch (createError) {
+      console.error('Failed to create course:', createError);
       setError('Failed to create the course. Please try again.');
     } finally {
       setActionLoading(null);
@@ -139,17 +125,14 @@ const CoursesManagementPage: React.FC = () => {
       }
 
       const response = await api.updateCourseCatalog(editingCourse.slug, formData);
-      setCourses(courses.map(c => 
-        c.slug === courseId ? response.data : c
-      ));
-      
       setShowEditModal(false);
       setEditingCourse(null);
+      await Promise.all([loadCourses({ silent: true }), loadStats()]);
       if (options?.openCurriculum) {
         openCurriculumStudio(response.data.slug);
       }
-    } catch (error) {
-      console.error('Failed to update course:', error);
+    } catch (updateError) {
+      console.error('Failed to update course:', updateError);
       setError('Failed to update the course. Please try again.');
     } finally {
       setActionLoading(null);
@@ -178,7 +161,7 @@ const CoursesManagementPage: React.FC = () => {
       setShowCreateModal(false);
       setShowEditModal(false);
       setEditingCourse(null);
-      await loadCourses();
+      await Promise.all([loadCourses({ silent: true }), loadStats()]);
 
       const courseSlug = session.courseSlug || session.course?.slug || payload.courseSlug || '';
       const query = new URLSearchParams();
@@ -199,23 +182,18 @@ const CoursesManagementPage: React.FC = () => {
       setActionLoading(`delete-${courseSlug}`);
       setError('');
       await api.deleteCourseCatalog(courseSlug);
-      setCourses(courses.filter(c => c.slug !== courseSlug));
       setPendingDeleteCourseSlug(null);
-    } catch (error) {
-      console.error('Failed to delete course:', error);
+      await Promise.all([loadCourses({ silent: true }), loadStats()]);
+    } catch (deleteError) {
+      console.error('Failed to delete course:', deleteError);
       setError('Failed to delete the course. Please try again.');
     } finally {
       setActionLoading(null);
     }
   };
 
-  const getDifficultyColor = (difficulty: string) => {
-    return COURSE_DIFFICULTY_COLORS[difficulty] || 'bg-gray-100 text-gray-800';
-  };
-
-  const getCategoryColor = (category: string) => {
-    return COURSE_CATEGORY_COLORS[category] || 'bg-gray-100 text-gray-800';
-  };
+  const getDifficultyColor = (difficulty: string) => COURSE_DIFFICULTY_COLORS[difficulty] || 'bg-gray-100 text-gray-800';
+  const getCategoryColor = (category: string) => COURSE_CATEGORY_COLORS[category] || 'bg-gray-100 text-gray-800';
 
   const formatDuration = (minutes: number) => {
     if (minutes < 60) return `${minutes} min`;
@@ -230,13 +208,11 @@ const CoursesManagementPage: React.FC = () => {
     setDifficultyFilter('all');
   };
 
-  const cmsRouteBase = pathname.startsWith('/instructor') ? '/instructor/dashboard/cms' : '/admin/dashboard/cms';
-
   const openCurriculumStudio = (courseSlug: string) => {
     router.push(`${cmsRouteBase}?course=${courseSlug}`);
   };
 
-  if (loading) {
+  if (loading && courses.length === 0) {
     return (
       <div className="flex justify-center items-center h-96">
         <div className="text-center">
@@ -249,7 +225,6 @@ const CoursesManagementPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Course Management</h2>
@@ -264,10 +239,10 @@ const CoursesManagementPage: React.FC = () => {
             Manage lessons
           </button>
           <button
-            onClick={loadCourses}
+            onClick={() => void loadCourses({ silent: true })}
             className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50"
           >
-            <RefreshCw className="w-4 h-4 mr-2" />
+            <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
             Refresh
           </button>
           <button
@@ -280,48 +255,15 @@ const CoursesManagementPage: React.FC = () => {
         </div>
       </div>
 
-      {error && (
-        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-          {error}
-        </div>
-      )}
+      {error ? <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div> : null}
 
-      {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatsCard
-          title="Total Courses"
-          value={stats.totalCourses}
-          icon={BookOpen}
-          iconBgColor="bg-blue-100"
-          iconColor="text-blue-600"
-        />
-        
-        <StatsCard
-          title="Avg. Duration"
-          value={formatDuration(stats.averageDuration)}
-          icon={Clock}
-          iconBgColor="bg-green-100"
-          iconColor="text-green-600"
-        />
-        
-        <StatsCard
-          title="Total Lessons"
-          value={stats.totalLessons}
-          icon={CheckCircle}
-          iconBgColor="bg-purple-100"
-          iconColor="text-purple-600"
-        />
-        
-        <StatsCard
-          title="Total Quizzes"
-          value={stats.totalQuizzes}
-          icon={BarChart3}
-          iconBgColor="bg-orange-100"
-          iconColor="text-orange-600"
-        />
+        <StatsCard title="Total Courses" value={stats.totalCourses} icon={BookOpen} iconBgColor="bg-blue-100" iconColor="text-blue-600" />
+        <StatsCard title="Avg. Duration" value={formatDuration(stats.averageDuration)} icon={Clock} iconBgColor="bg-green-100" iconColor="text-green-600" />
+        <StatsCard title="Total Lessons" value={stats.totalLessons} icon={CheckCircle} iconBgColor="bg-purple-100" iconColor="text-purple-600" />
+        <StatsCard title="Total Quizzes" value={stats.totalQuizzes} icon={BarChart3} iconBgColor="bg-orange-100" iconColor="text-orange-600" />
       </div>
 
-      {/* Filters */}
       <Filters
         searchTerm={searchTerm}
         setSearchTerm={setSearchTerm}
@@ -334,9 +276,7 @@ const CoursesManagementPage: React.FC = () => {
         onClearFilters={clearFilters}
       />
 
-      {/* Courses Table */}
-      <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
-        {/* Table Header */}
+      <div className="overflow-hidden bg-white rounded-xl shadow-lg border border-gray-200">
         <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
           <div className="grid grid-cols-12 gap-4">
             <div className="col-span-5 text-sm font-semibold text-gray-900">Course</div>
@@ -347,9 +287,8 @@ const CoursesManagementPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Table Body */}
         <div className="divide-y divide-gray-200">
-          {filteredCourses.map((course) => (
+          {courses.map((course) => (
             <CourseRow
               key={course.id}
               course={course}
@@ -367,52 +306,23 @@ const CoursesManagementPage: React.FC = () => {
           ))}
         </div>
 
-        {/* Empty State */}
-        {filteredCourses.length === 0 && (
+        {courses.length === 0 ? (
           <div className="text-center py-16">
             <div className="w-24 h-24 bg-gradient-to-r from-blue-100 to-purple-100 rounded-full flex items-center justify-center mx-auto">
               <BookOpen className="w-12 h-12 text-blue-600" />
             </div>
             <h3 className="mt-6 text-xl font-medium text-gray-900">No courses found</h3>
-            <p className="mt-2 text-gray-500 max-w-md mx-auto">
-              {courses.length === 0 
-                ? 'Get started by creating your first course to build your learning catalog.'
-                : 'Try adjusting your search or filters to find what you\'re looking for.'}
-            </p>
-            {courses.length === 0 && (
-              <button
-                onClick={() => setShowCreateModal(true)}
-                className="mt-6 inline-flex items-center px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg font-medium hover:opacity-90 shadow-md"
-              >
-                <Plus className="w-5 h-5 mr-2" />
-                Create Your First Course
-              </button>
-            )}
+            <p className="mt-2 text-gray-500 max-w-md mx-auto">Try adjusting your search or filters to find what you're looking for.</p>
           </div>
-        )}
+        ) : null}
 
-        {/* Table Footer */}
-        {filteredCourses.length > 0 && (
-          <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
-            <div className="flex items-center justify-between">
-              <div className="text-sm text-gray-500">
-                Showing <span className="font-medium">{filteredCourses.length}</span> of{' '}
-                <span className="font-medium">{courses.length}</span> courses
-              </div>
-              <div className="text-sm text-gray-500">Catalog entries update live from the backend.</div>
-            </div>
-          </div>
-        )}
+        <PaginationControls pagination={pagination} itemLabel="courses" onPageChange={setCurrentPage} />
       </div>
 
-      {/* Create/Edit Modal */}
       {(showCreateModal || showEditModal) && (
         <CourseModal
           course={editingCourse}
-          onSubmit={editingCourse ? 
-            (data, options) => handleUpdateCourse(editingCourse.slug, data, options) : 
-            handleCreateCourse
-          }
+          onSubmit={editingCourse ? (data, options) => handleUpdateCourse(editingCourse.slug, data, options) : handleCreateCourse}
           onStartImport={handleStartCourseImport}
           loading={actionLoading === 'create' || actionLoading === 'update'}
           importing={actionLoading === 'import'}

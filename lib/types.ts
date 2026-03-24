@@ -166,6 +166,20 @@ export interface ApiResponse<T> {
   data: T;
 }
 
+export interface PaginationMeta {
+  page: number;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
+}
+
+export interface PaginatedApiResponse<T> extends ApiResponse<T[]> {
+  pagination?: PaginationMeta;
+  summary?: Record<string, unknown>;
+}
+
 export interface CloudinaryUploadSignature {
   cloudName: string;
   apiKey: string;

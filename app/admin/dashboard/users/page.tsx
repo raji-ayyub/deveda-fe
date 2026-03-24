@@ -1,39 +1,41 @@
-
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { api } from '@/lib/api';
-import { UserWithDetails } from '@/lib/types';
+import React, { useEffect, useState } from 'react';
 import {
-  Search,
-  Filter,
-  MoreVertical,
+  BookOpen,
+  Calendar,
+  Download,
   Edit,
+  Mail,
+  MoreVertical,
+  Plus,
+  RefreshCw,
+  Search,
   Trash2,
   UserCheck,
   UserX,
-  Mail,
-  Calendar,
-  BookOpen,
-  TrendingUp,
-  Download,
-  Plus,
-  RefreshCw,
   Users,
-  X
+  X,
 } from 'lucide-react';
+
 import ConfirmationDialog from '@/components/ui/ConfirmationDialog';
+import PaginationControls from '@/components/ui/PaginationControls';
+import { api } from '@/lib/api';
+import { PaginationMeta, UserWithDetails } from '@/lib/types';
+import { useDebouncedValue } from '@/lib/useDebouncedValue';
+
+const PAGE_SIZE = 10;
 
 const UsersManagementPage: React.FC = () => {
   const [users, setUsers] = useState<UserWithDetails[]>([]);
-  const [filteredUsers, setFilteredUsers] = useState<UserWithDetails[]>([]);
+  const [pagination, setPagination] = useState<PaginationMeta | undefined>(undefined);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
-  const [usersPerPage] = useState(10);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [deleteUserId, setDeleteUserId] = useState<string | null>(null);
   const [pageError, setPageError] = useState('');
@@ -47,69 +49,58 @@ const UsersManagementPage: React.FC = () => {
     role: 'Instructor',
   });
 
-  useEffect(() => {
-    loadUsers();
-  }, []);
+  const debouncedSearchTerm = useDebouncedValue(searchTerm);
 
   useEffect(() => {
-    filterUsers();
-  }, [users, searchTerm, roleFilter, statusFilter]);
+    setCurrentPage(1);
+  }, [debouncedSearchTerm, roleFilter, statusFilter]);
 
-  const loadUsers = async () => {
+  useEffect(() => {
+    void loadUsers();
+  }, [currentPage, debouncedSearchTerm, roleFilter, statusFilter]);
+
+  const loadUsers = async (options?: { silent?: boolean }) => {
     try {
-      setLoading(true);
+      if (options?.silent) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
       setPageError('');
-      const response = await api.getUsersWithDetails();
+      const response = await api.getUsersWithDetails({
+        search: debouncedSearchTerm || undefined,
+        role: roleFilter === 'all' ? undefined : roleFilter,
+        status: statusFilter === 'all' ? undefined : statusFilter,
+        page: currentPage,
+        pageSize: PAGE_SIZE,
+      });
       setUsers(response.data);
+      setPagination(response.pagination);
+      setSelectedUsers([]);
     } catch (error) {
       console.error('Failed to load users:', error);
       setPageError('Unable to load users right now.');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  };
-
-  const filterUsers = () => {
-    let filtered = [...users];
-
-    if (searchTerm) {
-      filtered = filtered.filter(user =>
-        user.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        user.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        user.email.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-
-    if (roleFilter !== 'all') {
-      filtered = filtered.filter(user => user.role === roleFilter);
-    }
-
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter(user => 
-        statusFilter === 'active' ? user.isActive : !user.isActive
-      );
-    }
-
-    setFilteredUsers(filtered);
-    setCurrentPage(1);
   };
 
   const toggleUserStatus = async (userId: string, currentStatus: boolean) => {
     try {
       await api.updateUserStatus(userId, !currentStatus);
-      setUsers(users.map(user => 
-        user.id === userId ? { ...user, isActive: !currentStatus } : user
-      ));
+      await loadUsers({ silent: true });
     } catch (error) {
       console.error('Failed to update user status:', error);
+      setPageError('Unable to update the selected user right now.');
     }
   };
 
   const deleteUser = async (userId: string) => {
     try {
       await api.deleteUser(userId);
-      setUsers(users.filter(user => user.id !== userId));
       setDeleteUserId(null);
+      await loadUsers({ silent: true });
     } catch (error) {
       console.error('Failed to delete user:', error);
       setPageError('Unable to delete the selected user right now.');
@@ -122,7 +113,7 @@ const UsersManagementPage: React.FC = () => {
 
     try {
       setCreatingUser(true);
-      const response = await api.createUser({
+      await api.createUser({
         firstName: createForm.firstName.trim(),
         lastName: createForm.lastName.trim(),
         email: createForm.email.trim().toLowerCase(),
@@ -130,16 +121,6 @@ const UsersManagementPage: React.FC = () => {
         role: createForm.role,
       });
 
-      setUsers([
-        {
-          ...response.data,
-          createdAt: response.data.createdAt || new Date().toISOString(),
-          lastLogin: response.data.lastLogin || null,
-          coursesCount: 0,
-          quizAttempts: 0,
-        },
-        ...users,
-      ]);
       setShowCreateModal(false);
       setCreateForm({
         firstName: '',
@@ -148,6 +129,8 @@ const UsersManagementPage: React.FC = () => {
         password: '',
         role: 'Instructor',
       });
+      setCurrentPage(1);
+      await loadUsers({ silent: true });
     } catch (error: any) {
       setCreateError(error.message || 'Failed to create user.');
     } finally {
@@ -156,33 +139,18 @@ const UsersManagementPage: React.FC = () => {
   };
 
   const toggleSelectUser = (userId: string) => {
-    setSelectedUsers(prev =>
-      prev.includes(userId)
-        ? prev.filter(id => id !== userId)
-        : [...prev, userId]
-    );
+    setSelectedUsers((prev) => (prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]));
   };
 
   const toggleSelectAll = () => {
-    const pageUsers = getCurrentPageUsers();
-    if (selectedUsers.length === pageUsers.length) {
+    if (selectedUsers.length === users.length) {
       setSelectedUsers([]);
     } else {
-      setSelectedUsers(pageUsers.map(user => user.id));
+      setSelectedUsers(users.map((user) => user.id));
     }
   };
 
-  const getCurrentPageUsers = () => {
-    const startIndex = (currentPage - 1) * usersPerPage;
-    const endIndex = startIndex + usersPerPage;
-    return filteredUsers.slice(startIndex, endIndex);
-  };
-
-  const totalPages = Math.ceil(filteredUsers.length / usersPerPage);
-
-  const pageUsers = getCurrentPageUsers();
-
-  if (loading) {
+  if (loading && users.length === 0) {
     return (
       <div className="flex justify-center items-center h-96">
         <div className="text-center">
@@ -195,7 +163,6 @@ const UsersManagementPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">User Management</h2>
@@ -216,10 +183,8 @@ const UsersManagementPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Filters */}
       <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {/* Search */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
             <input
@@ -231,7 +196,6 @@ const UsersManagementPage: React.FC = () => {
             />
           </div>
 
-          {/* Role Filter */}
           <select
             value={roleFilter}
             onChange={(e) => setRoleFilter(e.target.value)}
@@ -243,7 +207,6 @@ const UsersManagementPage: React.FC = () => {
             <option value="Student">Student</option>
           </select>
 
-          {/* Status Filter */}
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
@@ -254,28 +217,23 @@ const UsersManagementPage: React.FC = () => {
             <option value="inactive">Inactive</option>
           </select>
 
-          {/* Refresh Button */}
           <button
-            onClick={loadUsers}
+            onClick={() => void loadUsers({ silent: true })}
             className="inline-flex items-center justify-center px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
           >
-            <RefreshCw className="w-4 h-4 mr-2" />
+            <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
             Refresh
           </button>
         </div>
       </div>
 
-      {/* Users Table */}
-      {pageError ? (
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{pageError}</div>
-      ) : null}
-      <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
-        {/* Table Header */}
+      {pageError ? <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{pageError}</div> : null}
+      <div className="overflow-hidden bg-white rounded-xl shadow-lg border border-gray-200">
         <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
           <div className="flex items-center">
             <input
               type="checkbox"
-              checked={selectedUsers.length === pageUsers.length && pageUsers.length > 0}
+              checked={selectedUsers.length === users.length && users.length > 0}
               onChange={toggleSelectAll}
               className="h-4 w-4 text-blue-600 rounded focus:ring-blue-500"
             />
@@ -290,9 +248,8 @@ const UsersManagementPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Table Body */}
         <div className="divide-y divide-gray-200">
-          {pageUsers.map((user) => (
+          {users.map((user) => (
             <div key={user.id} className="px-6 py-4 hover:bg-gray-50">
               <div className="flex items-center">
                 <input
@@ -302,7 +259,6 @@ const UsersManagementPage: React.FC = () => {
                   className="h-4 w-4 text-blue-600 rounded focus:ring-blue-500"
                 />
                 <div className="ml-4 grid grid-cols-12 gap-4 flex-1 items-center">
-                  {/* User Info */}
                   <div className="col-span-3">
                     <div className="flex items-center">
                       <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center mr-3">
@@ -323,19 +279,22 @@ const UsersManagementPage: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Role */}
                   <div className="col-span-2">
-                    <span className={`px-3 py-1 text-xs font-medium rounded-full ${
-                      user.role === 'Admin' ? 'bg-red-100 text-red-800' :
-                      user.role === 'Instructor' ? 'bg-blue-100 text-blue-800' :
-                      user.role === 'Student' ? 'bg-green-100 text-green-800' :
-                      'bg-gray-100 text-gray-800'
-                    }`}>
+                    <span
+                      className={`px-3 py-1 text-xs font-medium rounded-full ${
+                        user.role === 'Admin'
+                          ? 'bg-red-100 text-red-800'
+                          : user.role === 'Instructor'
+                          ? 'bg-blue-100 text-blue-800'
+                          : user.role === 'Student'
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-gray-100 text-gray-800'
+                      }`}
+                    >
                       {user.role}
                     </span>
                   </div>
 
-                  {/* Courses */}
                   <div className="col-span-2">
                     <div className="flex items-center">
                       <BookOpen className="w-4 h-4 text-gray-400 mr-2" />
@@ -344,35 +303,26 @@ const UsersManagementPage: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Joined Date */}
                   <div className="col-span-2">
                     <div className="flex items-center text-gray-600">
                       <Calendar className="w-4 h-4 mr-2" />
-                      <span className="text-sm">
-                        {new Date(user.createdAt).toLocaleDateString()}
-                      </span>
+                      <span className="text-sm">{new Date(user.createdAt).toLocaleDateString()}</span>
                     </div>
                   </div>
 
-                  {/* Status */}
                   <div className="col-span-2">
                     <div className="flex items-center">
-                      <div className={`w-2 h-2 rounded-full mr-2 ${
-                        user.isActive ? 'bg-green-500' : 'bg-red-500'
-                      }`} />
-                      <span className={`font-medium ${
-                        user.isActive ? 'text-green-700' : 'text-red-700'
-                      }`}>
+                      <div className={`w-2 h-2 rounded-full mr-2 ${user.isActive ? 'bg-green-500' : 'bg-red-500'}`} />
+                      <span className={`font-medium ${user.isActive ? 'text-green-700' : 'text-red-700'}`}>
                         {user.isActive ? 'Active' : 'Inactive'}
                       </span>
                     </div>
                   </div>
 
-                  {/* Actions */}
                   <div className="col-span-1">
                     <div className="flex items-center space-x-2">
                       <button
-                        onClick={() => toggleUserStatus(user.id, user.isActive)}
+                        onClick={() => void toggleUserStatus(user.id, user.isActive)}
                         className="p-1 hover:bg-gray-100 rounded"
                         title={user.isActive ? 'Deactivate' : 'Activate'}
                       >
@@ -385,11 +335,7 @@ const UsersManagementPage: React.FC = () => {
                       <button className="p-1 hover:bg-gray-100 rounded" title="Edit">
                         <Edit className="w-4 h-4 text-gray-500 hover:text-blue-600" />
                       </button>
-                      <button
-                        onClick={() => setDeleteUserId(user.id)}
-                        className="p-1 hover:bg-gray-100 rounded"
-                        title="Delete"
-                      >
+                      <button onClick={() => setDeleteUserId(user.id)} className="p-1 hover:bg-gray-100 rounded" title="Delete">
                         <Trash2 className="w-4 h-4 text-gray-500 hover:text-red-600" />
                       </button>
                       <button className="p-1 hover:bg-gray-100 rounded">
@@ -403,81 +349,23 @@ const UsersManagementPage: React.FC = () => {
           ))}
         </div>
 
-        {/* Empty State */}
-        {filteredUsers.length === 0 && (
+        {users.length === 0 ? (
           <div className="text-center py-12">
             <Users className="w-16 h-16 text-gray-300 mx-auto" />
             <p className="mt-4 text-gray-500">No users found</p>
           </div>
-        )}
+        ) : null}
 
-        {/* Pagination */}
-        {filteredUsers.length > 0 && (
-          <div className="px-6 py-4 border-t border-gray-200">
-            <div className="flex items-center justify-between">
-              <div className="text-sm text-gray-500">
-                Showing {((currentPage - 1) * usersPerPage) + 1} to{' '}
-                {Math.min(currentPage * usersPerPage, filteredUsers.length)} of{' '}
-                {filteredUsers.length} users
-              </div>
-              <div className="flex items-center space-x-2">
-                <button
-                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                  disabled={currentPage === 1}
-                  className="px-3 py-1 border border-gray-300 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Previous
-                </button>
-                <div className="flex items-center space-x-1">
-                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                    const pageNum = i + 1;
-                    if (totalPages <= 5) {
-                      return (
-                        <button
-                          key={pageNum}
-                          onClick={() => setCurrentPage(pageNum)}
-                          className={`w-8 h-8 rounded text-sm ${
-                            currentPage === pageNum
-                              ? 'bg-blue-600 text-white'
-                              : 'border border-gray-300 text-gray-700'
-                          }`}
-                        >
-                          {pageNum}
-                        </button>
-                      );
-                    }
-                    return null;
-                  })}
-                </div>
-                <button
-                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                  disabled={currentPage === totalPages}
-                  className="px-3 py-1 border border-gray-300 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Next
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        <PaginationControls pagination={pagination} itemLabel="users" onPageChange={setCurrentPage} />
       </div>
 
-      {/* Bulk Actions */}
       {selectedUsers.length > 0 && (
         <div className="fixed bottom-6 right-6 bg-white rounded-xl shadow-lg p-4 border border-gray-200">
           <div className="flex items-center space-x-4">
-            <span className="text-sm text-gray-600">
-              {selectedUsers.length} users selected
-            </span>
-            <button className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700">
-              Export Selected
-            </button>
-            <button className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700">
-              Activate All
-            </button>
-            <button className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700">
-              Delete All
-            </button>
+            <span className="text-sm text-gray-600">{selectedUsers.length} users selected</span>
+            <button className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700">Export Selected</button>
+            <button className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700">Activate All</button>
+            <button className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700">Delete All</button>
           </div>
         </div>
       )}
@@ -490,16 +378,13 @@ const UsersManagementPage: React.FC = () => {
                 <h3 className="text-xl font-bold text-slate-950">Create staff or learner account</h3>
                 <p className="mt-1 text-sm text-slate-600">Use this for instructors, admins, and managed student accounts.</p>
               </div>
-              <button
-                onClick={() => setShowCreateModal(false)}
-                className="rounded-full p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
-              >
+              <button onClick={() => setShowCreateModal(false)} className="rounded-full p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700">
                 <X className="h-5 w-5" />
               </button>
             </div>
 
             <form onSubmit={handleCreateUser} className="space-y-5 px-6 py-6">
-              {createError && <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{createError}</div>}
+              {createError ? <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{createError}</div> : null}
 
               <div className="grid gap-4 md:grid-cols-2">
                 <ModalField label="First name" value={createForm.firstName} onChange={(value) => setCreateForm((current) => ({ ...current, firstName: value }))} />
@@ -521,18 +406,10 @@ const UsersManagementPage: React.FC = () => {
               </div>
 
               <div className="flex justify-end gap-3 border-t border-slate-100 pt-5">
-                <button
-                  type="button"
-                  onClick={() => setShowCreateModal(false)}
-                  className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700"
-                >
+                <button type="button" onClick={() => setShowCreateModal(false)} className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700">
                   Cancel
                 </button>
-                <button
-                  type="submit"
-                  disabled={creatingUser}
-                  className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-60"
-                >
+                <button type="submit" disabled={creatingUser} className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-60">
                   {creatingUser ? 'Creating...' : 'Create account'}
                 </button>
               </div>

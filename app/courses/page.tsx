@@ -5,10 +5,12 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowRight, BookOpen, CheckCircle2, Clock3, Loader2, Search } from 'lucide-react';
 
+import PaginationControls from '@/components/ui/PaginationControls';
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
-import { CourseCatalog, UserCourse } from '@/lib/types';
+import { CourseCatalog, PaginationMeta, UserCourse } from '@/lib/types';
 import { getRoleLoginRedirect } from '@/lib/roleRoutes';
+import { useDebouncedValue } from '@/lib/useDebouncedValue';
 
 type CatalogStats = {
   total_courses: number;
@@ -17,7 +19,12 @@ type CatalogStats = {
   popular_courses: Array<{ _id: string; count: number }>;
   categories: Array<{ _id: string; count: number }>;
   difficulties: Array<{ _id: string; count: number }>;
+  average_duration?: number;
+  total_lessons?: number;
+  total_quizzes?: number;
 };
+
+const PAGE_SIZE = 9;
 
 export default function CoursesPage() {
   const router = useRouter();
@@ -27,6 +34,7 @@ export default function CoursesPage() {
   const [courses, setCourses] = useState<CourseCatalog[]>([]);
   const [userCourses, setUserCourses] = useState<UserCourse[]>([]);
   const [catalogStats, setCatalogStats] = useState<CatalogStats | null>(null);
+  const [pagination, setPagination] = useState<PaginationMeta | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [enrolling, setEnrolling] = useState<string | null>(null);
   const [error, setError] = useState('');
@@ -34,21 +42,46 @@ export default function CoursesPage() {
   const [categoryFilter, setCategoryFilter] = useState('All');
   const [difficultyFilter, setDifficultyFilter] = useState('All');
   const [sortBy, setSortBy] = useState<'popular' | 'newest' | 'duration' | 'title'>('popular');
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const debouncedSearchTerm = useDebouncedValue(searchTerm);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearchTerm, categoryFilter, difficultyFilter, sortBy]);
+
+  useEffect(() => {
+    const loadSupportData = async () => {
+      try {
+        const [statsResponse, enrollmentsResponse] = await Promise.all([
+          api.getCourseCatalogStats(),
+          isLearner && user ? api.getUserCourses(user.id) : Promise.resolve({ data: [] as UserCourse[] }),
+        ]);
+        setCatalogStats(statsResponse.data as CatalogStats);
+        setUserCourses(enrollmentsResponse.data);
+      } catch (loadError: any) {
+        setError(loadError.message || 'Unable to load the course catalog right now.');
+      }
+    };
+
+    void loadSupportData();
+  }, [isLearner, user]);
 
   useEffect(() => {
     const loadCatalog = async () => {
       try {
         setLoading(true);
         setError('');
-        const [catalogResponse, statsResponse, enrollmentsResponse] = await Promise.all([
-          api.getCourseCatalog(),
-          api.getCourseCatalogStats(),
-          isLearner && user ? api.getUserCourses(user.id) : Promise.resolve({ data: [] as UserCourse[] }),
-        ]);
-
-        setCourses(catalogResponse.data);
-        setCatalogStats(statsResponse.data as CatalogStats);
-        setUserCourses(enrollmentsResponse.data);
+        const response = await api.getCourseCatalog({
+          category: categoryFilter === 'All' ? undefined : categoryFilter,
+          difficulty: difficultyFilter === 'All' ? undefined : difficultyFilter,
+          search: debouncedSearchTerm.trim() || undefined,
+          sortBy,
+          page: currentPage,
+          pageSize: PAGE_SIZE,
+        });
+        setCourses(response.data);
+        setPagination(response.pagination);
       } catch (loadError: any) {
         setError(loadError.message || 'Unable to load the course catalog right now.');
       } finally {
@@ -57,7 +90,7 @@ export default function CoursesPage() {
     };
 
     void loadCatalog();
-  }, [isLearner, user]);
+  }, [categoryFilter, currentPage, debouncedSearchTerm, difficultyFilter, sortBy]);
 
   const popularityMap = useMemo(() => {
     const map = new Map<string, number>();
@@ -70,49 +103,16 @@ export default function CoursesPage() {
   }, [catalogStats]);
 
   const categories = useMemo(
-    () => ['All', ...Array.from(new Set(courses.map((course) => course.category).filter(Boolean)))],
-    [courses]
+    () => ['All', ...((catalogStats?.categories || []).map((item) => item._id).filter(Boolean))],
+    [catalogStats]
   );
 
   const difficulties = useMemo(
-    () => ['All', ...Array.from(new Set(courses.map((course) => course.difficulty).filter(Boolean)))],
-    [courses]
+    () => ['All', ...((catalogStats?.difficulties || []).map((item) => item._id).filter(Boolean))],
+    [catalogStats]
   );
 
-  const filteredCourses = useMemo(() => {
-    const query = searchTerm.trim().toLowerCase();
-    const filtered = courses.filter((course) => {
-      if (categoryFilter !== 'All' && course.category !== categoryFilter) {
-        return false;
-      }
-      if (difficultyFilter !== 'All' && course.difficulty !== difficultyFilter) {
-        return false;
-      }
-      if (!query) {
-        return true;
-      }
-      return [course.title, course.description, course.slug, ...course.tags].join(' ').toLowerCase().includes(query);
-    });
-
-    filtered.sort((left, right) => {
-      if (sortBy === 'popular') {
-        return (popularityMap.get(right.slug) || 0) - (popularityMap.get(left.slug) || 0);
-      }
-      if (sortBy === 'newest') {
-        return new Date(right.createdAt || 0).getTime() - new Date(left.createdAt || 0).getTime();
-      }
-      if (sortBy === 'duration') {
-        return left.duration - right.duration;
-      }
-      return left.title.localeCompare(right.title);
-    });
-
-    return filtered;
-  }, [categoryFilter, courses, difficultyFilter, popularityMap, searchTerm, sortBy]);
-
-  const enrolledCourseMap = useMemo(() => {
-    return new Map(userCourses.map((course) => [course.courseSlug, course]));
-  }, [userCourses]);
+  const enrolledCourseMap = useMemo(() => new Map(userCourses.map((course) => [course.courseSlug, course])), [userCourses]);
 
   const learnerStats = useMemo(() => {
     const completed = userCourses.filter((course) => course.completed).length;
@@ -149,7 +149,7 @@ export default function CoursesPage() {
     }
   };
 
-  if (loading) {
+  if (loading && courses.length === 0) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50">
         <div className="text-center">
@@ -176,7 +176,7 @@ export default function CoursesPage() {
             </div>
 
             <div className="grid gap-3 sm:grid-cols-3">
-              <HeroStat label="Courses" value={String(catalogStats?.total_courses || courses.length)} />
+              <HeroStat label="Courses" value={String(catalogStats?.total_courses || pagination?.totalItems || 0)} />
               <HeroStat label="Enrollments" value={String(catalogStats?.total_enrollments || 0)} />
               <HeroStat label="Learners" value={String(catalogStats?.unique_enrolled_users || 0)} />
             </div>
@@ -200,10 +200,7 @@ export default function CoursesPage() {
           ) : user ? (
             <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-600">
               This view is read-only for your role. Manage live course creation and curriculum from your workspace instead.
-              <button
-                onClick={() => router.push(getRoleLoginRedirect(user.role))}
-                className="ml-2 font-semibold text-blue-700"
-              >
+              <button onClick={() => router.push(getRoleLoginRedirect(user.role))} className="ml-2 font-semibold text-blue-700">
                 Open workspace
               </button>
             </div>
@@ -217,9 +214,7 @@ export default function CoursesPage() {
           )}
         </section>
 
-        {error ? (
-          <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>
-        ) : null}
+        {error ? <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div> : null}
 
         <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-lg shadow-slate-100">
           <div className="grid gap-4 lg:grid-cols-[1.2fr_0.6fr_0.6fr_0.6fr]">
@@ -267,109 +262,118 @@ export default function CoursesPage() {
           </div>
         </section>
 
-        <section className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-          {filteredCourses.map((course) => {
-            const enrollment = enrolledCourseMap.get(course.slug);
-            const isEnrolled = Boolean(enrollment);
-            const popularity = popularityMap.get(course.slug) || 0;
-
-            return (
-              <article key={course.id} className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-lg shadow-slate-100">
-                <div className="border-b border-slate-100 bg-[linear-gradient(135deg,#eff6ff_0%,#ffffff_60%,#eef2ff_100%)] px-6 py-5">
-                  <div className="flex flex-wrap gap-2">
-                    <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">{course.category}</span>
-                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">{course.difficulty}</span>
-                  </div>
-                  <h2 className="mt-4 text-2xl font-bold text-slate-950">{course.title}</h2>
-                  <p className="mt-2 text-sm text-slate-600">{course.description}</p>
-                </div>
-
-                <div className="space-y-4 px-6 py-6">
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <MetaPill label="Duration" value={`${course.duration} min`} />
-                    <MetaPill label="Lessons" value={String(course.totalLessons)} />
-                    <MetaPill label="Quizzes" value={String(course.totalQuizzes)} />
-                    <MetaPill label="Enrollments" value={String(popularity)} />
-                  </div>
-
-                  {course.tags.length > 0 ? (
-                    <div className="flex flex-wrap gap-2">
-                      {course.tags.slice(0, 4).map((tag) => (
-                        <span key={tag} className="rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-600">
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  ) : null}
-
-                  {isLearner && enrollment ? (
-                    <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4">
-                      <div className="flex items-center justify-between text-sm text-emerald-800">
-                        <span className="font-semibold">Your progress</span>
-                        <span>{enrollment.progress}%</span>
-                      </div>
-                      <div className="mt-3 h-2 rounded-full bg-emerald-100">
-                        <div className="h-2 rounded-full bg-emerald-500" style={{ width: `${enrollment.progress}%` }} />
-                      </div>
-                    </div>
-                  ) : null}
-
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() => {
-                        if (isEnrolled) {
-                          router.push(`/courses/${course.slug}`);
-                          return;
-                        }
-                        if (!isLearner) {
-                          router.push(`/courses/${course.slug}`);
-                          return;
-                        }
-                        void handleEnroll(course.slug);
-                      }}
-                      disabled={Boolean(enrolling === course.slug)}
-                      className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-60"
-                    >
-                      {enrolling === course.slug ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          Working...
-                        </>
-                      ) : isEnrolled ? (
-                        <>
-                          Continue
-                          <ArrowRight className="h-4 w-4" />
-                        </>
-                      ) : isLearner ? (
-                        <>
-                          Enroll
-                          <ArrowRight className="h-4 w-4" />
-                        </>
-                      ) : (
-                        <>
-                          View details
-                          <ArrowRight className="h-4 w-4" />
-                        </>
-                      )}
-                    </button>
-                    <Link
-                      href={`/courses/${course.slug}`}
-                      className="inline-flex items-center justify-center rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700"
-                    >
-                      Open
-                    </Link>
-                  </div>
-                </div>
-              </article>
-            );
-          })}
-        </section>
-
-        {filteredCourses.length === 0 ? (
+        {loading ? (
+          <section className="rounded-[28px] border border-slate-200 bg-white px-6 py-14 text-center shadow-lg shadow-slate-100">
+            <Loader2 className="mx-auto h-8 w-8 animate-spin text-blue-700" />
+            <p className="mt-3 text-sm text-slate-600">Refreshing course results...</p>
+          </section>
+        ) : courses.length === 0 ? (
           <section className="rounded-[28px] border border-dashed border-slate-300 bg-white px-6 py-14 text-center text-sm text-slate-500">
             No courses match the current filters.
           </section>
-        ) : null}
+        ) : (
+          <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-lg shadow-slate-100">
+            <div className="grid gap-6 p-6 md:grid-cols-2 xl:grid-cols-3">
+              {courses.map((course) => {
+                const enrollment = enrolledCourseMap.get(course.slug);
+                const isEnrolled = Boolean(enrollment);
+                const popularity = popularityMap.get(course.slug) || 0;
+
+                return (
+                  <article key={course.id} className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
+                    <div className="border-b border-slate-100 bg-[linear-gradient(135deg,#eff6ff_0%,#ffffff_60%,#eef2ff_100%)] px-6 py-5">
+                      <div className="flex flex-wrap gap-2">
+                        <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">{course.category}</span>
+                        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">{course.difficulty}</span>
+                      </div>
+                      <h2 className="mt-4 text-2xl font-bold text-slate-950">{course.title}</h2>
+                      <p className="mt-2 text-sm text-slate-600">{course.description}</p>
+                    </div>
+
+                    <div className="space-y-4 px-6 py-6">
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <MetaPill label="Duration" value={`${course.duration} min`} />
+                        <MetaPill label="Lessons" value={String(course.totalLessons)} />
+                        <MetaPill label="Quizzes" value={String(course.totalQuizzes)} />
+                        <MetaPill label="Enrollments" value={String(popularity)} />
+                      </div>
+
+                      {course.tags.length > 0 ? (
+                        <div className="flex flex-wrap gap-2">
+                          {course.tags.slice(0, 4).map((tag) => (
+                            <span key={tag} className="rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-600">
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
+
+                      {isLearner && enrollment ? (
+                        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4">
+                          <div className="flex items-center justify-between text-sm text-emerald-800">
+                            <span className="font-semibold">Your progress</span>
+                            <span>{enrollment.progress}%</span>
+                          </div>
+                          <div className="mt-3 h-2 rounded-full bg-emerald-100">
+                            <div className="h-2 rounded-full bg-emerald-500" style={{ width: `${enrollment.progress}%` }} />
+                          </div>
+                        </div>
+                      ) : null}
+
+                      <div className="flex gap-3">
+                        <button
+                          onClick={() => {
+                            if (isEnrolled) {
+                              router.push(`/courses/${course.slug}`);
+                              return;
+                            }
+                            if (!isLearner) {
+                              router.push(`/courses/${course.slug}`);
+                              return;
+                            }
+                            void handleEnroll(course.slug);
+                          }}
+                          disabled={Boolean(enrolling === course.slug)}
+                          className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-60"
+                        >
+                          {enrolling === course.slug ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              Working...
+                            </>
+                          ) : isEnrolled ? (
+                            <>
+                              Continue
+                              <ArrowRight className="h-4 w-4" />
+                            </>
+                          ) : isLearner ? (
+                            <>
+                              Enroll
+                              <ArrowRight className="h-4 w-4" />
+                            </>
+                          ) : (
+                            <>
+                              View details
+                              <ArrowRight className="h-4 w-4" />
+                            </>
+                          )}
+                        </button>
+                        <Link
+                          href={`/courses/${course.slug}`}
+                          className="inline-flex items-center justify-center rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700"
+                        >
+                          Open
+                        </Link>
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+
+            <PaginationControls pagination={pagination} itemLabel="courses" onPageChange={setCurrentPage} />
+          </section>
+        )}
       </div>
     </div>
   );

@@ -9,6 +9,7 @@ import {
   FileText,
   LoaderCircle,
   MessageSquare,
+  RefreshCw,
   Route,
   Send,
   ShieldAlert,
@@ -35,6 +36,7 @@ export default function AgentHub() {
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [sending, setSending] = useState(false);
   const [creatingThread, setCreatingThread] = useState(false);
   const [activityLabel, setActivityLabel] = useState('');
@@ -68,19 +70,26 @@ export default function AgentHub() {
     }
   }, [selectedAssignmentId, selectedThreadId]);
 
-  const loadHub = async () => {
+  const loadHub = async (options?: { preserveSelection?: boolean; silent?: boolean }) => {
     try {
-      setLoading(true);
+      setError('');
+      if (options?.silent) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
       const [catalogRes, assignmentsRes, threadsRes] = await Promise.all([
         api.getAgentCatalog(),
         api.getAgentAssignments(),
         api.getAgentThreads(),
       ]);
 
+      const nextAssignments = sortAssignments(assignmentsRes.data);
+      const nextThreads = sortThreads(threadsRes.data);
       setCatalog(catalogRes.data);
-      setAssignments(assignmentsRes.data);
-      setThreads(threadsRes.data);
-      if (assignmentsRes.data.length > 0) {
+      setAssignments(nextAssignments);
+      setThreads(nextThreads);
+      if (nextAssignments.length > 0) {
         const artifactsRes = await api.getAgentArtifacts();
         setArtifacts(artifactsRes.data);
       } else {
@@ -89,38 +98,44 @@ export default function AgentHub() {
 
       const storedAssignmentId = typeof window !== 'undefined' ? sessionStorage.getItem(SESSION_ASSIGNMENT_KEY) || '' : '';
       const storedThreadId = typeof window !== 'undefined' ? sessionStorage.getItem(SESSION_THREAD_KEY) || '' : '';
-      const approvedAssignments = assignmentsRes.data.filter((item) => item.status === 'approved');
-      const preferredAssignment =
-        approvedAssignments.find((item) => item.id === storedAssignmentId) ||
-        approvedAssignments[0] ||
-        null;
+      const preferredAssignment = pickPreferredAssignment(nextAssignments, {
+        selectedAssignmentId: options?.preserveSelection ? selectedAssignmentId : '',
+        storedAssignmentId,
+      });
 
       if (preferredAssignment) {
         setSelectedAssignmentId(preferredAssignment.id);
         const preferredThread =
-          threadsRes.data.find(
+          nextThreads.find(
             (thread) => thread.id === storedThreadId && thread.assignmentId === preferredAssignment.id
           ) ||
-          threadsRes.data.find((thread) => thread.assignmentId === preferredAssignment.id);
+          nextThreads.find((thread) => thread.assignmentId === preferredAssignment.id);
         if (preferredThread) {
-          await openThread(preferredThread.id);
+          await openThread(preferredThread.id, nextThreads);
         } else {
           setSelectedThreadId('');
           setMessages([]);
         }
+      } else {
+        setSelectedAssignmentId('');
+        setSelectedThreadId('');
+        setMessages([]);
       }
     } catch (loadError: any) {
       setError(loadError.message || 'Unable to load agent workspace.');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
   const assignmentByType = useMemo(() => {
-    return new Map(assignments.map((assignment) => [assignment.agentType, assignment]));
+    return buildLatestAssignmentMap(assignments);
   }, [assignments]);
 
-  const selectedAssignment = assignments.find((assignment) => assignment.id === selectedAssignmentId) || null;
+  const selectedAssignment =
+    assignments.find((assignment) => assignment.id === selectedAssignmentId) ||
+    pickPreferredAssignment(assignments, { selectedAssignmentId: '', storedAssignmentId: '' });
   const selectedArtifacts = selectedAssignment ? artifacts.filter((artifact) => artifact.assignmentId === selectedAssignment.id) : [];
   const latestCourseShell = selectedArtifacts.find((artifact) => artifact.artifactType === 'course_shell') || null;
   const latestCurriculumDraft = selectedArtifacts.find((artifact) => artifact.artifactType === 'curriculum_draft') || null;
@@ -137,10 +152,11 @@ export default function AgentHub() {
   const canApplyCurriculum = Boolean(availableCourseSlug);
   const visibleThreads = selectedAssignment ? threads.filter((thread) => thread.assignmentId === selectedAssignment.id) : threads;
 
-  const openThread = async (threadId: string) => {
+  const openThread = async (threadId: string, threadSource = threads) => {
     try {
+      setError('');
       setSelectedThreadId(threadId);
-      const selectedThread = threads.find((thread) => thread.id === threadId);
+      const selectedThread = threadSource.find((thread) => thread.id === threadId);
       if (selectedThread) {
         setSelectedAssignmentId(selectedThread.assignmentId);
       }
@@ -151,12 +167,23 @@ export default function AgentHub() {
     }
   };
 
-  const handleRequest = async (agentType: string) => {
+  const handleRequest = async (
+    agentType: string,
+    options?: Partial<Pick<AgentAssignment, 'displayName' | 'notes' | 'courseSlug' | 'lessonSlug' | 'targetUserId'>>
+  ) => {
     try {
       setRequestingAgent(agentType);
       setError('');
-      await api.requestAgent({ agentType });
-      await loadHub();
+      const response = await api.requestAgent({
+        agentType,
+        displayName: options?.displayName || undefined,
+        notes: options?.notes || undefined,
+        courseSlug: options?.courseSlug || undefined,
+        lessonSlug: options?.lessonSlug || undefined,
+        targetUserId: options?.targetUserId || undefined,
+      });
+      setSelectedAssignmentId(response.data.id);
+      await loadHub({ preserveSelection: true, silent: true });
     } catch (requestError: any) {
       setError(requestError.message || 'Unable to request this agent.');
     } finally {
@@ -185,6 +212,7 @@ export default function AgentHub() {
   const handleOpenChat = async (assignment: AgentAssignment) => {
     setSelectedAssignmentId(assignment.id);
     try {
+      setError('');
       const threadId = await ensureThread(assignment);
       await openThread(threadId);
     } catch (threadError: any) {
@@ -234,6 +262,9 @@ export default function AgentHub() {
       }
       setMessage('');
     } catch (sendError: any) {
+      if (selectedThreadId) {
+        await openThread(selectedThreadId);
+      }
       setError(sendError.message || 'Unable to send your message.');
     } finally {
       setSending(false);
@@ -298,6 +329,10 @@ export default function AgentHub() {
     }
   };
 
+  const handleRefresh = async () => {
+    await loadHub({ preserveSelection: true, silent: true });
+  };
+
   if (authLoading || loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
@@ -352,7 +387,14 @@ export default function AgentHub() {
               <h2 className="text-xl font-bold text-slate-950">Available agents</h2>
               <p className="mt-1 text-sm text-slate-600">Request only what you actually need.</p>
             </div>
-            <Bot className="h-5 w-5 text-blue-700" />
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-blue-300 hover:text-blue-700 disabled:opacity-60"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+              Refresh
+            </button>
           </div>
 
           <div className="mt-6 space-y-4">
@@ -376,9 +418,32 @@ export default function AgentHub() {
                         >
                           Open chat
                         </button>
+                      ) : currentAssignment.status === 'pending' ? (
+                        <div className="space-y-3">
+                          <div className="text-sm text-slate-500">Waiting for admin approval.</div>
+                          <button
+                            onClick={handleRefresh}
+                            disabled={refreshing}
+                            className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700 disabled:opacity-60"
+                          >
+                            {refreshing ? 'Checking...' : 'Check status'}
+                          </button>
+                        </div>
                       ) : (
-                        <div className="text-sm text-slate-500">
-                          {currentAssignment.status === 'pending' ? 'Waiting for admin approval.' : 'Request was rejected. You can request again later.'}
+                        <div className="space-y-3">
+                          <div className="text-sm text-slate-500">
+                            Request was rejected. You can resubmit it after reviewing the note below.
+                          </div>
+                          {currentAssignment.adminNotes ? (
+                            <div className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{currentAssignment.adminNotes}</div>
+                          ) : null}
+                          <button
+                            onClick={() => handleRequest(agent.key, currentAssignment)}
+                            disabled={requestingAgent === agent.key}
+                            className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700 disabled:opacity-60"
+                          >
+                            {requestingAgent === agent.key ? 'Resubmitting...' : 'Request again'}
+                          </button>
                         </div>
                       )
                     ) : (
@@ -425,6 +490,9 @@ export default function AgentHub() {
                     <div>
                       <div className="text-sm font-semibold text-slate-950">{assignment.displayName || assignment.agentType}</div>
                       <div className="mt-1 text-xs text-slate-500">{assignment.agentType.replace(/_/g, ' ')}</div>
+                      {assignment.adminNotes ? (
+                        <div className="mt-2 rounded-xl bg-slate-100 px-3 py-2 text-xs text-slate-600">{assignment.adminNotes}</div>
+                      ) : null}
                     </div>
                     <StatusBadge status={assignment.status} />
                   </div>
@@ -620,6 +688,12 @@ export default function AgentHub() {
                 <textarea
                   value={message}
                   onChange={(event) => setMessage(event.target.value)}
+                  onKeyDown={(event) => {
+                    if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+                      event.preventDefault();
+                      void handleSend();
+                    }
+                  }}
                   disabled={sending}
                   placeholder={sending ? 'Agent is working...' : 'Ask the agent for help...'}
                   className="min-h-[88px] flex-1 rounded-[24px] border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
@@ -657,13 +731,50 @@ export default function AgentHub() {
                 </div>
               )}
             </>
-          ) : (
-            <div className="mt-6 rounded-[24px] border border-dashed border-slate-300 px-6 py-10 text-center">
-              <ShieldAlert className="mx-auto h-10 w-10 text-slate-300" />
-              <h3 className="mt-4 text-lg font-semibold text-slate-900">No approved agent selected</h3>
-              <p className="mt-2 text-sm text-slate-500">Request an agent or wait for approval before chat becomes active.</p>
-            </div>
-          )}
+              ) : (
+                <div className="mt-6 rounded-[24px] border border-dashed border-slate-300 px-6 py-10 text-center">
+                  <ShieldAlert className="mx-auto h-10 w-10 text-slate-300" />
+                  <h3 className="mt-4 text-lg font-semibold text-slate-900">
+                    {selectedAssignment?.status === 'pending'
+                      ? 'Approval is still pending'
+                      : selectedAssignment?.status === 'rejected'
+                      ? 'This request needs attention'
+                      : 'No approved agent selected'}
+                  </h3>
+                  <p className="mt-2 text-sm text-slate-500">
+                    {selectedAssignment?.status === 'pending'
+                      ? 'This agent has been requested. Refresh the workspace after approval to unlock chat.'
+                      : selectedAssignment?.status === 'rejected'
+                      ? 'Review the admin note and resubmit when you are ready.'
+                      : 'Request an agent or wait for approval before chat becomes active.'}
+                  </p>
+                  {selectedAssignment?.adminNotes ? (
+                    <div className="mx-auto mt-4 max-w-md rounded-2xl bg-slate-100 px-4 py-3 text-sm text-slate-700">
+                      {selectedAssignment.adminNotes}
+                    </div>
+                  ) : null}
+                  <div className="mt-5 flex flex-wrap justify-center gap-3">
+                    {selectedAssignment?.status === 'pending' ? (
+                      <button
+                        onClick={handleRefresh}
+                        disabled={refreshing}
+                        className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700 disabled:opacity-60"
+                      >
+                        {refreshing ? 'Checking...' : 'Refresh status'}
+                      </button>
+                    ) : null}
+                    {selectedAssignment?.status === 'rejected' ? (
+                      <button
+                        onClick={() => handleRequest(selectedAssignment.agentType, selectedAssignment)}
+                        disabled={requestingAgent === selectedAssignment.agentType}
+                        className="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-60"
+                      >
+                        {requestingAgent === selectedAssignment.agentType ? 'Resubmitting...' : 'Request again'}
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              )}
         </section>
       </div>
     </div>
@@ -720,4 +831,51 @@ function getChatActivityLabel(agentType: string, message: string) {
   }
 
   return 'Reviewing lesson context and preparing a clear explanation...';
+}
+
+function sortAssignments(items: AgentAssignment[]) {
+  return [...items].sort((left, right) => {
+    const statusDelta = statusPriority(left.status) - statusPriority(right.status);
+    if (statusDelta !== 0) {
+      return statusDelta;
+    }
+    return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
+  });
+}
+
+function sortThreads(items: AgentThread[]) {
+  return [...items].sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime());
+}
+
+function buildLatestAssignmentMap(assignments: AgentAssignment[]) {
+  const grouped = new Map<string, AgentAssignment>();
+  for (const assignment of sortAssignments(assignments)) {
+    if (!grouped.has(assignment.agentType)) {
+      grouped.set(assignment.agentType, assignment);
+    }
+  }
+  return grouped;
+}
+
+function pickPreferredAssignment(
+  assignments: AgentAssignment[],
+  options: { selectedAssignmentId?: string; storedAssignmentId?: string }
+) {
+  const sorted = sortAssignments(assignments);
+  return (
+    sorted.find((assignment) => assignment.id === options.selectedAssignmentId) ||
+    sorted.find((assignment) => assignment.id === options.storedAssignmentId) ||
+    sorted[0] ||
+    null
+  );
+}
+
+function statusPriority(status: AgentAssignment['status']) {
+  if (status === 'approved') {
+    return 0;
+  }
+  if (status === 'pending') {
+    return 1;
+  }
+  return 2;
 }
