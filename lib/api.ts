@@ -42,7 +42,7 @@ import {
   QuizAttemptSubmission,
 } from './types';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_BASE_URL = 'https://deveda-be.onrender.com';
 
 class ApiService {
   private token: string | null = null;
