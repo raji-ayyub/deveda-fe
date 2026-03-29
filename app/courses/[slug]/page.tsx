@@ -182,10 +182,78 @@ export default function SingleCoursePage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-center">
-          <div className="mx-auto h-16 w-16 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
-          <p className="mt-4 text-gray-600">Loading course...</p>
+      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
+        <div className="border-b border-gray-200 bg-white">
+          <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
+            <div className="h-5 w-32 animate-pulse rounded bg-slate-200" />
+          </div>
+        </div>
+
+        <div className="bg-[linear-gradient(135deg,#1d4ed8_0%,#4338ca_50%,#0f172a_100%)]">
+          <div className="mx-auto grid max-w-7xl gap-8 px-4 py-8 text-white sm:px-6 lg:grid-cols-3 lg:px-8">
+            <div className="space-y-5 lg:col-span-2">
+              <div className="flex gap-3">
+                <div className="h-8 w-24 animate-pulse rounded-full bg-white/20" />
+                <div className="h-8 w-32 animate-pulse rounded-full bg-white/10" />
+              </div>
+              <div className="h-12 w-4/5 animate-pulse rounded bg-white/20" />
+              <div className="h-5 w-full animate-pulse rounded bg-white/10" />
+              <div className="h-5 w-3/4 animate-pulse rounded bg-white/10" />
+              <div className="flex flex-wrap gap-4">
+                <div className="h-4 w-40 animate-pulse rounded bg-white/10" />
+                <div className="h-4 w-32 animate-pulse rounded bg-white/10" />
+                <div className="h-4 w-20 animate-pulse rounded bg-white/10" />
+              </div>
+            </div>
+
+            <div className="rounded-3xl bg-white p-6 shadow-2xl">
+              <div className="h-48 animate-pulse rounded-2xl bg-slate-200" />
+              <div className="mt-6 space-y-3">
+                {Array.from({ length: 4 }).map((_, index) => (
+                  <div key={`course-stat-skeleton-${index}`} className="flex items-center justify-between">
+                    <div className="h-4 w-20 animate-pulse rounded bg-slate-100" />
+                    <div className="h-4 w-14 animate-pulse rounded bg-slate-200" />
+                  </div>
+                ))}
+              </div>
+              <div className="mt-6 space-y-3">
+                <div className="h-12 animate-pulse rounded-2xl bg-slate-200" />
+                <div className="h-12 animate-pulse rounded-2xl bg-slate-100" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+          <div className="grid gap-8 lg:grid-cols-3">
+            <div className="space-y-8 lg:col-span-2">
+              {Array.from({ length: 3 }).map((_, index) => (
+                <section key={`course-section-skeleton-${index}`} className="rounded-3xl bg-white p-6 shadow-lg shadow-slate-200">
+                  <div className="h-8 w-48 animate-pulse rounded bg-slate-200" />
+                  <div className="mt-5 grid gap-4 md:grid-cols-2">
+                    {Array.from({ length: 4 }).map((__, itemIndex) => (
+                      <div key={`item-${itemIndex}`} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                        <div className="h-5 w-2/3 animate-pulse rounded bg-slate-200" />
+                        <div className="mt-3 h-4 w-full animate-pulse rounded bg-slate-100" />
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </div>
+
+            <div className="space-y-6">
+              {Array.from({ length: 3 }).map((_, index) => (
+                <aside key={`sidebar-skeleton-${index}`} className="rounded-3xl bg-white p-6 shadow-lg shadow-slate-200">
+                  <div className="h-6 w-32 animate-pulse rounded bg-slate-200" />
+                  <div className="mt-5 space-y-3">
+                    <div className="h-4 w-full animate-pulse rounded bg-slate-100" />
+                    <div className="h-4 w-5/6 animate-pulse rounded bg-slate-100" />
+                  </div>
+                </aside>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     );

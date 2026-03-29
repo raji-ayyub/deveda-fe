@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowRight, BookOpen, CheckCircle2, Clock3, Code2, Database, GraduationCap, LayoutGrid, Loader2, Server, Sparkles, Trophy, Users, Zap } from 'lucide-react';
+import { ArrowRight, BookOpen, CheckCircle2, Clock3, Code2, Database, GraduationCap, LayoutGrid, Server, Sparkles, Trophy, Users, Zap } from 'lucide-react';
 
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
@@ -167,17 +167,6 @@ export default function HomePage() {
     return router.push(user.role === 'Student' ? '/courses' : getRoleLoginRedirect(user.role));
   };
 
-  if (loading) {
-    return (
-      <div className="flex min-h-[70vh] items-center justify-center bg-slate-50">
-        <div className="text-center">
-          <Loader2 className="mx-auto h-10 w-10 animate-spin text-blue-700" />
-          <p className="mt-3 text-sm text-slate-600">Loading Deveda...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#f8fafc_0%,#ffffff_45%,#eef2ff_100%)]">
       <section className="relative overflow-hidden border-b border-slate-200 bg-[radial-gradient(circle_at_top_left,#38bdf833_0%,transparent_30%),linear-gradient(135deg,#0f172a_0%,#1d4ed8_46%,#7c3aed_100%)]">
@@ -232,10 +221,10 @@ export default function HomePage() {
               <div className="text-xs font-semibold uppercase tracking-[0.18em] text-cyan-100">Platform snapshot</div>
               <h2 className="mt-3 text-2xl font-black tracking-tight text-white">Live catalog activity</h2>
               <div className="mt-6 grid gap-4 sm:grid-cols-2">
-                <HeroMetric label="Courses" value={stats.total_courses} icon={<BookOpen className="h-5 w-5" />} />
-                <HeroMetric label="Learners" value={stats.unique_enrolled_users} icon={<Users className="h-5 w-5" />} />
-                <HeroMetric label="Enrollments" value={stats.total_enrollments} icon={<GraduationCap className="h-5 w-5" />} />
-                <HeroMetric label="Guided hours" value={totalGuidedHours} icon={<Clock3 className="h-5 w-5" />} />
+                <HeroMetric label="Courses" value={loading ? '...' : stats.total_courses} icon={<BookOpen className="h-5 w-5" />} />
+                <HeroMetric label="Learners" value={loading ? '...' : stats.unique_enrolled_users} icon={<Users className="h-5 w-5" />} />
+                <HeroMetric label="Enrollments" value={loading ? '...' : stats.total_enrollments} icon={<GraduationCap className="h-5 w-5" />} />
+                <HeroMetric label="Guided hours" value={loading ? '...' : totalGuidedHours} icon={<Clock3 className="h-5 w-5" />} />
               </div>
               <div className="mt-6 rounded-[24px] border border-white/10 bg-slate-950/25 p-5 text-sm text-slate-200">
                 <div className="flex items-start gap-3"><CheckCircle2 className="mt-0.5 h-4 w-4 text-cyan-300" /><span>Browse published courses immediately.</span></div>
@@ -249,7 +238,7 @@ export default function HomePage() {
 
       {loadError ? <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8"><div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{loadError}</div></div> : null}
 
-      {user && snapshot ? (
+      {user && (snapshot || loading) ? (
         <section className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
           <div className="rounded-[32px] border border-slate-200 bg-white p-8 shadow-xl shadow-slate-200">
             <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
@@ -261,14 +250,19 @@ export default function HomePage() {
               <Link href="/profile" className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700">Open profile<ArrowRight className="h-4 w-4" /></Link>
             </div>
             <div className="mt-6 grid gap-4 md:grid-cols-3 xl:grid-cols-6">
-              <SnapshotCard label="Enrolled" value={snapshot.enrolledCourses} />
-              <SnapshotCard label="Completed" value={snapshot.completedCourses} />
-              <SnapshotCard label="Avg. progress" value={`${snapshot.averageProgress}%`} />
-              <SnapshotCard label="Quiz score" value={`${snapshot.averageQuizScore}%`} />
-              <SnapshotCard label="Hours" value={snapshot.totalHours} />
-              <SnapshotCard label="Streak" value={`${snapshot.streakDays}d`} accent />
+              <SnapshotCard label="Enrolled" value={loading ? '...' : snapshot?.enrolledCourses || 0} />
+              <SnapshotCard label="Completed" value={loading ? '...' : snapshot?.completedCourses || 0} />
+              <SnapshotCard label="Avg. progress" value={loading ? '...' : `${snapshot?.averageProgress || 0}%`} />
+              <SnapshotCard label="Quiz score" value={loading ? '...' : `${snapshot?.averageQuizScore || 0}%`} />
+              <SnapshotCard label="Hours" value={loading ? '...' : snapshot?.totalHours || 0} />
+              <SnapshotCard label="Streak" value={loading ? '...' : `${snapshot?.streakDays || 0}d`} accent />
             </div>
-            {(recentCourses.length > 0 || recentAttempts.length > 0) ? (
+            {loading ? (
+              <div className="mt-8 grid gap-6 lg:grid-cols-2">
+                <PanelSkeleton title="Recent courses" />
+                <PanelSkeleton title="Recent quiz attempts" />
+              </div>
+            ) : (recentCourses.length > 0 || recentAttempts.length > 0) ? (
               <div className="mt-8 grid gap-6 lg:grid-cols-2">
                 <Panel title="Recent courses" items={recentCourses.map((course) => ({ label: courseBySlug.get(course.courseSlug)?.title || course.courseSlug, detail: `${course.progress}% progress${course.completed ? ' - completed' : ''}` }))} />
                 <Panel title="Recent quiz attempts" items={recentAttempts.map((attempt) => ({ label: attempt.quizId, detail: `${attempt.score}%${attempt.passed ? ' - passed' : ' - retry recommended'}` }))} />
@@ -295,7 +289,31 @@ export default function HomePage() {
               return <button key={category.name} onClick={() => setActiveCategory(category.name)} className={`inline-flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold transition ${active ? 'bg-slate-950 text-white' : 'border border-slate-200 bg-white text-slate-700 hover:border-blue-300 hover:text-blue-700'}`}><Icon className="h-4 w-4" />{category.name}</button>;
             })}
           </div>
-          {visibleCourses.length > 0 ? (
+          {loading && visibleCourses.length === 0 ? (
+            <div className="mt-8 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+              {Array.from({ length: 3 }).map((_, index) => (
+                <article key={`course-skeleton-${index}`} className="overflow-hidden rounded-[28px] border border-slate-200 bg-slate-50 shadow-sm">
+                  <div className="h-44 animate-pulse bg-slate-200" />
+                  <div className="space-y-4 p-6">
+                    <div className="flex gap-2">
+                      <div className="h-6 w-24 animate-pulse rounded-full bg-slate-200" />
+                      <div className="h-6 w-20 animate-pulse rounded-full bg-slate-200" />
+                    </div>
+                    <div className="space-y-3">
+                      <div className="h-6 w-3/4 animate-pulse rounded bg-slate-200" />
+                      <div className="h-4 w-full animate-pulse rounded bg-slate-100" />
+                      <div className="h-4 w-5/6 animate-pulse rounded bg-slate-100" />
+                    </div>
+                    <div className="flex gap-4">
+                      <div className="h-4 w-24 animate-pulse rounded bg-slate-100" />
+                      <div className="h-4 w-24 animate-pulse rounded bg-slate-100" />
+                    </div>
+                    <div className="h-12 w-32 animate-pulse rounded-2xl bg-slate-200" />
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : visibleCourses.length > 0 ? (
             <div className="mt-8 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
               {visibleCourses.map((course) => (
                 <article key={course.slug} className="group overflow-hidden rounded-[28px] border border-slate-200 bg-slate-50 shadow-sm transition hover:-translate-y-1 hover:shadow-xl">
@@ -349,7 +367,16 @@ export default function HomePage() {
               </div>
               <Zap className="h-5 w-5 text-cyan-300" />
             </div>
-            {popularCourses.length > 0 ? (
+            {loading && popularCourses.length === 0 ? (
+              <div className="mt-6 space-y-4">
+                {Array.from({ length: 3 }).map((_, index) => (
+                  <div key={`popular-skeleton-${index}`} className="rounded-[24px] border border-white/10 bg-white/5 p-5">
+                    <div className="h-6 w-2/3 animate-pulse rounded bg-white/15" />
+                    <div className="mt-3 h-4 w-1/3 animate-pulse rounded bg-white/10" />
+                  </div>
+                ))}
+              </div>
+            ) : popularCourses.length > 0 ? (
               <div className="mt-6 space-y-4">
                 {popularCourses.map((course) => {
                   const count = stats.popular_courses.find((item) => item._id === course.slug)?.count || 0;
@@ -400,7 +427,7 @@ export default function HomePage() {
   );
 }
 
-function HeroMetric({ label, value, icon }: { label: string; value: number; icon: ReactNode }) {
+function HeroMetric({ label, value, icon }: { label: string; value: string | number; icon: ReactNode }) {
   return <div className="rounded-[28px] border border-white/15 bg-white/10 p-5 backdrop-blur-sm transition hover:bg-white/15"><div className="flex items-center justify-between text-cyan-100"><span className="text-sm font-semibold">{label}</span>{icon}</div><div className="mt-4 text-3xl font-black text-white">{value}</div></div>;
 }
 
@@ -410,6 +437,22 @@ function SnapshotCard({ label, value, accent = false }: { label: string; value: 
 
 function Panel({ title, items }: { title: string; items: Array<{ label: string; detail: string }> }) {
   return <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5"><h3 className="text-lg font-bold text-slate-950">{title}</h3><div className="mt-4 space-y-3">{items.map((item) => <div key={`${title}-${item.label}`} className="rounded-2xl border border-slate-200 bg-white px-4 py-3"><div className="font-semibold text-slate-950">{item.label}</div><div className="mt-1 text-sm text-slate-600">{item.detail}</div></div>)}</div></div>;
+}
+
+function PanelSkeleton({ title }: { title: string }) {
+  return (
+    <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-5">
+      <h3 className="text-lg font-bold text-slate-950">{title}</h3>
+      <div className="mt-4 space-y-3">
+        {Array.from({ length: 3 }).map((_, index) => (
+          <div key={`${title}-skeleton-${index}`} className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+            <div className="h-5 w-2/3 animate-pulse rounded bg-slate-200" />
+            <div className="mt-2 h-4 w-1/2 animate-pulse rounded bg-slate-100" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function ReasonRow({ icon, title, description }: { icon: ReactNode; title: string; description: string }) {

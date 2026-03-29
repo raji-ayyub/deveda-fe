@@ -149,17 +149,6 @@ export default function CoursesPage() {
     }
   };
 
-  if (loading && courses.length === 0) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50">
-        <div className="text-center">
-          <Loader2 className="mx-auto h-10 w-10 animate-spin text-blue-700" />
-          <p className="mt-3 text-sm text-slate-600">Loading course catalog...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#f8fafc_0%,#ffffff_45%,#eef2ff_100%)] px-4 py-8 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl space-y-6">
@@ -262,7 +251,39 @@ export default function CoursesPage() {
           </div>
         </section>
 
-        {loading ? (
+        {loading && courses.length === 0 ? (
+          <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-lg shadow-slate-100">
+            <div className="grid gap-6 p-6 md:grid-cols-2 xl:grid-cols-3">
+              {Array.from({ length: 6 }).map((_, index) => (
+                <article key={`course-card-skeleton-${index}`} className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
+                  <div className="border-b border-slate-100 bg-slate-50 px-6 py-5">
+                    <div className="flex gap-2">
+                      <div className="h-6 w-24 animate-pulse rounded-full bg-slate-200" />
+                      <div className="h-6 w-20 animate-pulse rounded-full bg-slate-200" />
+                    </div>
+                    <div className="mt-4 h-7 w-4/5 animate-pulse rounded bg-slate-200" />
+                    <div className="mt-3 h-4 w-full animate-pulse rounded bg-slate-100" />
+                    <div className="mt-2 h-4 w-5/6 animate-pulse rounded bg-slate-100" />
+                  </div>
+                  <div className="space-y-4 px-6 py-6">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {Array.from({ length: 4 }).map((__, pillIndex) => (
+                        <div key={`pill-${pillIndex}`} className="rounded-2xl bg-slate-50 px-4 py-3">
+                          <div className="h-3 w-16 animate-pulse rounded bg-slate-200" />
+                          <div className="mt-2 h-4 w-12 animate-pulse rounded bg-slate-100" />
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex gap-3">
+                      <div className="h-12 flex-1 animate-pulse rounded-2xl bg-slate-200" />
+                      <div className="h-12 w-20 animate-pulse rounded-2xl bg-slate-100" />
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+        ) : loading ? (
           <section className="rounded-[28px] border border-slate-200 bg-white px-6 py-14 text-center shadow-lg shadow-slate-100">
             <Loader2 className="mx-auto h-8 w-8 animate-spin text-blue-700" />
             <p className="mt-3 text-sm text-slate-600">Refreshing course results...</p>

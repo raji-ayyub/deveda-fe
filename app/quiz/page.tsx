@@ -69,17 +69,6 @@ export default function QuizListPage() {
     [courses, quizzes]
   );
 
-  if (loading && quizzes.length === 0) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50">
-        <div className="text-center">
-          <Loader2 className="mx-auto h-10 w-10 animate-spin text-blue-700" />
-          <p className="mt-3 text-sm text-slate-600">Loading quizzes...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#f8fafc_0%,#ffffff_45%,#eef2ff_100%)] px-4 py-8 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl space-y-6">
@@ -113,7 +102,30 @@ export default function QuizListPage() {
           </div>
         </section>
 
-        {summaries.length === 0 ? (
+        {loading && summaries.length === 0 ? (
+          <section className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-lg shadow-slate-100">
+            <div className="grid gap-6 p-6 md:grid-cols-2 xl:grid-cols-3">
+              {Array.from({ length: 6 }).map((_, index) => (
+                <article key={`quiz-skeleton-${index}`} className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="h-12 w-12 animate-pulse rounded-2xl bg-slate-200" />
+                    <div className="h-6 w-24 animate-pulse rounded-full bg-slate-100" />
+                  </div>
+                  <div className="mt-5 h-6 w-3/4 animate-pulse rounded bg-slate-200" />
+                  <div className="mt-3 h-4 w-1/2 animate-pulse rounded bg-slate-100" />
+                  <div className="mt-4 rounded-2xl bg-slate-50 px-4 py-4">
+                    <div className="h-5 w-2/3 animate-pulse rounded bg-slate-200" />
+                    <div className="mt-2 h-4 w-1/2 animate-pulse rounded bg-slate-100" />
+                  </div>
+                  <div className="mt-6 flex gap-3">
+                    <div className="h-12 flex-1 animate-pulse rounded-2xl bg-slate-200" />
+                    <div className="h-12 w-14 animate-pulse rounded-2xl bg-slate-100" />
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+        ) : summaries.length === 0 ? (
           <section className="rounded-[28px] border border-slate-200 bg-white px-6 py-14 text-center shadow-lg shadow-slate-100">
             <AlertCircle className="mx-auto h-12 w-12 text-slate-300" />
             <h2 className="mt-4 text-xl font-bold text-slate-950">No quizzes available yet</h2>

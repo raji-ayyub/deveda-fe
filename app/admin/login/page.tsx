@@ -6,7 +6,6 @@ import Link from 'next/link';
 import { Eye, EyeOff, Lock, Mail } from 'lucide-react';
 
 import { useAuth } from '@/context/AuthContext';
-import { api } from '@/lib/api';
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -23,8 +22,7 @@ export default function AdminLoginPage() {
     setLoading(true);
 
     try {
-      await login(email.trim().toLowerCase(), password);
-      const currentUser = await api.getCurrentUser();
+      const currentUser = await login(email.trim().toLowerCase(), password);
       if (!currentUser || !['Admin', 'Instructor'].includes(currentUser.role)) {
         await logout();
         throw new Error('This account does not have admin dashboard access.');

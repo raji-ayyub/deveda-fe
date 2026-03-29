@@ -42,7 +42,7 @@ import {
   QuizAttemptSubmission,
 } from './types';
 
-const API_BASE_URL = 'https://deveda-be.onrender.com';
+const API_BASE_URL = '/api/backend';
 
 class ApiService {
   private token: string | null = null;
@@ -640,6 +640,14 @@ class ApiService {
     return this.handleResponse<AgentThreadDetail>(response);
   }
 
+  async deleteAgentThread(threadId: string): Promise<ApiResponse<boolean>> {
+    const response = await this.apiFetch(`${API_BASE_URL}/agents/threads/${threadId}`, {
+      method: 'DELETE',
+      headers: this.getHeaders(),
+    });
+    return this.handleResponse<boolean>(response);
+  }
+
   async sendAgentMessage(threadId: string, payload: AgentMessagePayload): Promise<ApiResponse<{
     userMessage: AgentMessage;
     assistantMessage: AgentMessage;
@@ -744,4 +752,3 @@ class ApiService {
 }
 
 export const api = new ApiService();
-

@@ -46,10 +46,28 @@ const SettingsPage: React.FC = () => {
 
   if (authLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
-        <div className="text-center">
-          <div className="mx-auto h-14 w-14 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
-          <p className="mt-4 text-sm text-slate-600">Restoring your session...</p>
+      <div className="min-h-screen bg-[linear-gradient(180deg,#f8fafc_0%,#ffffff_42%,#eff6ff_100%)] px-4 py-8 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-5xl space-y-6">
+          <div className="h-5 w-32 animate-pulse rounded bg-slate-200" />
+          <div className="rounded-[32px] border border-slate-200 bg-white px-8 py-8 shadow-2xl shadow-slate-200">
+            <div className="h-10 w-56 animate-pulse rounded bg-slate-200" />
+            <div className="mt-3 h-4 w-72 animate-pulse rounded bg-slate-100" />
+          </div>
+          <div className="grid gap-6 lg:grid-cols-2">
+            {Array.from({ length: 2 }).map((_, index) => (
+              <section key={`settings-skeleton-${index}`} className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-lg shadow-slate-100">
+                <div className="h-6 w-40 animate-pulse rounded bg-slate-200" />
+                <div className="mt-6 space-y-4">
+                  {Array.from({ length: 4 }).map((__, fieldIndex) => (
+                    <div key={`field-${fieldIndex}`}>
+                      <div className="h-4 w-24 animate-pulse rounded bg-slate-100" />
+                      <div className="mt-2 h-12 animate-pulse rounded-2xl bg-slate-100" />
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ))}
+          </div>
         </div>
       </div>
     );

@@ -188,10 +188,50 @@ const QuizPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-blue-50">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading quiz...</p>
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">
+        <div className="bg-white shadow-sm border-b border-gray-200">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex justify-between items-center h-16">
+              <div className="h-5 w-24 animate-pulse rounded bg-slate-200" />
+              <div className="hidden md:flex items-center space-x-6">
+                <div className="h-5 w-20 animate-pulse rounded bg-slate-200" />
+                <div className="h-5 w-32 animate-pulse rounded bg-slate-100" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="lg:col-span-2">
+              <div className="bg-white rounded-2xl shadow-lg p-8">
+                <div className="h-7 w-2/3 animate-pulse rounded bg-slate-200" />
+                <div className="mt-6 space-y-4">
+                  {Array.from({ length: 4 }).map((_, index) => (
+                    <div key={`quiz-option-skeleton-${index}`} className="rounded-xl border-2 border-gray-200 p-6">
+                      <div className="flex items-center">
+                        <div className="h-10 w-10 animate-pulse rounded-lg bg-slate-200" />
+                        <div className="ml-4 h-5 w-3/4 animate-pulse rounded bg-slate-100" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              {Array.from({ length: 3 }).map((_, index) => (
+                <div key={`quiz-sidebar-skeleton-${index}`} className="bg-white rounded-2xl shadow-lg p-6">
+                  <div className="h-6 w-32 animate-pulse rounded bg-slate-200" />
+                  <div className="mt-4 space-y-3">
+                    <div className="h-4 w-full animate-pulse rounded bg-slate-100" />
+                    <div className="h-4 w-5/6 animate-pulse rounded bg-slate-100" />
+                    <div className="h-4 w-2/3 animate-pulse rounded bg-slate-100" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     );

@@ -86,12 +86,14 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { User } from '@/lib/types';
 import { api } from '@/lib/api';
 
+const AUTH_USER_SNAPSHOT_KEY = 'deveda_auth_user';
+
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, firstName: string, lastName: string, role?: string) => Promise<void>;
-  registerPrivateAdmin: (email: string, password: string, firstName: string, lastName: string, adminSetupSecret: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<User>;
+  register: (email: string, password: string, firstName: string, lastName: string, role?: string) => Promise<User>;
+  registerPrivateAdmin: (email: string, password: string, firstName: string, lastName: string, adminSetupSecret: string) => Promise<User>;
   logout: () => Promise<void>;
   updateUser: (data: Partial<User>) => Promise<void>;
 }
@@ -114,26 +116,73 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const loadStoredUserSnapshot = (): User | null => {
+    if (typeof window === 'undefined') {
+      return null;
+    }
+
+    const snapshot = window.sessionStorage.getItem(AUTH_USER_SNAPSHOT_KEY);
+    if (!snapshot) {
+      return null;
+    }
+
+    try {
+      return JSON.parse(snapshot) as User;
+    } catch (error) {
+      console.error('Failed to parse stored auth snapshot:', error);
+      window.sessionStorage.removeItem(AUTH_USER_SNAPSHOT_KEY);
+      return null;
+    }
+  };
+
+  const persistUserSnapshot = (nextUser: User | null) => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    if (nextUser) {
+      window.sessionStorage.setItem(AUTH_USER_SNAPSHOT_KEY, JSON.stringify(nextUser));
+      return;
+    }
+
+    window.sessionStorage.removeItem(AUTH_USER_SNAPSHOT_KEY);
+  };
+
+  const applyUser = (nextUser: User | null) => {
+    setUser(nextUser);
+    persistUserSnapshot(nextUser);
+  };
+
   useEffect(() => {
+    const storedUser = loadStoredUserSnapshot();
+    if (storedUser) {
+      setUser(storedUser);
+      setLoading(false);
+    }
+
     const loadUser = async () => {
       try {
         const currentUser = await api.getCurrentUser();
-        setUser(currentUser);
+        applyUser(currentUser);
       } catch (error) {
         console.error('Failed to load user:', error);
+        if (!storedUser) {
+          applyUser(null);
+        }
       } finally {
         setLoading(false);
       }
     };
 
-    loadUser();
+    void loadUser();
   }, []);
 
   const login = async (email: string, password: string) => {
     setLoading(true);
     try {
       const response = await api.login({ email, password });
-      setUser(response.data.user);
+      applyUser(response.data.user);
+      return response.data.user;
     } finally {
       setLoading(false);
     }
@@ -143,7 +192,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setLoading(true);
     try {
       const response = await api.register({ email, password, firstName, lastName, role });
-      setUser(response.data.user);
+      applyUser(response.data.user);
+      return response.data.user;
     } finally {
       setLoading(false);
     }
@@ -159,7 +209,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setLoading(true);
     try {
       const response = await api.registerPrivateAdmin({ email, password, firstName, lastName, adminSetupSecret });
-      setUser(response.data.user);
+      applyUser(response.data.user);
+      return response.data.user;
     } finally {
       setLoading(false);
     }
@@ -169,7 +220,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setLoading(true);
     try {
       await api.logout();
-      setUser(null);
+      applyUser(null);
     } finally {
       setLoading(false);
     }
@@ -180,7 +231,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     
     try {
       const response = await api.updateUser(user.id, data);
-      setUser(response.data);
+      applyUser(response.data);
     } catch (error) {
       console.error('Failed to update user:', error);
       throw error;

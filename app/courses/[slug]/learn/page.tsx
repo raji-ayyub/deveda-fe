@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, BookOpen, Bot, CheckCircle, ChevronLeft, ChevronRight, Clock, FileText, HelpCircle, Play, Star, Target, Video } from 'lucide-react';
 
@@ -57,6 +57,8 @@ const CourseLearnPage: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [celebrationAwards, setCelebrationAwards] = useState<UserAchievement[]>([]);
   const [lessonTutorOpen, setLessonTutorOpen] = useState(false);
+
+  const lessonViewportRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const loadCourseData = async () => {
@@ -179,6 +181,18 @@ const CourseLearnPage: React.FC = () => {
     void syncCourseProgress(completedLessonSlugs, lessonSlug);
   };
 
+  const scrollLessonViewportToTop = () => {
+    const viewport = lessonViewportRef.current;
+    if (viewport) {
+      viewport.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
   const handleLessonComplete = () => {
     if (!activeLesson) {
       return;
@@ -191,6 +205,7 @@ const CourseLearnPage: React.FC = () => {
       activeLesson;
 
     setActiveLessonSlug(nextPendingLesson.slug);
+    scrollLessonViewportToTop();
     void syncCourseProgress(nextCompletedLessonSlugs, nextPendingLesson.slug);
   };
 
@@ -204,10 +219,74 @@ const CourseLearnPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="text-center">
-          <div className="mx-auto h-16 w-16 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
-          <p className="mt-4 text-gray-600">Loading course content...</p>
+      <div className="min-h-screen bg-gray-900">
+        <div className="border-b border-gray-700 bg-gray-800">
+          <div className="flex items-center justify-between px-4 py-3">
+            <div className="space-y-2">
+              <div className="h-5 w-28 animate-pulse rounded bg-gray-700" />
+              <div className="h-4 w-40 animate-pulse rounded bg-gray-700/80" />
+            </div>
+            <div className="hidden md:block">
+              <div className="h-2 w-48 animate-pulse rounded-full bg-gray-700" />
+            </div>
+          </div>
+        </div>
+
+        <div className="flex h-[calc(100vh-64px)]">
+          <div className="hidden w-80 border-r border-gray-700 bg-gray-800 lg:block">
+            <div className="space-y-3 p-4">
+              {Array.from({ length: 6 }).map((_, index) => (
+                <div key={`outline-skeleton-${index}`} className="rounded-lg bg-gray-700/70 px-3 py-4">
+                  <div className="h-4 w-3/4 animate-pulse rounded bg-gray-600" />
+                  <div className="mt-2 h-3 w-1/2 animate-pulse rounded bg-gray-600/80" />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto">
+            <div className="p-6">
+              <div className="mb-6 overflow-hidden rounded-xl bg-black">
+                <div className="aspect-video animate-pulse bg-gradient-to-br from-gray-900 to-black" />
+                <div className="bg-gray-800 px-4 py-3">
+                  <div className="h-6 w-1/2 animate-pulse rounded bg-gray-700" />
+                  <div className="mt-2 h-4 w-24 animate-pulse rounded bg-gray-700/80" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+                <div className="space-y-6 lg:col-span-2">
+                  <div className="rounded-xl bg-gray-800 p-6">
+                    <div className="h-8 w-40 animate-pulse rounded bg-gray-700" />
+                    <div className="mt-6 space-y-4">
+                      <div className="h-6 w-3/4 animate-pulse rounded bg-gray-700" />
+                      <div className="h-4 w-full animate-pulse rounded bg-gray-700/80" />
+                      <div className="h-4 w-5/6 animate-pulse rounded bg-gray-700/80" />
+                      <div className="rounded-[24px] bg-white p-6">
+                        <div className="h-5 w-2/3 animate-pulse rounded bg-slate-200" />
+                        <div className="mt-3 h-4 w-full animate-pulse rounded bg-slate-100" />
+                        <div className="mt-2 h-4 w-full animate-pulse rounded bg-slate-100" />
+                        <div className="mt-2 h-4 w-4/5 animate-pulse rounded bg-slate-100" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-6">
+                  {Array.from({ length: 3 }).map((_, index) => (
+                    <div key={`learn-sidebar-skeleton-${index}`} className="rounded-xl bg-gray-800 p-6">
+                      <div className="h-6 w-32 animate-pulse rounded bg-gray-700" />
+                      <div className="mt-4 space-y-3">
+                        <div className="h-4 w-full animate-pulse rounded bg-gray-700/80" />
+                        <div className="h-4 w-5/6 animate-pulse rounded bg-gray-700/80" />
+                        <div className="h-4 w-2/3 animate-pulse rounded bg-gray-700/80" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -365,7 +444,7 @@ const CourseLearnPage: React.FC = () => {
             </div>
           </div>
         ) : null}
-        <div className="flex-1 overflow-y-auto">
+        <div ref={lessonViewportRef} className="flex-1 overflow-y-auto">
           <div className="p-6">
             <div className="mb-6 overflow-hidden rounded-xl bg-black">
               <div className="flex aspect-video items-center justify-center bg-gradient-to-br from-gray-900 to-black">
