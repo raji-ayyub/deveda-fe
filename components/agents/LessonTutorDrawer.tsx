@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { BookOpen, Bot, Clock3, LoaderCircle, MessageSquare, Plus, RefreshCw, Send, Sparkles, Trash2, X } from 'lucide-react';
 
 import { api } from '@/lib/api';
@@ -42,9 +43,15 @@ export default function LessonTutorDrawer({
   const [activityLabel, setActivityLabel] = useState('');
   const [error, setError] = useState('');
   const [threadPendingDelete, setThreadPendingDelete] = useState<AgentThread | null>(null);
+  const [showThreadList, setShowThreadList] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   const messagesViewportRef = useRef<HTMLDivElement | null>(null);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (open) {
@@ -54,6 +61,7 @@ export default function LessonTutorDrawer({
 
   useEffect(() => {
     if (!open) {
+      setShowThreadList(false);
       return;
     }
 
@@ -66,6 +74,21 @@ export default function LessonTutorDrawer({
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [open, onClose]);
+
+  useEffect(() => {
+    if (!mounted || typeof document === 'undefined') {
+      return;
+    }
+
+    const originalOverflow = document.body.style.overflow;
+    if (open) {
+      document.body.style.overflow = 'hidden';
+    }
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [mounted, open]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -94,6 +117,8 @@ export default function LessonTutorDrawer({
     if (!open) {
       return;
     }
+
+    composerRef.current?.focus();
 
     const viewport = messagesViewportRef.current;
     if (!viewport) {
@@ -248,6 +273,7 @@ export default function LessonTutorDrawer({
       setLoading(true);
       setError('');
       setPendingUserMessage('');
+      setShowThreadList(false);
       setThreadId(nextThreadId);
       const threadRes = await api.getAgentThread(nextThreadId);
       setMessages(threadRes.data.messages);
@@ -271,6 +297,7 @@ export default function LessonTutorDrawer({
       setLoading(true);
       setError('');
       setPendingUserMessage('');
+      setShowThreadList(false);
       const response = await api.createAgentThread({
         assignmentId: assignment.id,
         title: `${courseTitle} - Nexa ${threads.length + 1}`,
@@ -303,6 +330,7 @@ export default function LessonTutorDrawer({
 
       if (remainingThreads.length > 0) {
         const nextThread = remainingThreads[0];
+        setShowThreadList(false);
         setThreadId(nextThread.id);
         const threadRes = await api.getAgentThread(nextThread.id);
         setMessages(threadRes.data.messages);
@@ -314,6 +342,7 @@ export default function LessonTutorDrawer({
           lessonSlug,
         });
         setThreads([response.data]);
+        setShowThreadList(false);
         setThreadId(response.data.id);
         setMessages([]);
       }
@@ -332,26 +361,40 @@ export default function LessonTutorDrawer({
   const progressLabel = typeof currentProgress === 'number' ? `${Math.round(currentProgress)}% course progress` : 'Lesson context attached';
   const hasConversation = messages.length > 0 || Boolean(pendingUserMessage) || sending;
 
-  return (
+  if (!mounted || typeof document === 'undefined') {
+    return null;
+  }
+
+  return createPortal(
     <>
       <div
-        className={`fixed inset-0 z-40 bg-slate-950/55 backdrop-blur-[2px] transition-opacity duration-300 ${open ? 'opacity-100' : 'pointer-events-none opacity-0'}`}
+        aria-hidden={!open}
+        className={`fixed inset-0 z-[80] bg-slate-950/55 backdrop-blur-[2px] transition-opacity duration-300 ${open ? 'opacity-100' : 'pointer-events-none opacity-0'}`}
         onClick={onClose}
       />
       <div
-        className={`fixed inset-y-0 right-0 z-50 w-full max-w-[560px] border-l border-slate-800/80 bg-slate-950/95 text-white shadow-[0_0_80px_rgba(15,23,42,0.55)] backdrop-blur-xl transition-transform duration-300 ${open ? 'translate-x-0' : 'translate-x-full'} relative`}
+        aria-hidden={!open}
+        className={`fixed inset-y-0 right-0 z-[90] w-full max-w-[560px] transform-gpu border-l border-slate-800/80 bg-slate-950/95 text-white shadow-[0_0_80px_rgba(15,23,42,0.55)] backdrop-blur-xl transition-transform duration-300 ${open ? 'translate-x-0' : 'pointer-events-none translate-x-full'}`}
       >
-        <div className="flex h-full flex-col bg-gradient-to-b from-cyan-500/8 via-slate-950 to-slate-950">
-          <div className="border-b border-slate-800/80 px-5 py-5">
-            <div className="flex items-start justify-between gap-4">
-              <div>
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Personal tutor"
+          className="relative flex h-full flex-col bg-gradient-to-b from-cyan-500/8 via-slate-950 to-slate-950"
+        >
+          <div className="border-b border-slate-800/80 px-4 py-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
                 <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-100">
                   <Bot className="h-3.5 w-3.5" />
                   Lesson Tutor
                 </div>
-                <h2 className="mt-4 text-2xl font-semibold text-white">Nexa</h2>
-                <p className="mt-1 max-w-md text-sm leading-6 text-slate-300">
-                  A focused side chat for this lesson, with the course and lesson context already attached.
+                <div className="mt-3 flex items-center gap-2">
+                  <h2 className="text-xl font-semibold text-white">Nexa</h2>
+                  <span className="text-xs text-slate-500">Personal tutor</span>
+                </div>
+                <p className="mt-1 text-sm leading-6 text-slate-300">
+                  Ask for clearer explanations, examples, or a slower walkthrough without leaving the lesson.
                 </p>
               </div>
               <button
@@ -363,24 +406,14 @@ export default function LessonTutorDrawer({
               </button>
             </div>
 
-            <div className="mt-5 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-[24px] border border-slate-800 bg-white/[0.04] p-4">
-                <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
-                  <BookOpen className="h-3.5 w-3.5 text-cyan-300" />
-                  Current Lesson
-                </div>
-                <div className="mt-3 text-base font-semibold text-white">{lessonTitle || 'Course support'}</div>
-                <div className="mt-1 text-sm text-slate-400">{courseTitle}</div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <div className="inline-flex min-w-0 max-w-full items-center gap-2 rounded-full border border-slate-800 bg-white/[0.04] px-3 py-2 text-sm text-slate-200">
+                <BookOpen className="h-3.5 w-3.5 shrink-0 text-cyan-300" />
+                <span className="truncate">{lessonTitle || courseTitle}</span>
               </div>
-              <div className="rounded-[24px] border border-slate-800 bg-white/[0.04] p-4">
-                <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
-                  <Sparkles className="h-3.5 w-3.5 text-cyan-300" />
-                  Context
-                </div>
-                <div className="mt-3 text-base font-semibold text-white">{progressLabel}</div>
-                <div className="mt-1 text-sm text-slate-400">
-                  {activeThread ? `Active chat: ${activeThread.title}` : 'Ready when you are'}
-                </div>
+              <div className="inline-flex items-center gap-2 rounded-full border border-slate-800 bg-white/[0.04] px-3 py-2 text-sm text-slate-200">
+                <Sparkles className="h-3.5 w-3.5 shrink-0 text-cyan-300" />
+                <span>{progressLabel}</span>
               </div>
             </div>
           </div>
@@ -434,15 +467,23 @@ export default function LessonTutorDrawer({
               </div>
             ) : assignment?.status === 'approved' ? (
               <div className="flex h-full min-h-0 flex-col">
-                <div className="border-b border-slate-800/80 px-5 py-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Chat History</div>
-                      <div className="mt-1 text-sm text-slate-300">
-                        {threads.length} {threads.length === 1 ? 'saved chat' : 'saved chats'}
-                      </div>
+                <div className="border-b border-slate-800/80 px-4 py-3">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Active chat</div>
+                      <div className="mt-1 truncate text-sm font-medium text-white">{activeThread?.title || 'Nexa chat'}</div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {threads.length > 1 ? (
+                        <button
+                          onClick={() => setShowThreadList((current) => !current)}
+                          disabled={loading || sending}
+                          className="inline-flex items-center gap-2 rounded-2xl border border-slate-700 bg-white/[0.03] px-3 py-2 text-xs font-semibold text-slate-200 transition hover:border-cyan-400 hover:text-cyan-100 disabled:opacity-60"
+                        >
+                          <MessageSquare className="h-3.5 w-3.5" />
+                          {showThreadList ? 'Hide chats' : `Chats (${threads.length})`}
+                        </button>
+                      ) : null}
                       <button
                         onClick={handleNewChat}
                         disabled={loading || sending}
@@ -472,37 +513,39 @@ export default function LessonTutorDrawer({
                     </div>
                   </div>
 
-                  <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
-                    {threads.map((thread) => {
-                      const isActive = thread.id === threadId;
+                  {showThreadList ? (
+                    <div className="mt-3 max-h-48 space-y-2 overflow-y-auto pr-1">
+                      {threads.map((thread) => {
+                        const isActive = thread.id === threadId;
 
-                      return (
-                        <button
-                          key={thread.id}
-                          onClick={() => openThread(thread.id)}
-                          disabled={loading || sending}
-                          className={`min-w-[220px] rounded-[24px] border px-4 py-3 text-left transition ${
-                            isActive
-                              ? 'border-cyan-400/30 bg-cyan-500/12 text-cyan-50'
-                              : 'border-slate-800 bg-white/[0.03] text-slate-200 hover:border-slate-600 hover:bg-white/[0.05]'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="truncate text-sm font-semibold">{thread.title || 'Nexa chat'}</div>
-                            <div className={`text-[11px] ${isActive ? 'text-cyan-100' : 'text-slate-500'}`}>
-                              {isActive ? 'Open' : formatThreadTimestamp(thread.updatedAt)}
+                        return (
+                          <button
+                            key={thread.id}
+                            onClick={() => openThread(thread.id)}
+                            disabled={loading || sending}
+                            className={`block w-full rounded-[22px] border px-4 py-3 text-left transition ${
+                              isActive
+                                ? 'border-cyan-400/30 bg-cyan-500/12 text-cyan-50'
+                                : 'border-slate-800 bg-white/[0.03] text-slate-200 hover:border-slate-600 hover:bg-white/[0.05]'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="truncate text-sm font-semibold">{thread.title || 'Nexa chat'}</div>
+                              <div className={`shrink-0 text-[11px] ${isActive ? 'text-cyan-100' : 'text-slate-500'}`}>
+                                {isActive ? 'Open' : formatThreadTimestamp(thread.updatedAt)}
+                              </div>
                             </div>
-                          </div>
-                          <div className={`mt-2 truncate text-xs ${isActive ? 'text-cyan-100/80' : 'text-slate-400'}`}>
-                            {thread.lastMessagePreview || 'No messages yet'}
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
+                            <div className={`mt-2 truncate text-xs ${isActive ? 'text-cyan-100/80' : 'text-slate-400'}`}>
+                              {thread.lastMessagePreview || 'No messages yet'}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : null}
                 </div>
 
-                <div ref={messagesViewportRef} className="flex-1 overflow-y-auto px-5 py-5">
+                <div ref={messagesViewportRef} className="flex-1 overflow-y-auto px-4 py-4">
                   {hasConversation ? (
                     <div className="space-y-4">
                       {messages.map((item) => {
@@ -560,20 +603,20 @@ export default function LessonTutorDrawer({
                       ) : null}
                     </div>
                   ) : (
-                    <div className="rounded-[28px] border border-dashed border-slate-700 bg-white/[0.03] px-5 py-8 text-center">
+                    <div className="rounded-[24px] border border-dashed border-slate-700 bg-white/[0.03] px-5 py-6 text-center">
                       <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl border border-cyan-400/20 bg-cyan-400/10 text-cyan-100">
                         <MessageSquare className="h-5 w-5" />
                       </div>
                       <h3 className="mt-4 text-lg font-semibold text-white">This chat is ready</h3>
                       <p className="mt-2 text-sm leading-6 text-slate-400">
-                        Your conversation here stays tied to this course and lesson, so Nexa can answer with the right context.
+                        Ask about this lesson and Nexa will answer with the current course and lesson context already attached.
                       </p>
                     </div>
                   )}
                 </div>
 
-                <div className="border-t border-slate-800/80 bg-slate-950/90 px-5 py-4">
-                  <div className="rounded-[28px] border border-slate-800 bg-white/[0.04] p-3">
+                <div className="border-t border-slate-800/80 bg-slate-950/90 px-4 py-4">
+                  <div className="rounded-[24px] border border-slate-800 bg-white/[0.04] p-3">
                     <textarea
                       ref={composerRef}
                       value={message}
@@ -679,6 +722,8 @@ export default function LessonTutorDrawer({
         </div>
       </div>
     </>
+    ,
+    document.body
   );
 }
 
