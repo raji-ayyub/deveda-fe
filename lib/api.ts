@@ -42,7 +42,8 @@ import {
   QuizAttemptSubmission,
 } from './types';
 
-const API_BASE_URL = '/api/backend';
+const API_BASE_URL = 'https://deveda-be.onrender.com';
+
 
 class ApiService {
   private token: string | null = null;

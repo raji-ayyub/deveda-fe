@@ -5,6 +5,7 @@ export const dynamic = 'force-dynamic';
 
 const BACKEND_BASE_URL = (process.env.DEVEDA_BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || 'https://deveda-be.onrender.com').replace(/\/+$/, '');
 const HOP_BY_HOP_HEADERS = new Set([
+  'content-encoding',
   'connection',
   'content-length',
   'host',
@@ -28,6 +29,7 @@ async function proxyRequest(
 
   const headers = new Headers(request.headers);
   HOP_BY_HOP_HEADERS.forEach((header) => headers.delete(header));
+  headers.delete('accept-encoding');
 
   let body: BodyInit | undefined;
   if (!['GET', 'HEAD'].includes(request.method)) {
@@ -50,7 +52,9 @@ async function proxyRequest(
       }
     });
 
-    return new NextResponse(backendResponse.body, {
+    const responseBody = backendResponse.status === 204 ? null : await backendResponse.arrayBuffer();
+
+    return new NextResponse(responseBody, {
       status: backendResponse.status,
       statusText: backendResponse.statusText,
       headers: responseHeaders,
