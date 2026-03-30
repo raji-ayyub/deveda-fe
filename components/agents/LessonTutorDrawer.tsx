@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { BookOpen, Bot, Clock3, LoaderCircle, MessageSquare, Plus, RefreshCw, Send, Sparkles, Trash2, X } from 'lucide-react';
 
 import { api } from '@/lib/api';
+import { getErrorMessage } from '@/lib/error';
 import { AgentAssignment, AgentMessage, AgentThread } from '@/lib/types';
 import AgentMessageBody from '@/components/agents/AgentMessageBody';
 
@@ -194,7 +195,7 @@ export default function LessonTutorDrawer({
       const threadRes = await api.getAgentThread(thread.id);
       setMessages(threadRes.data.messages);
     } catch (loadError: any) {
-      setError(loadError.message || 'Unable to load Nexa right now.');
+      setError(getErrorMessage(loadError));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -213,7 +214,7 @@ export default function LessonTutorDrawer({
       setAssignment(response.data);
       await loadState({ silent: true });
     } catch (requestError: any) {
-      setError(requestError.message || 'Unable to request Nexa right now.');
+      setError(getErrorMessage(requestError));
     } finally {
       setLoading(false);
     }
@@ -236,6 +237,7 @@ export default function LessonTutorDrawer({
       const response = await api.sendAgentMessage(threadId, {
         message: outgoingMessage,
         courseSlug,
+        courseTitle,
         lessonSlug,
         lessonTitle,
         currentProgress,
@@ -260,7 +262,7 @@ export default function LessonTutorDrawer({
         await openThread(threadId);
       }
       setMessage(outgoingMessage);
-      setError(sendError.message || 'Unable to send your message.');
+      setError(getErrorMessage(sendError));
     } finally {
       setSending(false);
       setActivityLabel('');
@@ -278,7 +280,7 @@ export default function LessonTutorDrawer({
       const threadRes = await api.getAgentThread(nextThreadId);
       setMessages(threadRes.data.messages);
     } catch (loadError: any) {
-      setError(loadError.message || 'Unable to open this Nexa chat right now.');
+      setError(getErrorMessage(loadError));
     } finally {
       setLoading(false);
     }
@@ -309,7 +311,7 @@ export default function LessonTutorDrawer({
       setMessages([]);
       setMessage('');
     } catch (createError: any) {
-      setError(createError.message || 'Unable to start a new tutor chat.');
+      setError(getErrorMessage(createError));
     } finally {
       setLoading(false);
     }
@@ -350,7 +352,7 @@ export default function LessonTutorDrawer({
       setMessage('');
       setPendingUserMessage('');
     } catch (deleteError: any) {
-      setError(deleteError.message || 'Unable to delete this chat right now.');
+      setError(getErrorMessage(deleteError));
     } finally {
       setDeletingThreadId('');
       setThreadPendingDelete(null);
@@ -394,7 +396,7 @@ export default function LessonTutorDrawer({
                   <span className="text-xs text-slate-500">Personal tutor</span>
                 </div>
                 <p className="mt-1 text-sm leading-6 text-slate-300">
-                  Ask for clearer explanations, examples, or a slower walkthrough without leaving the lesson.
+                  Ask a question, think out loud, or ask for a slower explanation without leaving the lesson.
                 </p>
               </div>
               <button
@@ -609,7 +611,7 @@ export default function LessonTutorDrawer({
                       </div>
                       <h3 className="mt-4 text-lg font-semibold text-white">This chat is ready</h3>
                       <p className="mt-2 text-sm leading-6 text-slate-400">
-                        Ask about this lesson and Nexa will answer with the current course and lesson context already attached.
+                        Ask about this lesson, talk through confusion, or ask for a calmer walkthrough. Nexa uses lesson context when it helps.
                       </p>
                     </div>
                   )}
@@ -629,7 +631,7 @@ export default function LessonTutorDrawer({
                       }}
                       disabled={sending}
                       rows={1}
-                      placeholder={sending ? 'Nexa is working...' : 'Write your question here...'}
+                      placeholder={sending ? 'Nexa is working...' : 'Ask a question or think out loud...'}
                       className="min-h-[56px] max-h-[220px] w-full resize-none overflow-y-auto rounded-[22px] border border-transparent bg-slate-900 px-4 py-3 text-sm leading-6 text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400 disabled:cursor-not-allowed disabled:text-slate-500"
                     />
                     <div className="mt-3 flex items-center justify-between gap-3 px-1">
@@ -727,7 +729,20 @@ export default function LessonTutorDrawer({
   );
 }
 
-function getLessonTutorActivityLabel(_message: string) {
+function getLessonTutorActivityLabel(message: string) {
+  const normalized = message.trim().toLowerCase();
+  if (!normalized) {
+    return 'Getting ready to help...';
+  }
+  if (/(hi|hello|hey|thanks|thank you|how are you)/.test(normalized)) {
+    return 'Jumping in...';
+  }
+  if (/(code|error|bug|debug|not working|stuck)/.test(normalized)) {
+    return 'Looking at the problem and the lesson context...';
+  }
+  if (/(example|show me|walk through|explain)/.test(normalized)) {
+    return 'Putting together a clearer explanation...';
+  }
   return 'Reviewing your message and the lesson context...';
 }
 

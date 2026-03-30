@@ -18,6 +18,7 @@ import {
 
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
+import { getErrorMessage } from '@/lib/error';
 import { AgentArtifact, AgentAssignment, AgentMessage, AgentTemplate, AgentThread } from '@/lib/types';
 import AgentMessageBody from '@/components/agents/AgentMessageBody';
 import { COURSE_CATEGORIES, COURSE_DIFFICULTIES } from '@/lib/course-content';
@@ -122,7 +123,7 @@ export default function AgentHub() {
         setMessages([]);
       }
     } catch (loadError: any) {
-      setError(loadError.message || 'Unable to load agent workspace.');
+      setError(getErrorMessage(loadError));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -163,7 +164,7 @@ export default function AgentHub() {
       const response = await api.getAgentThread(threadId);
       setMessages(response.data.messages);
     } catch (threadError: any) {
-      setError(threadError.message || 'Unable to open this thread.');
+      setError(getErrorMessage(threadError));
     }
   };
 
@@ -185,7 +186,7 @@ export default function AgentHub() {
       setSelectedAssignmentId(response.data.id);
       await loadHub({ preserveSelection: true, silent: true });
     } catch (requestError: any) {
-      setError(requestError.message || 'Unable to request this agent.');
+      setError(getErrorMessage(requestError));
     } finally {
       setRequestingAgent(null);
     }
@@ -216,7 +217,7 @@ export default function AgentHub() {
       const threadId = await ensureThread(assignment);
       await openThread(threadId);
     } catch (threadError: any) {
-      setError(threadError.message || 'Unable to start chat.');
+      setError(getErrorMessage(threadError));
     }
   };
 
@@ -238,7 +239,7 @@ export default function AgentHub() {
       setSelectedThreadId(response.data.id);
       setMessages([]);
     } catch (threadError: any) {
-      setError(threadError.message || 'Unable to start a new chat.');
+      setError(getErrorMessage(threadError));
     } finally {
       setCreatingThread(false);
     }
@@ -265,7 +266,7 @@ export default function AgentHub() {
       if (selectedThreadId) {
         await openThread(selectedThreadId);
       }
-      setError(sendError.message || 'Unable to send your message.');
+      setError(getErrorMessage(sendError));
     } finally {
       setSending(false);
       setActivityLabel('');
@@ -322,7 +323,7 @@ export default function AgentHub() {
         setCourseDraftTitle('');
       }
     } catch (actionError: any) {
-      setError(actionError.message || 'Unable to run this agent action.');
+      setError(getErrorMessage(actionError));
     } finally {
       setSending(false);
       setActivityLabel('');

@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { Bot, FileUp, Loader2, WandSparkles, X } from 'lucide-react';
 import CloudinaryUploadField from '@/components/CloudinaryUploadField';
 import { api } from '@/lib/api';
+import { getErrorMessage } from '@/lib/error';
 import { AgentAssignment, CourseCatalog, CourseCatalogDraftPayload } from '@/lib/types';
 import { COURSE_CATEGORIES, COURSE_DIFFICULTIES } from '@/lib/course-content';
 
@@ -86,7 +87,7 @@ const CourseModal: React.FC<CourseModalProps> = ({ course, onSubmit, onStartImpo
         courseSlug: course?.slug,
       });
     } catch (error: any) {
-      setImportError(error.message || 'Unable to start the document import right now.');
+      setImportError(getErrorMessage(error));
     }
   };
 
@@ -152,7 +153,7 @@ const CourseModal: React.FC<CourseModalProps> = ({ course, onSubmit, onStartImpo
       });
       applyDraftToForm(response.data.payload as unknown as CourseCatalogDraftPayload);
     } catch (error: any) {
-      setAgentError(error.message || 'Unable to draft course details right now.');
+      setAgentError(getErrorMessage(error));
     } finally {
       setDrafting(false);
     }

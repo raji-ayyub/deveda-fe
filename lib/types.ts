@@ -543,6 +543,7 @@ export interface AgentThreadPayload {
 export interface AgentMessagePayload {
   message: string;
   courseSlug?: string;
+  courseTitle?: string;
   lessonSlug?: string;
   lessonTitle?: string;
   currentProgress?: number;

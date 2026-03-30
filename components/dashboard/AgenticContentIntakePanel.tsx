@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { FileUp, Loader2, Sparkles } from 'lucide-react';
 
 import { api } from '@/lib/api';
+import { getErrorMessage } from '@/lib/error';
 import { ContentIngestionResult, CourseCatalog } from '@/lib/types';
 
 type IntakeIntent = 'course' | 'lesson' | 'quiz' | 'question_bank';
@@ -83,7 +84,7 @@ export default function AgenticContentIntakePanel({
       setInstructions('');
       onImported?.(response.data);
     } catch (requestError: any) {
-      setError(requestError.message || 'Unable to import this source right now.');
+      setError(getErrorMessage(requestError));
     } finally {
       setLoading(false);
     }

@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { Bot, Loader2, Save, WandSparkles, X } from 'lucide-react';
 
 import { api } from '@/lib/api';
+import { getErrorMessage } from '@/lib/error';
 import { AgentAssignment, GeneratedQuestionContentPayload, QuizQuestion } from '@/lib/types';
 
 interface Quiz {
@@ -214,7 +215,7 @@ const QuestionModal: React.FC<QuestionModalProps> = ({
       const generated = response.data.payload as unknown as GeneratedQuestionContentPayload;
       setAgentSuggestion(generated);
     } catch (error: any) {
-      setAgentError(error.message || 'Unable to generate a question draft right now.');
+      setAgentError(getErrorMessage(error));
     } finally {
       setDrafting(false);
     }

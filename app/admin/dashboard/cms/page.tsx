@@ -8,6 +8,7 @@ import { BookOpen, Bot, ChevronDown, FileUp, Loader2, Plus, Save, Sparkles, Tras
 import { CourseModal } from '@/components/dashboard/courses';
 import RichContentRenderer from '@/components/lesson/RichContentRenderer';
 import { api } from '@/lib/api';
+import { getErrorMessage } from '@/lib/error';
 import {
   AgentAssignment,
   ContentGenerationSession,
@@ -267,7 +268,7 @@ export default function CMSPage() {
         if (match) setSelectedSlug(match.slug);
       }
     } catch (loadError: any) {
-      setError(loadError.message || 'Unable to load courses.');
+      setError(getErrorMessage(loadError));
     } finally {
       setLoadingCourses(false);
     }
@@ -281,7 +282,7 @@ export default function CMSPage() {
       return response.data;
     } catch (loadError: any) {
       setCurriculum(null);
-      setError(loadError.message || 'Unable to load this curriculum.');
+      setError(getErrorMessage(loadError));
       return null;
     } finally {
       setLoadingCurriculum(false);
@@ -335,7 +336,7 @@ export default function CMSPage() {
         const response = await api.getContentGenerationSession(preferredSessionId);
         await applyGenerationSession(response.data);
       } catch (sessionError: any) {
-        setError(sessionError.message || 'Unable to restore the generation session.');
+        setError(getErrorMessage(sessionError));
       } finally {
         setScanning(false);
       }
@@ -393,7 +394,7 @@ export default function CMSPage() {
       setMessage('Course created. You can now import source material or edit the curriculum directly.');
       await loadCurriculum(response.data.slug);
     } catch (createError: any) {
-      setError(createError.message || 'Unable to create this course right now.');
+      setError(getErrorMessage(createError));
     } finally {
       setCreatingCourse(false);
     }
@@ -460,7 +461,7 @@ export default function CMSPage() {
       await applyGenerationSession(response.data);
       setMessage('Scan complete. Review the plan below, then generate the course shell and modules step by step.');
     } catch (scanError: any) {
-      setError(scanError.message || 'Unable to scan this source right now.');
+      setError(getErrorMessage(scanError));
     } finally {
       setScanning(false);
     }
@@ -485,7 +486,7 @@ export default function CMSPage() {
       await applyGenerationSession(response.data);
       setMessage(response.message);
     } catch (actionError: any) {
-      setError(actionError.message || 'Unable to run this generation step right now.');
+      setError(getErrorMessage(actionError));
     } finally {
       setSessionAction('');
     }
@@ -506,7 +507,7 @@ export default function CMSPage() {
       setMessage('Curriculum saved successfully.');
       setError('');
     } catch (saveError: any) {
-      setError(saveError.message || 'Unable to save curriculum.');
+      setError(getErrorMessage(saveError));
     } finally {
       setSaving(false);
     }
@@ -532,7 +533,7 @@ export default function CMSPage() {
       });
       setCourseSuggestion(response.data.payload as unknown as GeneratedCourseContentPayload);
     } catch (assistantError: any) {
-      setAssistantError(helperKey, assistantError.message || 'Unable to suggest course framing right now.');
+      setAssistantError(helperKey, getErrorMessage(assistantError));
     } finally {
       setAssistantBusyKey('');
     }
@@ -571,7 +572,7 @@ export default function CMSPage() {
         [helperKey]: response.data.payload as unknown as GeneratedModuleContentPayload,
       }));
     } catch (assistantError: any) {
-      setAssistantError(helperKey, assistantError.message || 'Unable to suggest module content right now.');
+      setAssistantError(helperKey, getErrorMessage(assistantError));
     } finally {
       setAssistantBusyKey('');
     }
@@ -610,7 +611,7 @@ export default function CMSPage() {
         [helperKey]: response.data.payload as unknown as GeneratedLessonContentPayload,
       }));
     } catch (assistantError: any) {
-      setAssistantError(helperKey, assistantError.message || 'Unable to suggest lesson content right now.');
+      setAssistantError(helperKey, getErrorMessage(assistantError));
     } finally {
       setAssistantBusyKey('');
     }

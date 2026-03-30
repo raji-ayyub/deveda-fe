@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Bot, CheckCircle2, RefreshCw, ShieldAlert, XCircle } from 'lucide-react';
 
 import { api } from '@/lib/api';
+import { getErrorMessage } from '@/lib/error';
 import { AgentAssignment } from '@/lib/types';
 
 export default function AdminAgentsPage() {
@@ -44,7 +45,7 @@ export default function AdminAgentsPage() {
         return next;
       });
     } catch (loadError: any) {
-      setError(loadError.message || 'Unable to load agent approvals.');
+      setError(getErrorMessage(loadError));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -61,7 +62,7 @@ export default function AdminAgentsPage() {
       });
       await loadAssignments({ silent: true });
     } catch (updateError: any) {
-      setError(updateError.message || 'Unable to update request.');
+      setError(getErrorMessage(updateError));
     } finally {
       setSavingId(null);
     }
