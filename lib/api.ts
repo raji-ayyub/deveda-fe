@@ -25,6 +25,8 @@ import {
   CourseWithDetails,
   LoginCredentials,
   LessonLibraryItem,
+  LessonGameProgress,
+  LessonGameProgressResponse,
   PasswordChangePayload,
   PaginatedApiResponse,
   PrivateAdminRegistration,
@@ -426,6 +428,40 @@ class ApiService {
       }),
     });
     return this.handleResponse<CourseProgressResponse>(response);
+  }
+
+  async getLessonGameProgress(userId: string, courseSlug: string, lessonSlug: string): Promise<ApiResponse<LessonGameProgress>> {
+    const response = await this.apiFetch(
+      `${API_BASE_URL}/users/${userId}/courses/${courseSlug}/lessons/${lessonSlug}/game-progress`,
+      {
+        headers: this.getHeaders(),
+      }
+    );
+    return this.handleResponse<LessonGameProgress>(response);
+  }
+
+  async updateLessonGameProgress(
+    userId: string,
+    courseSlug: string,
+    lessonSlug: string,
+    payload: {
+      gameKey: string;
+      score: number;
+      totalRounds: number;
+      completedRounds: number;
+      accuracy: number;
+      completed: boolean;
+    }
+  ): Promise<ApiResponse<LessonGameProgressResponse>> {
+    const response = await this.apiFetch(
+      `${API_BASE_URL}/users/${userId}/courses/${courseSlug}/lessons/${lessonSlug}/game-progress`,
+      {
+        method: 'PUT',
+        headers: this.getHeaders(),
+        body: JSON.stringify(payload),
+      }
+    );
+    return this.handleResponse<LessonGameProgressResponse>(response);
   }
 
   async getUserAchievements(userId: string, courseSlug?: string): Promise<ApiResponse<UserAchievement[]>> {

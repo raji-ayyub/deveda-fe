@@ -538,7 +538,15 @@ const CourseLearnPage: React.FC = () => {
                       </div>
                     ) : null}
 
-                    <LessonGameArcade lessonSlug={activeLesson.slug} onAskNexa={() => setLessonTutorOpen(true)} />
+                    <LessonGameArcade
+                      userId={user?.id || ''}
+                      courseSlug={slug}
+                      lessonSlug={activeLesson.slug}
+                      lessonTitle={activeLesson.title}
+                      gameKey={activeLesson.gameKey}
+                      onAskNexa={() => setLessonTutorOpen(true)}
+                      onAwards={(awards) => setCelebrationAwards((current) => [...awards, ...current])}
+                    />
 
                     {activeLesson.practicePrompt ? (
                       <div className="rounded-lg border border-blue-800/50 bg-gradient-to-r from-blue-900/30 to-purple-900/30 p-4">

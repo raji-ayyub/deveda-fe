@@ -1,8 +1,7 @@
 export type LessonGameKind = 'semantic' | 'grid' | 'states' | 'array' | 'async';
 
 export interface LessonGameBase {
-  lessonSlug: string;
-  lessonTitle: string;
+  gameKey: string;
   kind: LessonGameKind;
   arcadeLabel: string;
   title: string;
@@ -121,10 +120,17 @@ export type LessonGameDefinition =
   | ArrayLessonGame
   | AsyncLessonGame;
 
+export const LESSON_GAME_OPTIONS = [
+  { key: 'semantic-sleuth', label: 'Semantic Sleuth' },
+  { key: 'grid-studio', label: 'Grid Studio' },
+  { key: 'ui-mood-runway', label: 'UI Mood Runway' },
+  { key: 'data-remix-club', label: 'Data Remix Club' },
+  { key: 'signal-rescue-mission', label: 'Signal Rescue Mission' },
+] as const;
+
 const FRONTEND_FOUNDATIONS_GAMES: LessonGameDefinition[] = [
   {
-    lessonSlug: 'frontend-development-foundations-semantic-structure-audit',
-    lessonTitle: 'Audit and improve semantic page structure',
+    gameKey: 'semantic-sleuth',
     kind: 'semantic',
     arcadeLabel: 'Semantic Sleuth',
     title: 'Page Glow-Up Detective',
@@ -192,8 +198,7 @@ const FRONTEND_FOUNDATIONS_GAMES: LessonGameDefinition[] = [
     ],
   },
   {
-    lessonSlug: 'frontend-development-foundations-css-grid-two-dimensional-layouts',
-    lessonTitle: 'Use CSS Grid for two-dimensional layouts',
+    gameKey: 'grid-studio',
     kind: 'grid',
     arcadeLabel: 'Grid Choreographer',
     title: 'Layout Star Studio',
@@ -339,8 +344,7 @@ const FRONTEND_FOUNDATIONS_GAMES: LessonGameDefinition[] = [
     ],
   },
   {
-    lessonSlug: 'frontend-development-foundations-hover-focus-success-error-states',
-    lessonTitle: 'Style hover, focus, success, and error states',
+    gameKey: 'ui-mood-runway',
     kind: 'states',
     arcadeLabel: 'Feedback Stylist',
     title: 'UI Mood Runway',
@@ -412,8 +416,7 @@ const FRONTEND_FOUNDATIONS_GAMES: LessonGameDefinition[] = [
     ],
   },
   {
-    lessonSlug: 'frontend-development-foundations-array-methods-transform-interface-data',
-    lessonTitle: 'Use array methods to transform interface data',
+    gameKey: 'data-remix-club',
     kind: 'array',
     arcadeLabel: 'Data DJ',
     title: 'Data Remix Club',
@@ -472,8 +475,7 @@ const FRONTEND_FOUNDATIONS_GAMES: LessonGameDefinition[] = [
     ],
   },
   {
-    lessonSlug: 'frontend-development-foundations-fetch-data-with-ui-states',
-    lessonTitle: 'Fetch data and show loading, success, and error states',
+    gameKey: 'signal-rescue-mission',
     kind: 'async',
     arcadeLabel: 'Signal Captain',
     title: 'Signal Rescue Mission',
@@ -518,10 +520,10 @@ const FRONTEND_FOUNDATIONS_GAMES: LessonGameDefinition[] = [
   },
 ];
 
-export function getLessonGameDefinition(lessonSlug?: string | null): LessonGameDefinition | null {
-  if (!lessonSlug) {
+export function getLessonGameDefinition(gameKey?: string | null): LessonGameDefinition | null {
+  if (!gameKey) {
     return null;
   }
 
-  return FRONTEND_FOUNDATIONS_GAMES.find((game) => game.lessonSlug === lessonSlug) || null;
+  return FRONTEND_FOUNDATIONS_GAMES.find((game) => game.gameKey === gameKey) || null;
 }

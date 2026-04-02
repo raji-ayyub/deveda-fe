@@ -9,6 +9,7 @@ import { CourseModal } from '@/components/dashboard/courses';
 import RichContentRenderer from '@/components/lesson/RichContentRenderer';
 import { api } from '@/lib/api';
 import { getErrorMessage } from '@/lib/error';
+import { LESSON_GAME_OPTIONS } from '@/lib/lesson-games';
 import {
   AgentAssignment,
   ContentGenerationSession,
@@ -40,6 +41,7 @@ const makeLesson = (courseSlug: string, moduleIndex: number, lessonIndex: number
   visualAidMarkdown: '## Visual aid\n`Concept` -> `Example` -> `Practice`',
   practicePrompt: 'Add a short practical task.',
   instructorNotes: '',
+  gameKey: '',
   playground: null,
 });
 
@@ -1397,8 +1399,25 @@ export default function CMSPage() {
                                       {option}
                                     </option>
                                   ))}
+                                  </select>
+                              </Field>
+                              <Field label="Lesson game">
+                                <select
+                                  value={lesson.gameKey || ''}
+                                  onChange={(event) => updateLesson(moduleIndex, lessonIndex, (currentLesson) => ({ ...currentLesson, gameKey: event.target.value || null }))}
+                                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                                >
+                                  <option value="">No lesson game</option>
+                                  {LESSON_GAME_OPTIONS.map((option) => (
+                                    <option key={option.key} value={option.key}>
+                                      {option.label}
+                                    </option>
+                                  ))}
                                 </select>
                               </Field>
+                            </div>
+
+                            <div className="grid gap-4 md:grid-cols-2">
                               <Field label="Quiz ID">
                                 <input
                                   value={lesson.quizId || ''}

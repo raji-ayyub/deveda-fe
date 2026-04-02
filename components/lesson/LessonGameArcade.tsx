@@ -3,6 +3,8 @@
 import { ReactNode, useEffect, useMemo, useState } from 'react';
 import { Bot, CheckCircle2, Gamepad2, Heart, RefreshCw, Sparkles, Trophy, WandSparkles, XCircle } from 'lucide-react';
 
+import { api } from '@/lib/api';
+import { getErrorMessage } from '@/lib/error';
 import {
   ArrayLessonGame,
   AsyncLessonGame,
@@ -13,10 +15,16 @@ import {
   SemanticLessonGame,
   StatesLessonGame,
 } from '@/lib/lesson-games';
+import { UserAchievement } from '@/lib/types';
 
 interface LessonGameArcadeProps {
+  userId: string;
+  courseSlug: string;
   lessonSlug?: string | null;
+  lessonTitle?: string | null;
+  gameKey?: string | null;
   onAskNexa?: () => void;
+  onAwards?: (awards: UserAchievement[]) => void;
 }
 
 interface FeedbackState {
@@ -25,13 +33,16 @@ interface FeedbackState {
   description: string;
 }
 
-const storageKey = (lessonSlug: string) => `deveda-lesson-game-best:${lessonSlug}`;
-
-export default function LessonGameArcade({ lessonSlug, onAskNexa }: LessonGameArcadeProps) {
-  const game = useMemo(() => getLessonGameDefinition(lessonSlug), [lessonSlug]);
+export default function LessonGameArcade({ userId, courseSlug, lessonSlug, lessonTitle, gameKey, onAskNexa, onAwards }: LessonGameArcadeProps) {
+  const game = useMemo(() => getLessonGameDefinition(gameKey), [gameKey]);
   const [roundIndex, setRoundIndex] = useState(0);
   const [score, setScore] = useState(0);
   const [bestScore, setBestScore] = useState(0);
+  const [bestAccuracy, setBestAccuracy] = useState(0);
+  const [progressStatus, setProgressStatus] = useState('not_started');
+  const [loadingProgress, setLoadingProgress] = useState(false);
+  const [savingProgress, setSavingProgress] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
   const [selectedChoice, setSelectedChoice] = useState('');
   const [asyncSequence, setAsyncSequence] = useState<string[]>([]);
@@ -42,15 +53,43 @@ export default function LessonGameArcade({ lessonSlug, onAskNexa }: LessonGameAr
     setFeedback(null);
     setSelectedChoice('');
     setAsyncSequence([]);
-  }, [game?.lessonSlug]);
+    setSaveError('');
+  }, [game?.gameKey, lessonSlug]);
 
   useEffect(() => {
-    if (typeof window === 'undefined' || !game) {
+    if (!game || !lessonSlug || !userId) {
       return;
     }
-    const stored = Number(window.localStorage.getItem(storageKey(game.lessonSlug)) || '0');
-    setBestScore(Number.isFinite(stored) ? stored : 0);
-  }, [game]);
+
+    let cancelled = false;
+    const loadProgress = async () => {
+      setLoadingProgress(true);
+      try {
+        const response = await api.getLessonGameProgress(userId, courseSlug, lessonSlug);
+        if (cancelled) {
+          return;
+        }
+        setBestScore(response.data.bestScore || 0);
+        setBestAccuracy(response.data.bestAccuracy || 0);
+        setProgressStatus(response.data.status || 'not_started');
+      } catch (error) {
+        if (!cancelled) {
+          setBestScore(0);
+          setBestAccuracy(0);
+          setProgressStatus('not_started');
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingProgress(false);
+        }
+      }
+    };
+
+    void loadProgress();
+    return () => {
+      cancelled = true;
+    };
+  }, [courseSlug, game, lessonSlug, userId]);
 
   if (!game) {
     return null;
@@ -84,13 +123,34 @@ export default function LessonGameArcade({ lessonSlug, onAskNexa }: LessonGameAr
     setAsyncSequence([]);
   };
 
-  const persistBestScore = (nextScore: number) => {
-    if (typeof window === 'undefined') {
+  const persistProgress = async (nextScore: number, completedRounds: number, completedGame: boolean) => {
+    if (!lessonSlug || !userId) {
       return;
     }
-    const nextBest = Math.max(bestScore, nextScore);
-    setBestScore(nextBest);
-    window.localStorage.setItem(storageKey(game.lessonSlug), String(nextBest));
+
+    setSavingProgress(true);
+    setSaveError('');
+    try {
+      const accuracyValue = rounds.length > 0 ? Math.round((nextScore / rounds.length) * 100) : 0;
+      const response = await api.updateLessonGameProgress(userId, courseSlug, lessonSlug, {
+        gameKey: game.gameKey,
+        score: nextScore,
+        totalRounds: rounds.length,
+        completedRounds,
+        accuracy: accuracyValue,
+        completed: completedGame,
+      });
+      setBestScore(response.data.progress.bestScore || 0);
+      setBestAccuracy(response.data.progress.bestAccuracy || 0);
+      setProgressStatus(response.data.progress.status || 'not_started');
+      if (response.data.awards.length > 0) {
+        onAwards?.(response.data.awards);
+      }
+    } catch (error) {
+      setSaveError(getErrorMessage(error));
+    } finally {
+      setSavingProgress(false);
+    }
   };
 
   const submitRound = () => {
@@ -114,9 +174,7 @@ export default function LessonGameArcade({ lessonSlug, onAskNexa }: LessonGameAr
       description: currentRound.insight,
     });
 
-    if (isFinalRound) {
-      persistBestScore(nextScore);
-    }
+    void persistProgress(nextScore, isFinalRound ? rounds.length : roundIndex + 1, isFinalRound);
   };
 
   const moveNext = () => {
@@ -139,7 +197,7 @@ export default function LessonGameArcade({ lessonSlug, onAskNexa }: LessonGameAr
     if (feedback || game.kind !== 'async') {
       return;
     }
-    if (asyncSequence.length >= currentRound.answer.length) {
+    if (asyncSequence.length >= (asyncRound?.answer.length || 0)) {
       return;
     }
     setAsyncSequence((current) => [...current, step]);
@@ -189,9 +247,12 @@ export default function LessonGameArcade({ lessonSlug, onAskNexa }: LessonGameAr
               <div>
                 <div className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Studio vibe</div>
                 <div className="mt-2 text-2xl font-bold text-white">{feedback?.correct ? previewAccuracy : accuracy}% mastery</div>
+                <div className="mt-2 text-sm text-slate-400">
+                  {loadingProgress ? 'Loading saved progress...' : `Saved best: ${bestAccuracy}% | ${prettyStatus(progressStatus)}`}
+                </div>
               </div>
               <div className={`rounded-full border px-3 py-1 text-xs font-semibold ${game.palette.chip}`}>
-                {game.lessonTitle}
+                {lessonTitle || 'Lesson challenge'}
               </div>
             </div>
 
@@ -268,10 +329,10 @@ export default function LessonGameArcade({ lessonSlug, onAskNexa }: LessonGameAr
           <div className="flex flex-wrap gap-3">
             <button
               onClick={submitRound}
-              disabled={!canSubmit}
+              disabled={!canSubmit || savingProgress}
               className="inline-flex items-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {feedback?.correct ? <CheckCircle2 className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
+              {savingProgress ? <RefreshCw className="h-4 w-4 animate-spin" /> : feedback?.correct ? <CheckCircle2 className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
               Check my move
             </button>
 
@@ -308,6 +369,8 @@ export default function LessonGameArcade({ lessonSlug, onAskNexa }: LessonGameAr
               </div>
             </div>
           ) : null}
+
+          {saveError ? <div className="rounded-2xl border border-amber-400/25 bg-amber-400/10 px-4 py-3 text-sm text-amber-50">{saveError}</div> : null}
         </div>
 
         <div className="space-y-5">
@@ -322,7 +385,7 @@ export default function LessonGameArcade({ lessonSlug, onAskNexa }: LessonGameAr
                 const isCleared = index < roundIndex || (index === roundIndex && Boolean(feedback?.correct));
                 return (
                   <div
-                    key={`${game.lessonSlug}-checkpoint-${index}`}
+                    key={`${game.gameKey}-checkpoint-${index}`}
                     className={`flex items-center justify-between rounded-2xl border px-4 py-3 ${
                       isCurrent
                         ? 'border-cyan-300/30 bg-cyan-400/10'
@@ -332,7 +395,7 @@ export default function LessonGameArcade({ lessonSlug, onAskNexa }: LessonGameAr
                     }`}
                   >
                     <div>
-                      <div className="text-sm font-semibold text-white">Checkpoint {index + 1}</div>
+                <div className="text-sm font-semibold text-white">Checkpoint {index + 1}</div>
                       <div className="text-xs text-slate-400">{isCurrent ? 'Live now' : isCleared ? 'Cleared' : 'Coming up'}</div>
                     </div>
                     {isCleared ? <CheckCircle2 className="h-4 w-4 text-emerald-300" /> : <Sparkles className="h-4 w-4 text-slate-500" />}
@@ -564,7 +627,7 @@ function AsyncRoundView({
             const step = sequence[index];
             return (
               <button
-                key={`${game.lessonSlug}-sequence-slot-${index}`}
+                key={`${game.gameKey}-sequence-slot-${index}`}
                 type="button"
                 disabled={disabled || !step}
                 onClick={() => step && onRemove(index)}
@@ -701,6 +764,12 @@ function getCorrectAnswerLabel(game: LessonGameDefinition, round: LessonGameDefi
   }
 
   return '';
+}
+
+function prettyStatus(status: string) {
+  return status
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (character) => character.toUpperCase());
 }
 
 function arraysEqual(left: string[], right: string[]) {

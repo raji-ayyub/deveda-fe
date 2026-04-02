@@ -76,12 +76,12 @@ const Header: React.FC = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           {/* Logo */}
-          <div className="flex items-center">
-            <Link href="/" className="flex items-center space-x-2">
-              <div className="w-10 h-10 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-xl">D</span>
+          <div className="flex min-w-0 items-center">
+            <Link href="/" className="flex min-w-0 items-center space-x-2">
+              <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 sm:h-10 sm:w-10">
+                <span className="text-lg font-bold text-white sm:text-xl">D</span>
               </div>
-              <span className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+              <span className="truncate bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-xl font-bold text-transparent sm:text-2xl">
                 Deveda
               </span>
             </Link>
@@ -102,7 +102,7 @@ const Header: React.FC = () => {
           </div>
 
           {/* User Profile / Auth */}
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2 sm:space-x-4">
             {user ? (
               <div className="relative">
                 <button
@@ -110,9 +110,9 @@ const Header: React.FC = () => {
                     setIsProfileDropdownOpen((current) => !current);
                     setIsMenuOpen(false);
                   }}
-                  className="flex items-center space-x-2 focus:outline-none"
+                  className="flex items-center space-x-2 rounded-full focus:outline-none focus:ring-2 focus:ring-blue-200"
                 >
-                  <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-r from-blue-500 to-purple-500 sm:h-10 sm:w-10">
                     <span className="text-white font-semibold">
                       {user.firstName.charAt(0)}
                       {user.lastName.charAt(0)}
@@ -163,16 +163,16 @@ const Header: React.FC = () => {
                 )}
               </div>
             ) : (
-              <div className="flex items-center space-x-4">
+              <div className="hidden items-center space-x-3 sm:flex">
                 <Link
                   href="/login"
-                  className="text-gray-700 hover:text-blue-600 font-medium transition-colors duration-200"
+                  className="text-sm font-medium text-gray-700 transition-colors duration-200 hover:text-blue-600"
                 >
                   Login
                 </Link>
                 <Link
                   href="/register"
-                  className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-2 rounded-lg font-medium hover:opacity-90 transition-opacity duration-200"
+                  className="rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 px-4 py-2 text-sm font-medium text-white transition-opacity duration-200 hover:opacity-90"
                 >
                   Sign Up
                 </Link>
@@ -185,7 +185,8 @@ const Header: React.FC = () => {
                 setIsMenuOpen((current) => !current);
                 setIsProfileDropdownOpen(false);
               }}
-              className="md:hidden text-gray-700 hover:text-blue-600"
+              className="rounded-lg p-2 text-gray-700 transition hover:bg-gray-50 hover:text-blue-600 md:hidden"
+              aria-label={isMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
             >
               {isMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
@@ -211,14 +212,14 @@ const Header: React.FC = () => {
                 <>
                   <Link
                     href="/login"
-                    className="text-gray-700 hover:text-blue-600 font-medium px-4 py-2 hover:bg-gray-50 rounded-lg"
+                    className="rounded-lg px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-blue-600"
                     onClick={() => setIsMenuOpen(false)}
                   >
                     Login
                   </Link>
                   <Link
                     href="/register"
-                    className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-4 py-2 rounded-lg font-medium text-center"
+                    className="rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 px-4 py-3 text-center text-sm font-medium text-white"
                     onClick={() => setIsMenuOpen(false)}
                   >
                     Sign Up

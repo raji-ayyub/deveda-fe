@@ -109,6 +109,7 @@ export interface CourseCurriculumLesson {
   visualAidMarkdown?: string | null;
   practicePrompt?: string | null;
   instructorNotes?: string | null;
+  gameKey?: string | null;
   playground?: LessonPlayground | null;
 }
 
@@ -215,6 +216,30 @@ export interface UserAchievement {
     skills: string[];
     shareNote: string;
   } | null;
+}
+
+export interface LessonGameProgress {
+  id: string | null;
+  courseSlug: string;
+  lessonSlug: string;
+  gameKey: string;
+  status: 'not_started' | 'in_progress' | 'completed' | 'mastered' | string;
+  attemptsCount: number;
+  bestScore: number;
+  lastScore: number;
+  totalRounds: number;
+  completedRounds: number;
+  bestAccuracy: number;
+  lastAccuracy: number;
+  firstCompletedAt?: string | null;
+  masteredAt?: string | null;
+  lastPlayedAt?: string | null;
+  updatedAt?: string | null;
+}
+
+export interface LessonGameProgressResponse {
+  progress: LessonGameProgress;
+  awards: UserAchievement[];
 }
 
 export interface LoginCredentials {
