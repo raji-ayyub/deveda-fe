@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, BookOpen, Bot, CheckCircle, ChevronLeft, ChevronRight, Clock, FileText, HelpCircle, Play, Star, Target, Video } from 'lucide-react';
+import { ArrowLeft, BookOpen, Bot, CheckCircle, ChevronLeft, ChevronRight, Clock, FileText, Gamepad2, HelpCircle, Play, Star, Target, Video } from 'lucide-react';
 
 import { AchievementCelebrationModal } from '@/components/achievements/AchievementCelebrationModal';
 import LessonTutorDrawer from '@/components/agents/LessonTutorDrawer';
@@ -60,6 +60,7 @@ const CourseLearnPage: React.FC = () => {
   const [lessonTutorOpen, setLessonTutorOpen] = useState(false);
 
   const lessonViewportRef = useRef<HTMLDivElement | null>(null);
+  const lessonGameRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const loadCourseData = async () => {
@@ -141,6 +142,8 @@ const CourseLearnPage: React.FC = () => {
   const activeLesson = lessonList[currentLessonIndex];
   const activeModule = curriculum?.modules.find((module: any) => module.title === activeLesson?.moduleTitle) || null;
   const remainingMinutes = lessonList.slice(currentLessonIndex).reduce((total, lesson) => total + lesson.durationMinutes, 0);
+  const activeLessonHasGame = Boolean(activeLesson?.gameKey);
+  const gameLessonCount = useMemo(() => lessonList.filter((lesson) => lesson.gameKey).length, [lessonList]);
 
   useEffect(() => {
     if (!activeLesson) {
@@ -191,6 +194,13 @@ const CourseLearnPage: React.FC = () => {
 
     if (typeof window !== 'undefined') {
       window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
+  const scrollToLessonGame = () => {
+    const target = lessonGameRef.current;
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   };
 
@@ -404,6 +414,7 @@ const CourseLearnPage: React.FC = () => {
                 {lessonList.map((lesson, index) => {
                   const isActive = lesson.slug === activeLesson.slug;
                   const isCompleted = completedLessonSet.has(lesson.slug);
+                  const hasGame = Boolean(lesson.gameKey);
                   return (
                     <button
                       key={lesson.slug}
@@ -415,7 +426,17 @@ const CourseLearnPage: React.FC = () => {
                           {isCompleted ? <CheckCircle className="h-3 w-3 text-green-500" /> : <Play className="h-3 w-3" />}
                         </div>
                         <div className="flex-1">
-                          <div className="font-medium">Lesson {index + 1}: {lesson.title}</div>
+                          <div className="flex items-center gap-2">
+                            <div className="font-medium">Lesson {index + 1}: {lesson.title}</div>
+                            {hasGame ? (
+                              <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] ${
+                                isActive ? 'bg-white/20 text-white' : 'bg-cyan-500/15 text-cyan-200'
+                              }`}>
+                                <Gamepad2 className="h-3 w-3" />
+                                Game
+                              </span>
+                            ) : null}
+                          </div>
                           <div className="text-sm opacity-75">{lesson.durationMinutes} min / {isCompleted ? 'Completed' : isActive ? 'In progress' : 'Not started'}</div>
                         </div>
                         {isActive ? <ChevronRight className="h-4 w-4" /> : null}
@@ -436,6 +457,12 @@ const CourseLearnPage: React.FC = () => {
                     <FileText className="mr-2 h-4 w-4" />
                     <span className="capitalize">{activeLesson.contentType}</span>
                   </div>
+                  {activeLessonHasGame ? (
+                    <button onClick={scrollToLessonGame} className="flex w-full items-center rounded p-2 text-cyan-200 transition hover:bg-gray-700">
+                      <Gamepad2 className="mr-2 h-4 w-4" />
+                      <span>Play lesson challenge</span>
+                    </button>
+                  ) : null}
                   <button onClick={() => setLessonTutorOpen(true)} className="flex w-full items-center rounded p-2 text-gray-300 transition hover:bg-gray-700">
                     <Bot className="mr-2 h-4 w-4" />
                     <span>Open Nexa</span>
@@ -462,9 +489,16 @@ const CourseLearnPage: React.FC = () => {
                     <h3 className="text-lg font-semibold text-white">Lesson {currentLessonIndex + 1}: {activeLesson.title}</h3>
                     <p className="text-gray-400">{activeLesson.durationMinutes} minutes</p>
                   </div>
-                  <button onClick={() => goToAdjacentLesson(1)} disabled={currentLessonIndex === totalLessons - 1} className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
-                    Next Lesson
-                  </button>
+                  <div className="flex items-center gap-3">
+                    {activeLessonHasGame ? (
+                      <button onClick={scrollToLessonGame} className="rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-4 py-2 text-cyan-100 transition hover:bg-cyan-500/20">
+                        Play Challenge
+                      </button>
+                    ) : null}
+                    <button onClick={() => goToAdjacentLesson(1)} disabled={currentLessonIndex === totalLessons - 1} className="rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
+                      Next Lesson
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -487,7 +521,7 @@ const CourseLearnPage: React.FC = () => {
 
                     <div className="rounded-lg bg-gray-700 p-4">
                       <h4 className="mb-2 font-semibold text-white">Lesson snapshot</h4>
-                      <div className="grid gap-3 md:grid-cols-3">
+                      <div className={`grid gap-3 ${activeLessonHasGame ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}>
                         <div className="rounded-lg bg-gray-800 p-3">
                           <div className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-400">Module</div>
                           <div className="mt-2 text-sm font-medium text-white">{activeLesson.moduleTitle}</div>
@@ -500,6 +534,15 @@ const CourseLearnPage: React.FC = () => {
                           <div className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-400">Estimated time</div>
                           <div className="mt-2 text-sm font-medium text-white">{activeLesson.durationMinutes} minutes</div>
                         </div>
+                        {activeLessonHasGame ? (
+                          <button onClick={scrollToLessonGame} className="rounded-lg bg-cyan-500/10 p-3 text-left transition hover:bg-cyan-500/20">
+                            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-cyan-200">Challenge</div>
+                            <div className="mt-2 flex items-center gap-2 text-sm font-medium text-white">
+                              <Gamepad2 className="h-4 w-4 text-cyan-300" />
+                              Play now
+                            </div>
+                          </button>
+                        ) : null}
                       </div>
                     </div>
 
@@ -538,15 +581,19 @@ const CourseLearnPage: React.FC = () => {
                       </div>
                     ) : null}
 
-                    <LessonGameArcade
-                      userId={user?.id || ''}
-                      courseSlug={slug}
-                      lessonSlug={activeLesson.slug}
-                      lessonTitle={activeLesson.title}
-                      gameKey={activeLesson.gameKey}
-                      onAskNexa={() => setLessonTutorOpen(true)}
-                      onAwards={(awards) => setCelebrationAwards((current) => [...awards, ...current])}
-                    />
+                    {activeLessonHasGame ? (
+                      <div ref={lessonGameRef}>
+                        <LessonGameArcade
+                          userId={user?.id || ''}
+                          courseSlug={slug}
+                          lessonSlug={activeLesson.slug}
+                          lessonTitle={activeLesson.title}
+                          gameKey={activeLesson.gameKey}
+                          onAskNexa={() => setLessonTutorOpen(true)}
+                          onAwards={(awards) => setCelebrationAwards((current) => [...awards, ...current])}
+                        />
+                      </div>
+                    ) : null}
 
                     {activeLesson.practicePrompt ? (
                       <div className="rounded-lg border border-blue-800/50 bg-gradient-to-r from-blue-900/30 to-purple-900/30 p-4">
@@ -662,6 +709,24 @@ const CourseLearnPage: React.FC = () => {
                             ))}
                           </div>
                         </div>
+                      ) : null}
+                      <div className="rounded-lg bg-gray-700 p-3">
+                        <div className="font-medium text-white">Interactive challenges</div>
+                        <div className="mt-2 text-sm text-gray-300">
+                          {gameLessonCount > 0
+                            ? `${gameLessonCount} lesson${gameLessonCount === 1 ? '' : 's'} in this course currently include a playable challenge.`
+                            : 'No lesson challenges are published for this course yet.'}
+                        </div>
+                      </div>
+                      {activeLessonHasGame ? (
+                        <button onClick={scrollToLessonGame} className="group flex w-full items-center rounded-lg bg-cyan-500/10 p-3 text-left transition-colors hover:bg-cyan-500/20">
+                          <Gamepad2 className="mr-3 h-5 w-5 text-cyan-300" />
+                          <div className="flex-1">
+                            <div className="font-medium text-white">This lesson has a challenge</div>
+                            <div className="text-sm text-cyan-100/80">Jump straight into the arcade experience for this topic.</div>
+                          </div>
+                          <ChevronRight className="h-4 w-4 text-cyan-200 group-hover:text-white" />
+                        </button>
                       ) : null}
                       <button onClick={() => setLessonTutorOpen(true)} className="group flex w-full items-center rounded-lg bg-gray-700 p-3 text-left transition-colors hover:bg-gray-600">
                         <HelpCircle className="mr-3 h-5 w-5 text-yellow-400" />
