@@ -7,6 +7,7 @@ import { ArrowLeft, BookOpen, Bot, CheckCircle, ChevronLeft, ChevronRight, Clock
 import { AchievementCelebrationModal } from '@/components/achievements/AchievementCelebrationModal';
 import LessonTutorDrawer from '@/components/agents/LessonTutorDrawer';
 import LessonCodePlayground from '@/components/lesson/LessonCodePlayground';
+import LessonGameArcade from '@/components/lesson/LessonGameArcade';
 import RichContentRenderer from '@/components/lesson/RichContentRenderer';
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
@@ -536,6 +537,8 @@ const CourseLearnPage: React.FC = () => {
                         </div>
                       </div>
                     ) : null}
+
+                    <LessonGameArcade lessonSlug={activeLesson.slug} onAskNexa={() => setLessonTutorOpen(true)} />
 
                     {activeLesson.practicePrompt ? (
                       <div className="rounded-lg border border-blue-800/50 bg-gradient-to-r from-blue-900/30 to-purple-900/30 p-4">
