@@ -3,11 +3,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowRight, BookOpen, CheckCircle2, Clock3, Loader2, Search } from 'lucide-react';
+import { ArrowRight, BookOpen, CheckCircle2, Clock3, Gamepad2, Loader2, Search } from 'lucide-react';
 
 import PaginationControls from '@/components/ui/PaginationControls';
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
+import { LESSON_GAME_OPTIONS } from '@/lib/lesson-games';
 import { CourseCatalog, PaginationMeta, UserCourse } from '@/lib/types';
 import { getRoleLoginRedirect } from '@/lib/roleRoutes';
 import { useDebouncedValue } from '@/lib/useDebouncedValue';
@@ -201,6 +202,28 @@ export default function CoursesPage() {
               </Link>
             </div>
           )}
+        </section>
+
+        <section className="rounded-[28px] border border-cyan-200 bg-[linear-gradient(135deg,#ecfeff_0%,#eff6ff_48%,#fdf2f8_100%)] p-6 shadow-lg shadow-cyan-100">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+            <div className="max-w-3xl">
+              <div className="inline-flex items-center gap-2 rounded-full bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-700">
+                <Gamepad2 className="h-3.5 w-3.5" />
+                Challenge arcade
+              </div>
+              <h2 className="mt-4 text-2xl font-black tracking-tight text-slate-950">Prefer the game path?</h2>
+              <p className="mt-2 text-sm text-slate-700">
+                Lesson games now have their own visible hub. Explore {LESSON_GAME_OPTIONS.length} current frontend challenges and jump straight into the exact course lesson that contains each game.
+              </p>
+            </div>
+            <Link
+              href="/games"
+              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
+            >
+              Open games hub
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
         </section>
 
         {error ? <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div> : null}

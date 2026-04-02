@@ -8,7 +8,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import { Menu, X, User, LogOut, Home, BookOpen, Trophy, FileCode2, Info, Settings, Bot } from 'lucide-react';
+import { Menu, X, User, LogOut, Home, BookOpen, Trophy, FileCode2, Info, Settings, Bot, Gamepad2 } from 'lucide-react';
 import { getRoleProfilePath } from '@/lib/roleRoutes';
 
 const Header: React.FC = () => {
@@ -23,6 +23,7 @@ const Header: React.FC = () => {
   const navigation = [
     { name: 'Home', href: '/', icon: <Home className="w-5 h-5" /> },
     { name: 'Courses', href: '/courses', icon: <BookOpen className="w-5 h-5" /> },
+    { name: 'Games', href: '/games', icon: <Gamepad2 className="w-5 h-5" /> },
     { name: 'Quizzes', href: '/quiz', icon: <Trophy className="w-5 h-5" /> },
     { name: 'Lessons', href: '/lessons', icon: <FileCode2 className="w-5 h-5" /> },
     { name: 'About', href: '/about', icon: <Info className="w-5 h-5" /> },
@@ -135,6 +136,14 @@ const Header: React.FC = () => {
                     >
                       <User className="w-4 h-4" />
                       <span>Profile</span>
+                    </Link>
+                    <Link
+                      href="/games"
+                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
+                      onClick={() => setIsProfileDropdownOpen(false)}
+                    >
+                      <Gamepad2 className="w-4 h-4" />
+                      <span>Games</span>
                     </Link>
                     <Link
                       href={agentHref}

@@ -13,6 +13,7 @@ import {
   ChevronRight,
   Clock,
   FileText,
+  Gamepad2,
   Globe,
   Loader2,
   MessageSquareText,
@@ -163,6 +164,19 @@ export default function SingleCoursePage() {
   );
   const effectiveLessons = totalLessons || course?.totalLessons || 0;
   const effectiveQuizzes = totalQuizzes || course?.totalQuizzes || 0;
+  const gameLessonCount = useMemo(
+    () => modules.reduce((total, module) => total + module.lessons.filter((lesson) => lesson.gameKey).length, 0),
+    [modules]
+  );
+  const firstGameLesson = useMemo(
+    () =>
+      modules.flatMap((module) =>
+        module.lessons
+          .filter((lesson) => lesson.gameKey)
+          .map((lesson) => ({ lesson, moduleTitle: module.title }))
+      )[0] || null,
+    [modules]
+  );
   const isEnrolled = Boolean(userCourse);
   const progress = userCourse?.progress || 0;
   const completedEnrollments = recentEnrollments.filter((item) => item.completed).length;
@@ -347,6 +361,7 @@ export default function SingleCoursePage() {
               <StatRow icon={BookOpen} label="Lessons" value={String(effectiveLessons)} />
               <StatRow icon={BarChart3} label="Quizzes" value={String(effectiveQuizzes)} />
               <StatRow icon={Award} label="Milestones" value={String(milestones.length)} />
+              <StatRow icon={Gamepad2} label="Games" value={String(gameLessonCount)} />
             </div>
 
             <div className="mt-6 flex flex-col gap-3">
@@ -391,6 +406,21 @@ export default function SingleCoursePage() {
                 <Share2 className="mr-2 h-4 w-4" />
                 Share course
               </button>
+              {gameLessonCount > 0 ? (
+                <button
+                  onClick={() =>
+                    router.push(
+                      isLearner && isEnrolled && firstGameLesson
+                        ? `/courses/${slug}/learn?lesson=${firstGameLesson.lesson.slug}&focus=game`
+                        : '/games'
+                    )
+                  }
+                  className="inline-flex items-center justify-center rounded-2xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm font-semibold text-cyan-800 transition hover:border-cyan-300 hover:bg-cyan-100"
+                >
+                  <Gamepad2 className="mr-2 h-4 w-4" />
+                  {isLearner && isEnrolled ? 'Play course challenge' : 'View games hub'}
+                </button>
+              ) : null}
             </div>
 
             {shareFeedback ? <p className="mt-3 text-xs text-emerald-700">{shareFeedback}</p> : null}
@@ -475,6 +505,32 @@ export default function SingleCoursePage() {
                   </div>
                 </section>
 
+                {gameLessonCount > 0 ? (
+                  <section className="rounded-3xl bg-white p-6 shadow-lg shadow-slate-200">
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                      <div>
+                        <h2 className="text-2xl font-bold text-slate-950">Game challenges</h2>
+                        <p className="mt-2 text-sm text-slate-600">
+                          This course includes {gameLessonCount} lesson-linked game challenge{gameLessonCount === 1 ? '' : 's'} with a direct path into the matching lesson arcade.
+                        </p>
+                      </div>
+                      <button
+                        onClick={() =>
+                          router.push(
+                            isLearner && isEnrolled && firstGameLesson
+                              ? `/courses/${slug}/learn?lesson=${firstGameLesson.lesson.slug}&focus=game`
+                              : '/games'
+                          )
+                        }
+                        className="inline-flex items-center gap-2 rounded-2xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
+                      >
+                        <Gamepad2 className="h-4 w-4" />
+                        {isLearner && isEnrolled ? 'Jump into the first challenge' : 'Open the games hub'}
+                      </button>
+                    </div>
+                  </section>
+                ) : null}
+
                 <section className="rounded-3xl bg-white p-6 shadow-lg shadow-slate-200">
                   <h2 className="text-2xl font-bold text-slate-950">Milestone projects</h2>
                   <div className="mt-5 space-y-4">
@@ -538,6 +594,12 @@ export default function SingleCoursePage() {
                                     <h4 className="font-semibold text-slate-950">{lesson.title}</h4>
                                     <p className="mt-1 text-sm text-slate-600">{lesson.summary}</p>
                                     <div className="mt-2 flex flex-wrap gap-3 text-xs text-slate-500">
+                                      {lesson.gameKey ? (
+                                        <span className="inline-flex items-center gap-1 rounded-full bg-cyan-50 px-2.5 py-1 font-semibold text-cyan-700">
+                                          <Gamepad2 className="h-3.5 w-3.5" />
+                                          Game challenge
+                                        </span>
+                                      ) : null}
                                       <span>{lesson.durationMinutes} min</span>
                                       <span className="capitalize">{lesson.contentType}</span>
                                       {!published ? <span className="font-semibold text-amber-700">Planned</span> : null}
@@ -547,10 +609,10 @@ export default function SingleCoursePage() {
                                 </div>
                                 {isLearner && isEnrolled && published ? (
                                   <button
-                                    onClick={() => router.push(`/courses/${slug}/learn?lesson=${lesson.slug}`)}
+                                    onClick={() => router.push(`/courses/${slug}/learn?lesson=${lesson.slug}${lesson.gameKey ? '&focus=game' : ''}`)}
                                     className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-blue-300 hover:text-blue-700"
                                   >
-                                    Open
+                                    {lesson.gameKey ? 'Play' : 'Open'}
                                   </button>
                                 ) : null}
                               </div>

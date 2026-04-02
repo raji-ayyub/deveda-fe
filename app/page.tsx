@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowRight, BookOpen, CheckCircle2, Clock3, Code2, Database, GraduationCap, LayoutGrid, Server, Sparkles, Trophy, Users, Zap } from 'lucide-react';
+import { ArrowRight, BookOpen, CheckCircle2, Clock3, Code2, Database, Gamepad2, GraduationCap, LayoutGrid, Server, Sparkles, Trophy, Users, Zap } from 'lucide-react';
 
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
@@ -193,6 +193,7 @@ export default function HomePage() {
             <div className="mt-6 flex flex-wrap gap-3 text-sm">
               <span className="rounded-full border border-white/15 bg-white/10 px-3 py-2 backdrop-blur-sm">Published courses</span>
               <span className="rounded-full border border-white/15 bg-white/10 px-3 py-2 backdrop-blur-sm">Hands-on lessons</span>
+              <span className="rounded-full border border-white/15 bg-white/10 px-3 py-2 backdrop-blur-sm">Lesson challenge games</span>
               <span className="rounded-full border border-white/15 bg-white/10 px-3 py-2 backdrop-blur-sm">Quiz checkpoints</span>
               <span className="rounded-full border border-white/15 bg-white/10 px-3 py-2 backdrop-blur-sm">Role-based workspaces</span>
             </div>
@@ -203,6 +204,10 @@ export default function HomePage() {
               </button>
               <button onClick={() => router.push(user ? getRoleProfilePath(user.role) : '/courses')} className="inline-flex items-center gap-2 rounded-2xl border border-white/20 bg-white/10 px-5 py-3 text-sm font-semibold text-white backdrop-blur-sm transition hover:bg-white/15">
                 {user ? 'View account' : 'Browse catalog'}
+              </button>
+              <button onClick={() => router.push('/games')} className="inline-flex items-center gap-2 rounded-2xl border border-cyan-300/30 bg-cyan-300/10 px-5 py-3 text-sm font-semibold text-cyan-50 backdrop-blur-sm transition hover:bg-cyan-300/15">
+                <Gamepad2 className="h-4 w-4" />
+                Explore games
               </button>
             </div>
           </div>
@@ -229,6 +234,7 @@ export default function HomePage() {
               <div className="mt-6 rounded-[24px] border border-white/10 bg-slate-950/25 p-5 text-sm text-slate-200">
                 <div className="flex items-start gap-3"><CheckCircle2 className="mt-0.5 h-4 w-4 text-cyan-300" /><span>Browse published courses immediately.</span></div>
                 <div className="mt-3 flex items-start gap-3"><CheckCircle2 className="mt-0.5 h-4 w-4 text-cyan-300" /><span>Track real lesson and quiz progress.</span></div>
+                <div className="mt-3 flex items-start gap-3"><CheckCircle2 className="mt-0.5 h-4 w-4 text-cyan-300" /><span>Jump into lesson-linked games from a visible arcade hub.</span></div>
                 <div className="mt-3 flex items-start gap-3"><CheckCircle2 className="mt-0.5 h-4 w-4 text-cyan-300" /><span>Use a workspace that matches your role.</span></div>
               </div>
             </div>

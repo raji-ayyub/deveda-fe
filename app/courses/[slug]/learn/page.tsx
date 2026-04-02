@@ -49,6 +49,7 @@ const CourseLearnPage: React.FC = () => {
 
   const slug = params.slug as string;
   const requestedLessonSlug = searchParams.get('lesson') || '';
+  const requestedFocus = searchParams.get('focus') || '';
 
   const [loading, setLoading] = useState(true);
   const [course, setCourse] = useState<any>(null);
@@ -58,6 +59,7 @@ const CourseLearnPage: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [celebrationAwards, setCelebrationAwards] = useState<UserAchievement[]>([]);
   const [lessonTutorOpen, setLessonTutorOpen] = useState(false);
+  const [shouldFocusGame, setShouldFocusGame] = useState(false);
 
   const lessonViewportRef = useRef<HTMLDivElement | null>(null);
   const lessonGameRef = useRef<HTMLDivElement | null>(null);
@@ -146,6 +148,12 @@ const CourseLearnPage: React.FC = () => {
   const gameLessonCount = useMemo(() => lessonList.filter((lesson) => lesson.gameKey).length, [lessonList]);
 
   useEffect(() => {
+    if (requestedFocus === 'game') {
+      setShouldFocusGame(true);
+    }
+  }, [requestedFocus]);
+
+  useEffect(() => {
     if (!activeLesson) {
       return;
     }
@@ -154,6 +162,20 @@ const CourseLearnPage: React.FC = () => {
       router.replace(nextUrl, { scroll: false });
     }
   }, [activeLesson, router, slug]);
+
+  useEffect(() => {
+    if (!shouldFocusGame || !activeLessonHasGame) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      scrollToLessonGame();
+      setShouldFocusGame(false);
+      router.replace(`/courses/${slug}/learn?lesson=${activeLesson?.slug}`, { scroll: false });
+    }, 180);
+
+    return () => window.clearTimeout(timer);
+  }, [activeLesson?.slug, activeLessonHasGame, router, shouldFocusGame, slug]);
 
   const syncCourseProgress = async (nextCompletedLessonSlugs: string[], nextCurrentLessonSlug: string | null) => {
     if (!user || !userCourse) {
