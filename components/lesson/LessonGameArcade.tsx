@@ -23,7 +23,7 @@ interface LessonGameArcadeProps {
   lessonSlug?: string | null;
   lessonTitle?: string | null;
   gameKey?: string | null;
-  onAskNexa?: () => void;
+  onAskZara?: () => void;
   onAwards?: (awards: UserAchievement[]) => void;
 }
 
@@ -33,7 +33,7 @@ interface FeedbackState {
   description: string;
 }
 
-export default function LessonGameArcade({ userId, courseSlug, lessonSlug, lessonTitle, gameKey, onAskNexa, onAwards }: LessonGameArcadeProps) {
+export default function LessonGameArcade({ userId, courseSlug, lessonSlug, lessonTitle, gameKey, onAskZara, onAwards }: LessonGameArcadeProps) {
   const game = useMemo(() => getLessonGameDefinition(gameKey), [gameKey]);
   const [roundIndex, setRoundIndex] = useState(0);
   const [score, setScore] = useState(0);
@@ -410,17 +410,17 @@ export default function LessonGameArcade({ userId, courseSlug, lessonSlug, lesso
               <Bot className="h-4 w-4" />
               <div className="text-xs font-semibold uppercase tracking-[0.22em]">Need backup?</div>
             </div>
-            <div className="mt-3 text-lg font-bold text-white">Talk it through with Nexa</div>
+            <div className="mt-3 text-lg font-bold text-white">Talk it through with Zara</div>
             <p className="mt-2 text-sm leading-6 text-slate-300">
-              If a round feels tricky, open Nexa and ask for a calmer explanation, a fresh example, or why the correct choice fits the lesson.
+              If a round feels tricky, open Zara and ask for a calmer explanation, a fresh example, or why the correct choice fits the lesson.
             </p>
-            {onAskNexa ? (
+            {onAskZara ? (
               <button
-                onClick={onAskNexa}
+                onClick={onAskZara}
                 className="mt-4 inline-flex items-center gap-2 rounded-2xl border border-cyan-400/30 bg-cyan-400/10 px-4 py-3 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-400/20"
               >
                 <Bot className="h-4 w-4" />
-                Open Nexa
+                Open Zara
               </button>
             ) : null}
           </div>

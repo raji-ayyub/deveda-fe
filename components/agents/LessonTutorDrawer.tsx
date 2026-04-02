@@ -179,7 +179,7 @@ export default function LessonTutorDrawer({
         (
           await api.createAgentThread({
             assignmentId: approved.id,
-            title: `${courseTitle} - Nexa`,
+            title: `${courseTitle} - Zara`,
             courseSlug,
             lessonSlug,
           })
@@ -302,7 +302,7 @@ export default function LessonTutorDrawer({
       setShowThreadList(false);
       const response = await api.createAgentThread({
         assignmentId: assignment.id,
-        title: `${courseTitle} - Nexa ${threads.length + 1}`,
+        title: `${courseTitle} - Zara ${threads.length + 1}`,
         courseSlug,
         lessonSlug,
       });
@@ -339,7 +339,7 @@ export default function LessonTutorDrawer({
       } else {
         const response = await api.createAgentThread({
           assignmentId: assignment.id,
-          title: `${courseTitle} - Nexa`,
+          title: `${courseTitle} - Zara`,
           courseSlug,
           lessonSlug,
         });
@@ -392,7 +392,7 @@ export default function LessonTutorDrawer({
                   Lesson Tutor
                 </div>
                 <div className="mt-3 flex items-center gap-2">
-                  <h2 className="text-xl font-semibold text-white">Nexa</h2>
+                  <h2 className="text-xl font-semibold text-white">Zara</h2>
                   <span className="text-xs text-slate-500">Personal tutor</span>
                 </div>
                 <p className="mt-1 text-sm leading-6 text-slate-300">
@@ -437,7 +437,7 @@ export default function LessonTutorDrawer({
                   This removes the chat and its messages from your saved history. Use this when you want to free space for newer chats.
                 </p>
                 <div className="mt-5 rounded-[22px] border border-slate-800 bg-white/[0.03] px-4 py-3 text-sm text-slate-300">
-                  {threadPendingDelete.title || 'Nexa chat'}
+                  {threadPendingDelete.title || 'Zara chat'}
                 </div>
                 <div className="mt-5 flex flex-wrap gap-3">
                   <button
@@ -464,7 +464,7 @@ export default function LessonTutorDrawer({
               <div className="flex h-full items-center justify-center px-6">
                 <div className="rounded-[28px] border border-slate-800 bg-white/[0.03] px-6 py-8 text-center">
                   <LoaderCircle className="mx-auto h-8 w-8 animate-spin text-cyan-200" />
-                  <p className="mt-4 text-sm text-slate-300">Loading Nexa...</p>
+                  <p className="mt-4 text-sm text-slate-300">Loading Zara...</p>
                 </div>
               </div>
             ) : assignment?.status === 'approved' ? (
@@ -473,7 +473,7 @@ export default function LessonTutorDrawer({
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="min-w-0 flex-1">
                       <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Active chat</div>
-                      <div className="mt-1 truncate text-sm font-medium text-white">{activeThread?.title || 'Nexa chat'}</div>
+                      <div className="mt-1 truncate text-sm font-medium text-white">{activeThread?.title || 'Zara chat'}</div>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                       {threads.length > 1 ? (
@@ -532,7 +532,7 @@ export default function LessonTutorDrawer({
                             }`}
                           >
                             <div className="flex items-center justify-between gap-3">
-                              <div className="truncate text-sm font-semibold">{thread.title || 'Nexa chat'}</div>
+                              <div className="truncate text-sm font-semibold">{thread.title || 'Zara chat'}</div>
                               <div className={`shrink-0 text-[11px] ${isActive ? 'text-cyan-100' : 'text-slate-500'}`}>
                                 {isActive ? 'Open' : formatThreadTimestamp(thread.updatedAt)}
                               </div>
@@ -568,7 +568,7 @@ export default function LessonTutorDrawer({
                               }`}
                             >
                               <div className={`mb-2 flex items-center justify-between gap-4 text-[11px] font-semibold uppercase tracking-[0.16em] ${isUser ? 'text-blue-100/85' : 'text-slate-400'}`}>
-                                <span>{isUser ? 'You' : 'Nexa'}</span>
+                                <span>{isUser ? 'You' : 'Zara'}</span>
                                 <span>{formatMessageTime(item.createdAt)}</span>
                               </div>
                               <AgentMessageBody content={item.content} className="text-[15px]" />
@@ -597,7 +597,7 @@ export default function LessonTutorDrawer({
                           <div className="max-w-[88%] rounded-[26px] border border-slate-800 bg-white/[0.05] px-4 py-3 text-slate-100 shadow-sm">
                             <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
                               <LoaderCircle className="h-3.5 w-3.5 animate-spin text-cyan-200" />
-                              Nexa is thinking
+                              Zara is thinking
                             </div>
                             <p className="text-sm leading-6 text-slate-300">{activityLabel || 'Reviewing your message and the lesson context...'}</p>
                           </div>
@@ -611,7 +611,7 @@ export default function LessonTutorDrawer({
                       </div>
                       <h3 className="mt-4 text-lg font-semibold text-white">This chat is ready</h3>
                       <p className="mt-2 text-sm leading-6 text-slate-400">
-                        Ask about this lesson, talk through confusion, or ask for a calmer walkthrough. Nexa uses lesson context when it helps.
+                        Ask about this lesson, talk through confusion, or ask for a calmer walkthrough. Zara uses lesson context when it helps.
                       </p>
                     </div>
                   )}
@@ -631,7 +631,7 @@ export default function LessonTutorDrawer({
                       }}
                       disabled={sending}
                       rows={1}
-                      placeholder={sending ? 'Nexa is working...' : 'Ask a question or think out loud...'}
+                      placeholder={sending ? 'Zara is working...' : 'Ask a question or think out loud...'}
                       className="min-h-[56px] max-h-[220px] w-full resize-none overflow-y-auto rounded-[22px] border border-transparent bg-slate-900 px-4 py-3 text-sm leading-6 text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-400 disabled:cursor-not-allowed disabled:text-slate-500"
                     />
                     <div className="mt-3 flex items-center justify-between gap-3 px-1">
@@ -656,7 +656,7 @@ export default function LessonTutorDrawer({
                       <Clock3 className="h-5 w-5" />
                     </div>
                     <div>
-                      <h3 className="text-lg font-semibold">Nexa is waiting for approval</h3>
+                      <h3 className="text-lg font-semibold">Zara is waiting for approval</h3>
                       <p className="mt-1 text-sm text-amber-100/80">Your request is still pending. Refresh when you want to check again.</p>
                     </div>
                   </div>
@@ -706,7 +706,7 @@ export default function LessonTutorDrawer({
                   <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl border border-cyan-400/20 bg-cyan-400/10 text-cyan-100">
                     <Bot className="h-5 w-5" />
                   </div>
-                  <h3 className="mt-4 text-lg font-semibold text-white">Enable Nexa</h3>
+                  <h3 className="mt-4 text-lg font-semibold text-white">Enable Zara</h3>
                   <p className="mt-2 text-sm leading-6 text-slate-400">
                     Request access once, and this lesson chat will be ready whenever you want extra help during the course.
                   </p>
@@ -715,7 +715,7 @@ export default function LessonTutorDrawer({
                     disabled={loading}
                     className="mt-5 rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-100 disabled:opacity-60"
                   >
-                    Request Nexa
+                    Request Zara
                   </button>
                 </div>
               </div>

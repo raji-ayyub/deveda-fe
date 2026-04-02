@@ -725,7 +725,7 @@ export default function SingleCoursePage() {
                 <FeatureRow icon={BookOpen} text={`${effectiveLessons} structured lessons`} />
                 <FeatureRow icon={BarChart3} text={`${effectiveQuizzes} quiz checkpoints`} />
                 <FeatureRow icon={Target} text={`${milestones.length} milestone projects`} />
-                <FeatureRow icon={MessageSquareText} text="Nexa support available through approved agent access" />
+                <FeatureRow icon={MessageSquareText} text="Zara support available through approved agent access" />
               </div>
             </aside>
 

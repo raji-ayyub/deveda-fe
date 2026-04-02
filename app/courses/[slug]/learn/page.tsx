@@ -414,7 +414,7 @@ const CourseLearnPage: React.FC = () => {
                 {sidebarOpen ? 'Hide outline' : 'Show outline'}
               </button>
               <button onClick={() => setLessonTutorOpen((current) => !current)} className="rounded-xl border border-cyan-500/40 bg-cyan-500/10 px-3 py-2 text-sm font-semibold text-cyan-200 transition hover:bg-cyan-500/20">
-                {lessonTutorOpen ? 'Hide Nexa' : 'Open Nexa'}
+                {lessonTutorOpen ? 'Hide Zara' : 'Open Zara'}
               </button>
             </div>
           </div>
@@ -487,7 +487,7 @@ const CourseLearnPage: React.FC = () => {
                   ) : null}
                   <button onClick={() => setLessonTutorOpen(true)} className="flex w-full items-center rounded p-2 text-gray-300 transition hover:bg-gray-700">
                     <Bot className="mr-2 h-4 w-4" />
-                    <span>Open Nexa</span>
+                    <span>Open Zara</span>
                   </button>
                 </div>
               </div>
@@ -611,7 +611,7 @@ const CourseLearnPage: React.FC = () => {
                           lessonSlug={activeLesson.slug}
                           lessonTitle={activeLesson.title}
                           gameKey={activeLesson.gameKey}
-                          onAskNexa={() => setLessonTutorOpen(true)}
+                          onAskZara={() => setLessonTutorOpen(true)}
                           onAwards={(awards) => setCelebrationAwards((current) => [...awards, ...current])}
                         />
                       </div>
@@ -625,7 +625,7 @@ const CourseLearnPage: React.FC = () => {
                         </div>
                         <p className="mb-3 text-gray-300">{activeLesson.practicePrompt}</p>
                         <button onClick={() => setLessonTutorOpen(true)} className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700">
-                          Ask Nexa
+                          Ask Zara
                         </button>
                       </div>
                     ) : null}
@@ -754,7 +754,7 @@ const CourseLearnPage: React.FC = () => {
                         <HelpCircle className="mr-3 h-5 w-5 text-yellow-400" />
                         <div className="flex-1">
                           <div className="font-medium text-white">Need another explanation?</div>
-                          <div className="text-sm text-gray-400">Open Nexa for examples, clearer wording, and gentle walkthroughs.</div>
+                          <div className="text-sm text-gray-400">Open Zara for examples, clearer wording, and gentle walkthroughs.</div>
                         </div>
                         <ChevronRight className="h-4 w-4 text-gray-400 group-hover:text-white" />
                       </button>
@@ -791,7 +791,7 @@ const CourseLearnPage: React.FC = () => {
 
       <button onClick={() => setLessonTutorOpen((current) => !current)} className="fixed bottom-6 right-6 z-40 inline-flex items-center gap-2 rounded-full bg-cyan-500 px-5 py-3 text-sm font-semibold text-slate-950 shadow-2xl transition hover:bg-cyan-400">
         <Bot className="h-4 w-4" />
-        {lessonTutorOpen ? 'Close Nexa' : 'Nexa'}
+        {lessonTutorOpen ? 'Close Zara' : 'Zara'}
       </button>
 
       {!sidebarOpen ? (
